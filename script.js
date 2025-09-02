@@ -38,9 +38,9 @@ function setLabelPositionFromDegRad(p, rec) {
 
   rec.marker.setLatLng(labelLL);
   updateLeaderLine(rec.baseLL, rec.marker, rec.line);
+}
 function getPlaceById(id) {
   return (window.PLACES || []).find(p => String(p.id) === String(id));
-}
 }
 
 /* ---------- Firebase ---------- */
