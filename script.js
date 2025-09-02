@@ -518,4 +518,12 @@ async function initMap() {
   await subscribePlacesAndRender();
 }
 
+function toNum(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+function isValidPlace(p) {
+  return Number.isFinite(p?.lat) && Number.isFinite(p?.lon);
+}
+
 window.addEventListener("load", initMap);
