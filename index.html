@@ -24,9 +24,25 @@
 <body>
   <div id="map"></div>
 
-  <!-- 데이터 먼저 -->
+  <!-- 1) 데이터 먼저 -->
   <script src="places.js" charset="utf-8" defer></script>
-  <!-- 로직 나중 -->
+
+  <!-- 2) (선택) Firebase: 익명 로그인 + Firestore 사용하려면 필요 -->
+  <!--    Firebase 콘솔 > 프로젝트 설정 > 내 앱 > SDK 설정 복사해서 아래에 붙여넣기 -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
+  <script>
+    // ⚠️ 여기를 네 프로젝트 값으로 바꿔 넣기 (예시는 형식만 보여줌)
+    window.FB_CONFIG = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      // (필요 시) storageBucket, messagingSenderId, appId 등 추가 가능
+    };
+  </script>
+
+  <!-- 3) 로직 마지막에 -->
   <script src="script.js" charset="utf-8" defer></script>
 </body>
 </html>
