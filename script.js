@@ -458,57 +458,58 @@ async function subscribePlacesAndRender() {
 
   // 2) places.js에 있는데 DB에 없는 항목은 초기 시드(업서트)
   for (const p0 of (window.PLACES || [])) {
-  const idStr = String(p0.id);
-  if (!existingIds.has(idStr)) {
-    const seed = { ...p0, lat: toNum(p0.lat), lon: toNum(p0.lon) };
-    if (!isValidPlace(seed)) {
-      console.warn("[seed] skip invalid seed:", seed);
-      continue;
+    const idStr = String(p0.id);
+    if (!existingIds.has(idStr)) {
+      const seed = { ...p0, lat: toNum(p0.lat), lon: toNum(p0.lon) };
+      if (!isValidPlace(seed)) {
+        console.warn("[seed] skip invalid seed:", seed);
+        continue;
+      }
+      ensureDegRad(seed);
+      await upsertPlaceDoc(seed);
     }
-    ensureDegRad(seed);
-    await upsertPlaceDoc(seed);
   }
-}
 
-// 3) 실시간 구독 → 화면 렌더
-db.collection("places").onSnapshot((ss) => {
-  const arr = [];
-  ss.forEach(doc => {
-    const d = doc.data() || {};
+  // 3) 실시간 구독 → 화면 렌더
+  db.collection("places").onSnapshot((ss) => {
+    const arr = [];
+    ss.forEach(doc => {
+      const d = doc.data() || {};
 
-    // 좌표 숫자화 & 검증
-    const lat = toNum(d.lat);
-    const lon = toNum(d.lon);
-    if (!isValidLatLng(lat, lon)) {
-      console.warn("[snapshot] skip invalid lat/lon doc:", doc.id, d);
-      return; // 잘못된 문서는 건너뜀
-    }
+      // 좌표 숫자화 & 검증
+      const lat = toNum(d.lat);
+      const lon = toNum(d.lon);
+      if (!isValidLatLng(lat, lon)) {
+        console.warn("[snapshot] skip invalid lat/lon doc:", doc.id, d);
+        return; // 잘못된 문서는 건너뜀
+      }
 
-    // id 보정
-    const idNum = Number(doc.id);
-    const id = Number.isFinite(idNum) ? idNum : (toNum(d.id) ?? doc.id);
+      // id 보정
+      const idNum = Number(doc.id);
+      const id = Number.isFinite(idNum) ? idNum : (toNum(d.id) ?? doc.id);
 
-    arr.push({
-      id,
-      name: d.name ?? "",
-      address: d.address ?? "",
-      lat, lon,
-      deg: (typeof d.deg === "number") ? d.deg : undefined,
-      rad: (typeof d.rad === "number") ? d.rad : undefined,
+      arr.push({
+        id,
+        name: d.name ?? "",
+        address: d.address ?? "",
+        lat, lon,
+        deg: (typeof d.deg === "number") ? d.deg : undefined,
+        rad: (typeof d.rad === "number") ? d.rad : undefined,
+      });
     });
+
+    window.PLACES = arr;
+
+    // 안전하게 bounds 맞추기
+    const latlngs = arr.filter(isValidPlace).map(p => [p.lat, p.lon]);
+    if (latlngs.length) map.fitBounds(latlngs);
+
+    renderAll();
+  }, (err) => {
+    console.error("[firebase] onSnapshot error:", err);
+    renderAll();
   });
-
-  window.PLACES = arr;
-
-  // 안전하게 bounds 맞추기
-  const latlngs = arr.filter(isValidPlace).map(p => [p.lat, p.lon]);
-  if (latlngs.length) map.fitBounds(latlngs);
-
-  renderAll();
-}, (err) => {
-  console.error("[firebase] onSnapshot error:", err);
-  renderAll();
-});
+}
 
 /* ---------- 초기화 ---------- */
 async function initMap() {
