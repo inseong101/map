@@ -1,34 +1,32 @@
 /* global L, firebase */
 "use strict";
 
-/* ---------- 디버그: places.js 로드 확인 ---------- */
+/* ---------- 초기 데이터(places.js) ---------- */
 window.PLACES = window.PLACES || [];
 console.log("[debug] PLACES length =", window.PLACES.length);
 
-/* ---------- 상수 ---------- */
-const DEFAULT_DEG = 270;     // (폴백)
-const DEFAULT_RAD = 100;     // (폴백)
-let nextPlaceId = (window.PLACES.length || 0) + 1;
-
-/* ---------- 전역 ---------- */
+/* ---------- 상수/전역 ---------- */
 let map;
 let labelsLayer = null;   // 라벨/점 컨테이너
 let linesLayer  = null;   // 선 컨테이너
 const layerById = {};     // id -> { marker, line, dot, baseLL }
 const SIDO_GEOJSON = "TL_SCCO_CTPRVN.json";
 
+const DEFAULT_DEG = 270;      // 폴백(거의 안 씀)
+const DEFAULT_RAD = 100;      // 폴백
+let nextPlaceId = (window.PLACES.length || 0) + 1;
+
 /* ---------- Firebase ---------- */
 let db = null;
 async function initFirebase() {
   try {
     if (!window.firebase || !window.FB_CONFIG) {
-      console.warn("[firebase] SDK 또는 FB_CONFIG 없음 → 로컬/비연동 모드");
+      console.warn("[firebase] SDK 또는 FB_CONFIG 없음 → 로컬 모드");
       return;
     }
     if (firebase.apps?.length === 0) firebase.initializeApp(window.FB_CONFIG);
     db = firebase.firestore();
-    // 익명 로그인(규칙에서 auth 필요 시)
-    try { await firebase.auth().signInAnonymously(); } catch (e) { /* noop */ }
+    try { await firebase.auth().signInAnonymously(); } catch (_) {}
     console.log("[firebase] initialized");
   } catch (e) {
     console.error("[firebase] init failed:", e);
@@ -36,39 +34,10 @@ async function initFirebase() {
   }
 }
 
-async function loadDegRadOverrides() {
-  if (!db) return new Map();
-  try {
-    const snap = await db.collection("places").get();
-    const m = new Map();
-    snap.forEach(doc => {
-      const d = doc.data() || {};
-      const idNum = Number(doc.id);
-      if (Number.isFinite(idNum) && typeof d.deg === "number" && typeof d.rad === "number") {
-        m.set(idNum, { deg: d.deg, rad: d.rad });
-      }
-    });
-    console.log("[firebase] loaded overrides:", m.size);
-    return m;
-  } catch (e) {
-    console.error("[firebase] load overrides failed:", e);
-    return new Map();
-  }
-}
-async function saveDegRad(id, deg, rad) {
-  if (!db) return;
-  try {
-    await db.collection("places").doc(String(id)).set({ deg, rad }, { merge: true });
-    console.log("[firebase] saved", id, { deg, rad });
-  } catch (e) {
-    console.error("[firebase] save failed:", e);
-  }
-}
-
 /* ---------- 유틸: deg/rad 보장(없으면 랜덤) ---------- */
 function ensureDegRad(p) {
-  if (typeof p.deg !== "number") p.deg = Math.random() * 360;     // 0~360
-  if (typeof p.rad !== "number") p.rad = 80 + Math.random() * 120; // 80~200px
+  if (typeof p.deg !== "number") p.deg = Math.random() * 360;      // 0~360
+  if (typeof p.rad !== "number") p.rad = 80 + Math.random() * 120;  // 80~200px
 }
 
 /* ---------- GeoJSON(시·도 실루엣/경계) ---------- */
@@ -107,18 +76,6 @@ function addKoreaSilhouetteFromLocal() {
     .catch(err => console.error("[geojson] load failed:", err));
 }
 
-/* ---------- deg/rad 계산 (드래그 저장용) ---------- */
-function computeDegRad(baseLL, labelMarker) {
-  const basePt  = map.latLngToLayerPoint(baseLL);
-  const labelPt = map.latLngToLayerPoint(labelMarker.getLatLng());
-  const dx = labelPt.x - basePt.x;
-  const dy = labelPt.y - basePt.y;
-  const rad = Math.hypot(dx, dy);                 // 픽셀 거리
-  let deg = Math.atan2(dy, dx) * 180 / Math.PI;   // -180~180
-  if (deg < 0) deg += 360;                        // 0~360
-  return { deg, rad };
-}
-
 /* ---------- 선분-사각형 경계 교차(라벨 박스 내부 구간 숨김) ---------- */
 function segmentRectIntersection(P0, P1, tl, size) {
   const xmin = tl.x, ymin = tl.y;
@@ -147,6 +104,7 @@ function segmentRectIntersection(P0, P1, tl, size) {
   return L.point(cand[0].x, cand[0].y);
 }
 
+/* ---------- 라벨 중심까지 or 경계점까지 선 그리기 ---------- */
 function updateLeaderLine(baseLL, labelMarker, polyline) {
   const basePt = map.latLngToLayerPoint(baseLL);
   const iconEl = labelMarker.getElement ? labelMarker.getElement() : labelMarker._icon;
@@ -164,9 +122,50 @@ function updateLeaderLine(baseLL, labelMarker, polyline) {
   polyline.setLatLngs([baseLL, endLL]);
 }
 
+/* ---------- deg/rad 재계산 (드래그 저장용) ---------- */
+function computeDegRad(baseLL, labelMarker) {
+  const basePt  = map.latLngToLayerPoint(baseLL);
+  const labelPt = map.latLngToLayerPoint(labelMarker.getLatLng());
+  const dx = labelPt.x - basePt.x;
+  const dy = labelPt.y - basePt.y;
+  const rad = Math.hypot(dx, dy);                 // 픽셀 거리
+  let deg = Math.atan2(dy, dx) * 180 / Math.PI;   // -180~180
+  if (deg < 0) deg += 360;                        // 0~360
+  return { deg, rad };
+}
+
+/* ---------- Firestore I/O ---------- */
+async function saveDegRad(id, deg, rad) {
+  if (!db) return;
+  try {
+    await db.collection("places").doc(String(id)).set({ deg, rad }, { merge: true });
+    console.log("[firebase] saved deg/rad", id, { deg, rad });
+  } catch (e) {
+    console.error("[firebase] save failed:", e);
+  }
+}
+
+async function upsertPlaceDoc(p) {
+  if (!db) return;
+  try {
+    const payload = {
+      id: p.id,
+      name: p.name,
+      address: p.address,
+      lat: p.lat,
+      lon: p.lon,
+      deg: p.deg,
+      rad: p.rad,
+    };
+    await db.collection("places").doc(String(p.id)).set(payload, { merge: true });
+  } catch (e) {
+    console.error("[firebase] upsert failed:", e);
+  }
+}
+
 /* ---------- 지도에 한 항목 추가 (점/라벨/선) ---------- */
 function addPlaceToMap(p, alsoAddTab = true) {
-  if (typeof p.id !== "number") p.id = nextPlaceId++;
+  if (typeof p.id !== "number") p.id = Number(p.id) || (nextPlaceId++);
 
   // deg/rad 보장 (없으면 랜덤)
   ensureDegRad(p);
@@ -219,10 +218,9 @@ function addPlaceToMap(p, alsoAddTab = true) {
   marker.on("drag",    e => updateLeaderLine(baseLL, e.target, line));
   marker.on("dragend", async (e) => {
     updateLeaderLine(baseLL, e.target, line);
-    // 드래그 종료 시 deg/rad 계산해서 Firestore에 저장
     const { deg, rad } = computeDegRad(baseLL, e.target);
     p.deg = deg; p.rad = rad; // 메모리에도 반영
-    await saveDegRad(p.id, deg, rad);
+    await saveDegRad(p.id, deg, rad); // ← Firestore에 영구 저장
   });
 
   layerById[p.id] = { marker, line, dot, baseLL };
@@ -236,17 +234,15 @@ function renderAll() {
 
   labelsLayer = L.layerGroup().addTo(map); // 마커/라벨
   linesLayer  = L.layerGroup().addTo(map); // 폴리라인
+  Object.keys(layerById).forEach(k => delete layerById[k]); // 레지스트리 초기화
 
-  (window.PLACES || []).forEach(p => {
-    ensureDegRad(p);
-    addPlaceToMap(p, false);
-  });
+  (window.PLACES || []).forEach(p => addPlaceToMap(p, false));
   rebuildTabs();
 
   console.log("[render] rendered places:", (window.PLACES || []).length);
 }
 
-/* ---------- 좌측 탭 (접기/펼치기 토글 포함) ---------- */
+/* ---------- 좌측 탭 ---------- */
 function leftPanelHTML() {
   return '' +
     '<div class="left-tabs" id="leftTabs">' +
@@ -321,11 +317,9 @@ function centerOnPlace(p) {
   else map.setView([p.lat, p.lon], Math.max(map.getZoom(), 10), { animate: true });
 }
 function removePlace(id) {
-  // 데이터
   const idx = (window.PLACES || []).findIndex(x => x.id === id);
   if (idx >= 0) window.PLACES.splice(idx, 1);
 
-  // 레이어
   const rec = layerById[id];
   if (rec) {
     if (rec.marker) rec.marker.remove();
@@ -334,12 +328,14 @@ function removePlace(id) {
     delete layerById[id];
   }
 
-  // 탭
   const el = document.getElementById("tab_" + id);
   if (el && el.parentNode) el.parentNode.removeChild(el);
+
+  // DB에서도 삭제하고 싶으면 아래 해제
+  // if (db) db.collection("places").doc(String(id)).delete().catch(console.error);
 }
 
-/* ---------- 우측 입력 패널 (deg/rad 입력 제거) ---------- */
+/* ---------- 우측 입력 패널 ---------- */
 function rightPanelHTML() {
   return '' +
   '<div class="input-panel" id="rightPanel">' +
@@ -367,7 +363,7 @@ function injectRightPanel() {
   }
   setupPanelToggle("rightPanel", "rightToggle", "rightPanelState");
 
-  document.getElementById("btn_add").onclick = function () {
+  document.getElementById("btn_add").onclick = async function () {
     const name = (document.getElementById("in_name").value || "").trim();
     const address = (document.getElementById("in_addr").value || "").trim();
     const lat = parseFloat(document.getElementById("in_lat").value);
@@ -378,11 +374,31 @@ function injectRightPanel() {
       return;
     }
 
-    const p = { id: nextPlaceId++, name, address: address || "주소 없음", lat, lon };
-    (window.PLACES || (window.PLACES = [])).push(p);
-    ensureDegRad(p);   // 새 항목에 랜덤 deg/rad
-    addPlaceToMap(p, false);
-    appendTab(p);
+    // 아이디 계산(스냅샷 기반)
+    const ids = (window.PLACES || []).map(p => Number(p.id) || 0);
+    const newId = (ids.length ? Math.max(...ids) + 1 : 1);
+
+    const p = { id: newId, name, address: address || "주소 없음", lat, lon };
+    ensureDegRad(p); // 초기 라벨 위치 랜덤
+
+    if (db) {
+      // DB에 기록 → onSnapshot이 다시 불러와서 renderAll
+      await upsertPlaceDoc(p);
+      // 입력 초기화만 하고 끝
+      document.getElementById("in_name").value = "";
+      document.getElementById("in_addr").value = "";
+      document.getElementById("in_lat").value = "";
+      document.getElementById("in_lon").value = "";
+    } else {
+      // 로컬 모드: 즉시 반영
+      (window.PLACES || (window.PLACES = [])).push(p);
+      addPlaceToMap(p, false);
+      appendTab(p);
+      document.getElementById("in_name").value = "";
+      document.getElementById("in_addr").value = "";
+      document.getElementById("in_lat").value = "";
+      document.getElementById("in_lon").value = "";
+    }
   };
 }
 
@@ -392,7 +408,6 @@ function setupPanelToggle(containerId, toggleBtnId, storageKey) {
   const $toggle = document.getElementById(toggleBtnId);
   if (!$container || !$toggle) return;
 
-  // 저장된 상태 복원
   try {
     const saved = localStorage.getItem(storageKey);
     if (saved === "collapsed") {
@@ -400,25 +415,79 @@ function setupPanelToggle(containerId, toggleBtnId, storageKey) {
       $toggle.textContent = "+";
       $toggle.setAttribute("aria-label", "펼치기");
     }
-  } catch (e) {}
+  } catch (_) {}
 
   $toggle.addEventListener("click", () => {
     const collapsed = $container.classList.toggle("collapsed");
     if (collapsed) {
       $toggle.textContent = "+";
       $toggle.setAttribute("aria-label", "펼치기");
-      try { localStorage.setItem(storageKey, "collapsed"); } catch (e) {}
+      try { localStorage.setItem(storageKey, "collapsed"); } catch (_) {}
     } else {
       $toggle.textContent = "−";
       $toggle.setAttribute("aria-label", "접기");
-      try { localStorage.setItem(storageKey, "expanded"); } catch (e) {}
+      try { localStorage.setItem(storageKey, "expanded"); } catch (_) {}
     }
+  });
+}
+
+/* ---------- Firestore 구독 + 초기 시드 ---------- */
+async function subscribePlacesAndRender() {
+  if (!db) {
+    // 로컬 모드: places.js 그대로 렌더
+    renderAll();
+    return;
+  }
+
+  // 1) DB에 현재 문서 목록 확인
+  const snap = await db.collection("places").get();
+  const existingIds = new Set(snap.docs.map(d => d.id));
+
+  // 2) places.js에 있는데 DB에 없는 항목은 초기 시드(업서트)
+  for (const p0 of (window.PLACES || [])) {
+    const idStr = String(p0.id);
+    if (!existingIds.has(idStr)) {
+      const seed = { ...p0 };
+      ensureDegRad(seed);
+      await upsertPlaceDoc(seed);
+    }
+  }
+
+  // 3) 실시간 구독 → 화면 렌더
+  db.collection("places").onSnapshot((ss) => {
+    const arr = [];
+    ss.forEach(doc => {
+      const d = doc.data() || {};
+      // 타입 보정
+      const idNum = Number(doc.id);
+      const item = {
+        id: Number.isFinite(idNum) ? idNum : d.id,
+        name: d.name,
+        address: d.address,
+        lat: d.lat,
+        lon: d.lon,
+        deg: d.deg,
+        rad: d.rad,
+      };
+      arr.push(item);
+    });
+    window.PLACES = arr;
+    // 지도 범위 맞추기(최초 렌더 시 한 번만 하고 싶다면 플래그로 제어)
+    if (arr.length) {
+      const latlngs = arr.map(p => [p.lat, p.lon]);
+      map.fitBounds(latlngs);
+    }
+    renderAll();
+  }, (err) => {
+    console.error("[firebase] onSnapshot error:", err);
+    // 오류 시라도 로컬 렌더
+    renderAll();
   });
 }
 
 /* ---------- 초기화 ---------- */
 async function initMap() {
-  await initFirebase(); // 있으면 초기화
+  await initFirebase();
 
   map = L.map("map", { zoomControl: true }).setView([36.5, 127.8], 7);
 
@@ -433,19 +502,6 @@ async function initMap() {
 
   addKoreaSilhouetteFromLocal();
 
-  // Firestore에서 저장된 deg/rad 있으면 우선 적용
-  const overrides = await loadDegRadOverrides();
-  (window.PLACES || []).forEach(p => {
-    const ov = overrides.get(Number(p.id));
-    if (ov) { p.deg = ov.deg; p.rad = ov.rad; }
-  });
-
-  if (window.PLACES.length) {
-    const latlngs = window.PLACES.map(p => [p.lat, p.lon]);
-    map.fitBounds(latlngs);
-  }
-
-  renderAll();
   injectLeftTabs();
   injectRightPanel();
 
@@ -457,6 +513,9 @@ async function initMap() {
       }
     });
   });
+
+  // Firestore 구독(없으면 로컬 렌더)
+  await subscribePlacesAndRender();
 }
 
 window.addEventListener("load", initMap);
