@@ -16,6 +16,18 @@ const DEFAULT_DEG = 270;      // 폴백(거의 안 씀)
 const DEFAULT_RAD = 100;      // 폴백
 let nextPlaceId = (window.PLACES.length || 0) + 1;
 
+
+/* ---------- 유틸 함수들 ---------- */
+function toNum(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function isValidPlace(p) {
+  return Number.isFinite(p?.lat) && Number.isFinite(p?.lon);
+}
+
+
 /* ---------- Firebase ---------- */
 let db = null;
 async function initFirebase() {
@@ -518,12 +530,5 @@ async function initMap() {
   await subscribePlacesAndRender();
 }
 
-function toNum(v) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-function isValidPlace(p) {
-  return Number.isFinite(p?.lat) && Number.isFinite(p?.lon);
-}
 
 window.addEventListener("load", initMap);
