@@ -465,37 +465,53 @@ async function subscribePlacesAndRender() {
     }
   }
 
-  // 3) 실시간 구독 → 화면 렌더
-  db.collection("places").onSnapshot((ss) => {
-    const arr = [];
-    ss.forEach(doc => {
-      const d = doc.data() || {};
-      // 타입 보정
-      const idNum = Number(doc.id);
-      const item = {
-        id: Number.isFinite(idNum) ? idNum : d.id,
-        name: d.name,
-        address: d.address,
-        lat: d.lat,
-        lon: d.lon,
-        deg: d.deg,
-        rad: d.rad,
-      };
-      arr.push(item);
-    });
-    window.PLACES = arr;
-    // 지도 범위 맞추기(최초 렌더 시 한 번만 하고 싶다면 플래그로 제어)
-    if (arr.length) {
-      const latlngs = arr.map(p => [p.lat, p.lon]);
-      map.fitBounds(latlngs);
+// 3) 실시간 구독 → 화면 렌더
+db.collection("places").onSnapshot((ss) => {
+  const arr = [];
+  ss.forEach(doc => {
+    const d = doc.data() || {};
+
+    // 좌표를 숫자로 보정
+    const lat = toNum(d.lat);
+    const lon = toNum(d.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      console.warn("[snapshot] skip invalid lat/lon doc:", doc.id, d);
+      return; // 좌표가 없거나 문자열이면 건너뜀
     }
-    renderAll();
-  }, (err) => {
-    console.error("[firebase] onSnapshot error:", err);
-    // 오류 시라도 로컬 렌더
-    renderAll();
+
+    // id 보정
+    const idNum = Number(doc.id);
+    const id = Number.isFinite(idNum) ? idNum : (Number(d.id) || doc.id);
+
+    // 항목 구성
+    const item = {
+      id,
+      name: d.name ?? "",
+      address: d.address ?? "",
+      lat, lon,
+      deg: (typeof d.deg === "number") ? d.deg : undefined,
+      rad: (typeof d.rad === "number") ? d.rad : undefined,
+    };
+    arr.push(item);
   });
-}
+
+  // 전역 데이터 교체
+  window.PLACES = arr;
+
+  // 유효 좌표만으로 bounds 맞추기
+  const validLatLngs = arr.filter(isValidPlace).map(p => [p.lat, p.lon]);
+  if (validLatLngs.length) {
+    map.fitBounds(validLatLngs);
+  } else {
+    console.warn("[snapshot] no valid lat/lon to fitBounds");
+  }
+
+  renderAll();
+}, (err) => {
+  console.error("[firebase] onSnapshot error:", err);
+  // 오류 시라도 로컬 렌더
+  renderAll();
+});
 
 /* ---------- 초기화 ---------- */
 async function initMap() {
