@@ -24,6 +24,24 @@ const isDbMode = () => !!db;              // DB 연결 여부
 function toNum(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
 function isValidLatLng(lat, lon) { return Number.isFinite(lat) && Number.isFinite(lon); }
 function isValidPlace(p) { return isValidLatLng(p?.lat, p?.lon); }
+function setLabelPositionFromDegRad(p, rec) {
+  if (!rec || !rec.marker || !rec.baseLL) return;
+  if (typeof p.deg !== "number" || typeof p.rad !== "number") return;
+
+  const basePt = map.latLngToLayerPoint(rec.baseLL);
+  const radDeg = p.deg * Math.PI / 180;
+  const dx = Math.cos(radDeg) * p.rad;
+  const dy = Math.sin(radDeg) * p.rad;
+
+  const labelPt = L.point(basePt.x + dx, basePt.y + dy);
+  const labelLL = map.layerPointToLatLng(labelPt);
+
+  rec.marker.setLatLng(labelLL);
+  updateLeaderLine(rec.baseLL, rec.marker, rec.line);
+function getPlaceById(id) {
+  return (window.PLACES || []).find(p => String(p.id) === String(id));
+}
+}
 
 /* ---------- Firebase ---------- */
 async function initFirebase() {
@@ -549,14 +567,22 @@ async function initMap() {
   injectLeftTabs();
   injectRightPanel();
 
-  // 지도 확대/축소/이동/리사이즈 시 선 재계산
-  map.on("zoom move resize", () => {
-    Object.values(layerById).forEach(rec => {
-      if (rec && rec.marker && rec.line && rec.baseLL) {
-        updateLeaderLine(rec.baseLL, rec.marker, rec.line);
-      }
-    });
+// 줌이 바뀌거나 viewreset될 때: 저장된 deg/rad 기준으로 라벨 위치 자체를 다시 배치
+map.on("zoomend viewreset", () => {
+  Object.entries(layerById).forEach(([id, rec]) => {
+    const p = getPlaceById(id);
+    if (p) setLabelPositionFromDegRad(p, rec);
   });
+});
+
+// 이동/리사이즈만 될 때: 라벨 위치는 유지하고 선만 다시 경계까지 맞춤
+map.on("move resize", () => {
+  Object.values(layerById).forEach(rec => {
+    if (rec && rec.marker && rec.line && rec.baseLL) {
+      updateLeaderLine(rec.baseLL, rec.marker, rec.line);
+    }
+  });
+});
 
   // Firestore 구독(없으면 로컬 렌더)
   await subscribePlacesAndRender();
