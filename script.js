@@ -16,13 +16,16 @@ const DEFAULT_DEG = 270;      // 폴백(거의 안 씀)
 const DEFAULT_RAD = 100;      // 폴백
 let nextPlaceId = (window.PLACES.length || 0) + 1;
 
+let db = null;
+let firstSnapshot = true;                 // 첫 Firestore 스냅샷인지
+const isDbMode = () => !!db;              // DB 연결 여부
 
 /* ---------- 유틸 함수들 ---------- */
 function toNum(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
 function isValidLatLng(lat, lon) { return Number.isFinite(lat) && Number.isFinite(lon); }
 function isValidPlace(p) { return isValidLatLng(p?.lat, p?.lon); }
+
 /* ---------- Firebase ---------- */
-let db = null;
 async function initFirebase() {
   try {
     if (!window.firebase || !window.FB_CONFIG) {
@@ -174,25 +177,30 @@ async function upsertPlaceDoc(p) {
 
 /* ---------- 지도에 한 항목 추가 (점/라벨/선) ---------- */
 function addPlaceToMap(p, alsoAddTab = true) {
-  if (!isValidPlace(p)) {           // ← 추가
+  if (!isValidPlace(p)) {
     console.warn("[addPlaceToMap] skip invalid place:", p);
     return;
   }
 
-  // deg/rad 보장 (없으면 랜덤)
-  ensureDegRad(p);
+  // ✅ DB 모드에서는 렌더 시 랜덤 부여 금지 (시드/추가 시에만 생성)
+  if (!isDbMode()) {
+    if (typeof p.deg !== "number" || typeof p.rad !== "number") {
+      ensureDegRad(p);
+    }
+  }
 
   const baseLL = L.latLng(p.lat, p.lon);
   const basePt = map.latLngToLayerPoint(baseLL);
 
-  const radDeg = p.deg * Math.PI / 180;
-  const dx  = Math.cos(radDeg) * p.rad;
-  const dy  = Math.sin(radDeg) * p.rad;
+  const radDeg = (typeof p.deg === "number" ? p.deg : DEFAULT_DEG) * Math.PI / 180;
+  const R      = (typeof p.rad === "number" ? p.rad : DEFAULT_RAD);
+  const dx  = Math.cos(radDeg) * R;
+  const dy  = Math.sin(radDeg) * R;
 
   const labelPt = L.point(basePt.x + dx, basePt.y + dy);
   const labelLL = map.layerPointToLatLng(labelPt);
 
-  // 점(빨강) — markers pane
+  // 점(빨강)
   const dot = L.circleMarker(baseLL, {
     radius: 4,
     color: "#FF0000",
@@ -217,7 +225,7 @@ function addPlaceToMap(p, alsoAddTab = true) {
     pane: "pane-markers"
   }).addTo(labelsLayer);
 
-  // 리더 라인 — lines pane
+  // 리더 라인
   const line = L.polyline([baseLL, labelLL], {
     color: "#FF0000",
     weight: 2.5,
@@ -232,7 +240,7 @@ function addPlaceToMap(p, alsoAddTab = true) {
     updateLeaderLine(baseLL, e.target, line);
     const { deg, rad } = computeDegRad(baseLL, e.target);
     p.deg = deg; p.rad = rad; // 메모리에도 반영
-    await saveDegRad(p.id, deg, rad); // ← Firestore에 영구 저장
+    await saveDegRad(p.id, deg, rad); // Firestore 저장
   });
 
   layerById[p.id] = { marker, line, dot, baseLL };
@@ -247,9 +255,19 @@ function renderAll() {
   labelsLayer = L.layerGroup().addTo(map);
   linesLayer  = L.layerGroup().addTo(map);
 
-  (window.PLACES || [])
-    .filter(isValidPlace)           // ← 추가
-    .forEach(p => addPlaceToMap(p, false));
+  (window.PLACES || []).forEach(p => {
+    if (!isValidPlace(p)) return;
+
+    // DB 모드에선 deg/rad 없는 건 렌더 스킵(시드/추가 시 채움)
+    if (isDbMode() && (typeof p.deg !== "number" || typeof p.rad !== "number")) return;
+
+    // 로컬 모드에선 여기서 보장
+    if (!isDbMode()) {
+      if (typeof p.deg !== "number" || typeof p.rad !== "number") ensureDegRad(p);
+    }
+
+    addPlaceToMap(p, false);
+  });
 
   rebuildTabs();
   console.log("[render] rendered places:", (window.PLACES || []).length);
@@ -344,7 +362,7 @@ function removePlace(id) {
   const el = document.getElementById("tab_" + id);
   if (el && el.parentNode) el.parentNode.removeChild(el);
 
-  // DB에서도 삭제하고 싶으면 아래 해제
+  // DB에서도 삭제하려면 아래 주석 해제
   // if (db) db.collection("places").doc(String(id)).delete().catch(console.error);
 }
 
@@ -387,23 +405,24 @@ function injectRightPanel() {
       return;
     }
 
-    // 아이디 계산(스냅샷 기반)
+    // 아이디 계산(현재 목록 기준)
     const ids = (window.PLACES || []).map(p => Number(p.id) || 0);
     const newId = (ids.length ? Math.max(...ids) + 1 : 1);
 
     const p = { id: newId, name, address: address || "주소 없음", lat, lon };
-    ensureDegRad(p); // 초기 라벨 위치 랜덤
 
     if (db) {
-      // DB에 기록 → onSnapshot이 다시 불러와서 renderAll
+      // 시드 시 1회만 deg/rad 생성해서 DB에 저장
+      ensureDegRad(p);
       await upsertPlaceDoc(p);
-      // 입력 초기화만 하고 끝
+      // 입력 초기화
       document.getElementById("in_name").value = "";
       document.getElementById("in_addr").value = "";
       document.getElementById("in_lat").value = "";
       document.getElementById("in_lon").value = "";
     } else {
-      // 로컬 모드: 즉시 반영
+      // 로컬 모드
+      ensureDegRad(p);
       (window.PLACES || (window.PLACES = [])).push(p);
       addPlaceToMap(p, false);
       appendTab(p);
@@ -456,7 +475,7 @@ async function subscribePlacesAndRender() {
   const snap = await db.collection("places").get();
   const existingIds = new Set(snap.docs.map(d => d.id));
 
-  // 2) places.js에 있는데 DB에 없는 항목은 초기 시드(업서트)
+  // 2) places.js에 있는데 DB에 없는 항목은 '시드' 업서트(이때만 랜덤 생성)
   for (const p0 of (window.PLACES || [])) {
     const idStr = String(p0.id);
     if (!existingIds.has(idStr)) {
@@ -465,29 +484,26 @@ async function subscribePlacesAndRender() {
         console.warn("[seed] skip invalid seed:", seed);
         continue;
       }
-      ensureDegRad(seed);
+      if (typeof seed.deg !== "number" || typeof seed.rad !== "number") {
+        ensureDegRad(seed);
+      }
       await upsertPlaceDoc(seed);
     }
   }
 
-  // 3) 실시간 구독 → 화면 렌더
+  // 3) 실시간 구독 → 첫 스냅샷에서만 fitBounds + 렌더
   db.collection("places").onSnapshot((ss) => {
     const arr = [];
     ss.forEach(doc => {
       const d = doc.data() || {};
-
-      // 좌표 숫자화 & 검증
       const lat = toNum(d.lat);
       const lon = toNum(d.lon);
       if (!isValidLatLng(lat, lon)) {
         console.warn("[snapshot] skip invalid lat/lon doc:", doc.id, d);
-        return; // 잘못된 문서는 건너뜀
+        return;
       }
-
-      // id 보정
       const idNum = Number(doc.id);
       const id = Number.isFinite(idNum) ? idNum : (toNum(d.id) ?? doc.id);
-
       arr.push({
         id,
         name: d.name ?? "",
@@ -500,9 +516,11 @@ async function subscribePlacesAndRender() {
 
     window.PLACES = arr;
 
-    // 안전하게 bounds 맞추기
-    const latlngs = arr.filter(isValidPlace).map(p => [p.lat, p.lon]);
-    if (latlngs.length) map.fitBounds(latlngs);
+    if (firstSnapshot) {
+      firstSnapshot = false;
+      const latlngs = arr.filter(isValidPlace).map(p => [p.lat, p.lon]);
+      if (latlngs.length) map.fitBounds(latlngs);
+    }
 
     renderAll();
   }, (err) => {
@@ -543,6 +561,5 @@ async function initMap() {
   // Firestore 구독(없으면 로컬 렌더)
   await subscribePlacesAndRender();
 }
-
 
 window.addEventListener("load", initMap);
