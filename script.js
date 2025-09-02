@@ -160,16 +160,20 @@ async function saveDegRad(id, deg, rad) {
 async function upsertPlaceDoc(p) {
   if (!db) return;
   try {
+    const lat = toNum(p.lat), lon = toNum(p.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      console.warn("[upsert] invalid lat/lon, abort", p);
+      return;
+    }
     const payload = {
-      id: p.id,
-      name: p.name,
-      address: p.address,
-      lat: p.lat,
-      lon: p.lon,
-      deg: p.deg,
-      rad: p.rad,
+      id: Number(p.id) || p.id,
+      name: p.name ?? "",
+      address: p.address ?? "",
+      lat, lon,
+      deg: (typeof p.deg === "number") ? p.deg : undefined,
+      rad: (typeof p.rad === "number") ? p.rad : undefined,
     };
-    await db.collection("places").doc(String(p.id)).set(payload, { merge: true });
+    await db.collection("places").doc(String(payload.id)).set(payload, { merge: true });
   } catch (e) {
     console.error("[firebase] upsert failed:", e);
   }
@@ -457,13 +461,17 @@ async function subscribePlacesAndRender() {
 
   // 2) places.js에 있는데 DB에 없는 항목은 초기 시드(업서트)
   for (const p0 of (window.PLACES || [])) {
-    const idStr = String(p0.id);
-    if (!existingIds.has(idStr)) {
-      const seed = { ...p0 };
-      ensureDegRad(seed);
-      await upsertPlaceDoc(seed);
+  const idStr = String(p0.id);
+  if (!existingIds.has(idStr)) {
+    const seed = { ...p0, lat: toNum(p0.lat), lon: toNum(p0.lon) };
+    if (!isValidPlace(seed)) {
+      console.warn("[seed] skip invalid seed:", seed);
+      continue;
     }
+    ensureDegRad(seed);
+    await upsertPlaceDoc(seed);
   }
+}
 
 // 3) 실시간 구독 → 화면 렌더
 db.collection("places").onSnapshot((ss) => {
