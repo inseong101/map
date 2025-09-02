@@ -18,16 +18,9 @@ let nextPlaceId = (window.PLACES.length || 0) + 1;
 
 
 /* ---------- 유틸 함수들 ---------- */
-function toNum(v) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
-function isValidPlace(p) {
-  return Number.isFinite(p?.lat) && Number.isFinite(p?.lon);
-}
-
-
+function toNum(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
+function isValidLatLng(lat, lon) { return Number.isFinite(lat) && Number.isFinite(lon); }
+function isValidPlace(p) { return isValidLatLng(p?.lat, p?.lon); }
 /* ---------- Firebase ---------- */
 let db = null;
 async function initFirebase() {
@@ -181,7 +174,10 @@ async function upsertPlaceDoc(p) {
 
 /* ---------- 지도에 한 항목 추가 (점/라벨/선) ---------- */
 function addPlaceToMap(p, alsoAddTab = true) {
-  if (typeof p.id !== "number") p.id = Number(p.id) || (nextPlaceId++);
+  if (!isValidPlace(p)) {           // ← 추가
+    console.warn("[addPlaceToMap] skip invalid place:", p);
+    return;
+  }
 
   // deg/rad 보장 (없으면 랜덤)
   ensureDegRad(p);
@@ -248,13 +244,14 @@ function renderAll() {
   if (labelsLayer) labelsLayer.removeFrom(map);
   if (linesLayer)  linesLayer.removeFrom(map);
 
-  labelsLayer = L.layerGroup().addTo(map); // 마커/라벨
-  linesLayer  = L.layerGroup().addTo(map); // 폴리라인
-  Object.keys(layerById).forEach(k => delete layerById[k]); // 레지스트리 초기화
+  labelsLayer = L.layerGroup().addTo(map);
+  linesLayer  = L.layerGroup().addTo(map);
 
-  (window.PLACES || []).forEach(p => addPlaceToMap(p, false));
+  (window.PLACES || [])
+    .filter(isValidPlace)           // ← 추가
+    .forEach(p => addPlaceToMap(p, false));
+
   rebuildTabs();
-
   console.log("[render] rendered places:", (window.PLACES || []).length);
 }
 
@@ -479,45 +476,37 @@ db.collection("places").onSnapshot((ss) => {
   ss.forEach(doc => {
     const d = doc.data() || {};
 
-    // 좌표를 숫자로 보정
+    // 좌표 숫자화 & 검증
     const lat = toNum(d.lat);
     const lon = toNum(d.lon);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    if (!isValidLatLng(lat, lon)) {
       console.warn("[snapshot] skip invalid lat/lon doc:", doc.id, d);
-      return; // 좌표가 없거나 문자열이면 건너뜀
+      return; // 잘못된 문서는 건너뜀
     }
 
     // id 보정
     const idNum = Number(doc.id);
-    const id = Number.isFinite(idNum) ? idNum : (Number(d.id) || doc.id);
+    const id = Number.isFinite(idNum) ? idNum : (toNum(d.id) ?? doc.id);
 
-    // 항목 구성
-    const item = {
+    arr.push({
       id,
       name: d.name ?? "",
       address: d.address ?? "",
       lat, lon,
       deg: (typeof d.deg === "number") ? d.deg : undefined,
       rad: (typeof d.rad === "number") ? d.rad : undefined,
-    };
-    arr.push(item);
+    });
   });
 
-  // 전역 데이터 교체
   window.PLACES = arr;
 
-  // 유효 좌표만으로 bounds 맞추기
-  const validLatLngs = arr.filter(isValidPlace).map(p => [p.lat, p.lon]);
-  if (validLatLngs.length) {
-    map.fitBounds(validLatLngs);
-  } else {
-    console.warn("[snapshot] no valid lat/lon to fitBounds");
-  }
+  // 안전하게 bounds 맞추기
+  const latlngs = arr.filter(isValidPlace).map(p => [p.lat, p.lon]);
+  if (latlngs.length) map.fitBounds(latlngs);
 
   renderAll();
 }, (err) => {
   console.error("[firebase] onSnapshot error:", err);
-  // 오류 시라도 로컬 렌더
   renderAll();
 });
 
