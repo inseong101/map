@@ -1,4 +1,4 @@
-/* global L */
+/* global L, firebase */
 "use strict";
 
 /* ---------- 디버그: places.js 로드 확인 ---------- */
@@ -6,32 +6,72 @@ window.PLACES = window.PLACES || [];
 console.log("[debug] PLACES length =", window.PLACES.length);
 
 /* ---------- 상수 ---------- */
-const DEFAULT_DEG = 270;     // (폴백용) 거의 쓰일 일 없지만 남겨둠
-const DEFAULT_RAD = 100;     // (폴백용)
+const DEFAULT_DEG = 270;     // (폴백)
+const DEFAULT_RAD = 100;     // (폴백)
 let nextPlaceId = (window.PLACES.length || 0) + 1;
 
-/* ---------- 전역 레이어/맵 ---------- */
+/* ---------- 전역 ---------- */
 let map;
 let labelsLayer = null;   // 라벨/점 컨테이너
 let linesLayer  = null;   // 선 컨테이너
 const layerById = {};     // id -> { marker, line, dot, baseLL }
-
-/* ---------- 로컬 GeoJSON(시·도 경계) ---------- */
 const SIDO_GEOJSON = "TL_SCCO_CTPRVN.json";
 
-/* ---------- 유틸: deg/rad 보장(없으면 랜덤 부여) ---------- */
-function ensureDegRad(p) {
-  if (typeof p.deg !== "number") {
-    // 0~360도 랜덤 (정수로 하고 싶으면 Math.floor)
-    p.deg = Math.random() * 360;
-  }
-  if (typeof p.rad !== "number") {
-    // 80~200px 랜덤
-    p.rad = 80 + Math.random() * 120;
+/* ---------- Firebase ---------- */
+let db = null;
+async function initFirebase() {
+  try {
+    if (!window.firebase || !window.FB_CONFIG) {
+      console.warn("[firebase] SDK 또는 FB_CONFIG 없음 → 로컬/비연동 모드");
+      return;
+    }
+    if (firebase.apps?.length === 0) firebase.initializeApp(window.FB_CONFIG);
+    db = firebase.firestore();
+    // 익명 로그인(규칙에서 auth 필요 시)
+    try { await firebase.auth().signInAnonymously(); } catch (e) { /* noop */ }
+    console.log("[firebase] initialized");
+  } catch (e) {
+    console.error("[firebase] init failed:", e);
+    db = null;
   }
 }
 
-/* ---------- 시·도 실루엣 + 경계 (타일 없이, 비인터랙티브) ---------- */
+async function loadDegRadOverrides() {
+  if (!db) return new Map();
+  try {
+    const snap = await db.collection("places").get();
+    const m = new Map();
+    snap.forEach(doc => {
+      const d = doc.data() || {};
+      const idNum = Number(doc.id);
+      if (Number.isFinite(idNum) && typeof d.deg === "number" && typeof d.rad === "number") {
+        m.set(idNum, { deg: d.deg, rad: d.rad });
+      }
+    });
+    console.log("[firebase] loaded overrides:", m.size);
+    return m;
+  } catch (e) {
+    console.error("[firebase] load overrides failed:", e);
+    return new Map();
+  }
+}
+async function saveDegRad(id, deg, rad) {
+  if (!db) return;
+  try {
+    await db.collection("places").doc(String(id)).set({ deg, rad }, { merge: true });
+    console.log("[firebase] saved", id, { deg, rad });
+  } catch (e) {
+    console.error("[firebase] save failed:", e);
+  }
+}
+
+/* ---------- 유틸: deg/rad 보장(없으면 랜덤) ---------- */
+function ensureDegRad(p) {
+  if (typeof p.deg !== "number") p.deg = Math.random() * 360;     // 0~360
+  if (typeof p.rad !== "number") p.rad = 80 + Math.random() * 120; // 80~200px
+}
+
+/* ---------- GeoJSON(시·도 실루엣/경계) ---------- */
 function addKoreaSilhouetteFromLocal() {
   fetch(SIDO_GEOJSON)
     .then(r => r.json())
@@ -59,7 +99,6 @@ function addKoreaSilhouetteFromLocal() {
         })
       }).addTo(map);
 
-      // places 없으면 경계로 맞춤
       if (!window.PLACES || window.PLACES.length === 0) {
         const bounds = L.geoJSON(geo).getBounds();
         map.fitBounds(bounds);
@@ -68,40 +107,16 @@ function addKoreaSilhouetteFromLocal() {
     .catch(err => console.error("[geojson] load failed:", err));
 }
 
-/* ---------- 지도 초기화 ---------- */
-function initMap() {
-  map = L.map("map", { zoomControl: true }).setView([36.5, 127.8], 7);
-
-  // pane(레이어 순서): geo(아래) < lines(중간) < markers(위)
-  map.createPane("pane-geo");                // zIndex 기본 400
-  const paneLines   = map.createPane("pane-lines");
-  const paneMarkers = map.createPane("pane-markers");
-  paneLines.style.zIndex   = 650;
-  paneMarkers.style.zIndex = 700;
-  paneLines.style.pointerEvents = "none";          // 선은 이벤트 통과
-  map.getPane("pane-geo").style.pointerEvents = "none"; // 행정구역 완전 비인터랙티브
-
-  addKoreaSilhouetteFromLocal();
-
-  if (window.PLACES.length) {
-    const latlngs = window.PLACES.map(p => [p.lat, p.lon]);
-    map.fitBounds(latlngs);
-  }
-
-  renderAll();
-  injectLeftTabs();
-  injectRightPanel();
-
-
-// 지도 확대/축소, 이동, 창 크기 변경 시 라벨-선 재계산
-map.on("zoom move resize", () => {
-  Object.values(layerById).forEach(rec => {
-    if (rec && rec.marker && rec.line && rec.baseLL) {
-      updateLeaderLine(rec.baseLL, rec.marker, rec.line);
-    }
-  });
-});
-  
+/* ---------- deg/rad 계산 (드래그 저장용) ---------- */
+function computeDegRad(baseLL, labelMarker) {
+  const basePt  = map.latLngToLayerPoint(baseLL);
+  const labelPt = map.latLngToLayerPoint(labelMarker.getLatLng());
+  const dx = labelPt.x - basePt.x;
+  const dy = labelPt.y - basePt.y;
+  const rad = Math.hypot(dx, dy);                 // 픽셀 거리
+  let deg = Math.atan2(dy, dx) * 180 / Math.PI;   // -180~180
+  if (deg < 0) deg += 360;                        // 0~360
+  return { deg, rad };
 }
 
 /* ---------- 선분-사각형 경계 교차(라벨 박스 내부 구간 숨김) ---------- */
@@ -119,7 +134,6 @@ function segmentRectIntersection(P0, P1, tl, size) {
       if (onLR || onTB) cand.push({ t, x, y });
     }
   }
-
   if (Math.abs(dx) > EPS) {
     let t = (xmin - P0.x) / dx; addIf(t, xmin, P0.y + t * dy);
     t = (xmax - P0.x) / dx;     addIf(t, xmax, P0.y + t * dy);
@@ -128,7 +142,6 @@ function segmentRectIntersection(P0, P1, tl, size) {
     let t2 = (ymin - P0.y) / dy; addIf(t2, P0.x + t2 * dx, ymin);
     t2 = (ymax - P0.y) / dy;     addIf(t2, P0.x + t2 * dx, ymax);
   }
-
   if (!cand.length) return null;
   cand.sort((a, b) => a.t - b.t);
   return L.point(cand[0].x, cand[0].y);
@@ -155,7 +168,7 @@ function updateLeaderLine(baseLL, labelMarker, polyline) {
 function addPlaceToMap(p, alsoAddTab = true) {
   if (typeof p.id !== "number") p.id = nextPlaceId++;
 
-  // deg/rad 없으면 랜덤으로 부여(한 번 정해지면 p에 저장되어 이후 재렌더에도 유지)
+  // deg/rad 보장 (없으면 랜덤)
   ensureDegRad(p);
 
   const baseLL = L.latLng(p.lat, p.lon);
@@ -193,7 +206,7 @@ function addPlaceToMap(p, alsoAddTab = true) {
     pane: "pane-markers"
   }).addTo(labelsLayer);
 
-  // 리더 라인 — lines pane (완전 불투명, 지도보다 위)
+  // 리더 라인 — lines pane
   const line = L.polyline([baseLL, labelLL], {
     color: "#FF0000",
     weight: 2.5,
@@ -204,7 +217,13 @@ function addPlaceToMap(p, alsoAddTab = true) {
   // 렌더 후 경계까지 선 갱신
   setTimeout(() => updateLeaderLine(baseLL, marker, line), 0);
   marker.on("drag",    e => updateLeaderLine(baseLL, e.target, line));
-  marker.on("dragend", e => updateLeaderLine(baseLL, e.target, line));
+  marker.on("dragend", async (e) => {
+    updateLeaderLine(baseLL, e.target, line);
+    // 드래그 종료 시 deg/rad 계산해서 Firestore에 저장
+    const { deg, rad } = computeDegRad(baseLL, e.target);
+    p.deg = deg; p.rad = rad; // 메모리에도 반영
+    await saveDegRad(p.id, deg, rad);
+  });
 
   layerById[p.id] = { marker, line, dot, baseLL };
   if (alsoAddTab) appendTab(p);
@@ -320,8 +339,7 @@ function removePlace(id) {
   if (el && el.parentNode) el.parentNode.removeChild(el);
 }
 
-/* ---------- 우측 입력 패널 (접기/펼치기 토글 포함) ---------- */
-// 입력은 이름/주소/위도/경도만. deg/rad 입력 UI 제거.
+/* ---------- 우측 입력 패널 (deg/rad 입력 제거) ---------- */
 function rightPanelHTML() {
   return '' +
   '<div class="input-panel" id="rightPanel">' +
@@ -341,7 +359,6 @@ function rightPanelHTML() {
     '</div>' +
   '</div>';
 }
-
 function injectRightPanel() {
   if (!document.querySelector(".input-panel")) {
     const wrap = document.createElement("div");
@@ -361,25 +378,11 @@ function injectRightPanel() {
       return;
     }
 
-    const p = {
-      id: nextPlaceId++,
-      name,
-      address: address || "주소 없음",
-      lat, lon
-      // deg/rad는 입력받지 않음 — addPlaceToMap/renderAll에서 ensureDegRad로 랜덤 부여
-    };
-
+    const p = { id: nextPlaceId++, name, address: address || "주소 없음", lat, lon };
     (window.PLACES || (window.PLACES = [])).push(p);
-    // 랜덤 deg/rad 부여 후 바로 추가
-    ensureDegRad(p);
+    ensureDegRad(p);   // 새 항목에 랜덤 deg/rad
     addPlaceToMap(p, false);
     appendTab(p);
-
-    // 입력 초기화
-    document.getElementById("in_name").value = "";
-    document.getElementById("in_addr").value = "";
-    document.getElementById("in_lat").value = "";
-    document.getElementById("in_lon").value = "";
   };
 }
 
@@ -413,5 +416,47 @@ function setupPanelToggle(containerId, toggleBtnId, storageKey) {
   });
 }
 
-/* ---------- 시작 ---------- */
+/* ---------- 초기화 ---------- */
+async function initMap() {
+  await initFirebase(); // 있으면 초기화
+
+  map = L.map("map", { zoomControl: true }).setView([36.5, 127.8], 7);
+
+  // pane: geo(아래) < lines(중간) < markers(위)
+  map.createPane("pane-geo");
+  const paneLines   = map.createPane("pane-lines");
+  const paneMarkers = map.createPane("pane-markers");
+  paneLines.style.zIndex   = 650;
+  paneMarkers.style.zIndex = 700;
+  paneLines.style.pointerEvents = "none";
+  map.getPane("pane-geo").style.pointerEvents = "none";
+
+  addKoreaSilhouetteFromLocal();
+
+  // Firestore에서 저장된 deg/rad 있으면 우선 적용
+  const overrides = await loadDegRadOverrides();
+  (window.PLACES || []).forEach(p => {
+    const ov = overrides.get(Number(p.id));
+    if (ov) { p.deg = ov.deg; p.rad = ov.rad; }
+  });
+
+  if (window.PLACES.length) {
+    const latlngs = window.PLACES.map(p => [p.lat, p.lon]);
+    map.fitBounds(latlngs);
+  }
+
+  renderAll();
+  injectLeftTabs();
+  injectRightPanel();
+
+  // 지도 확대/축소/이동/리사이즈 시 선 재계산
+  map.on("zoom move resize", () => {
+    Object.values(layerById).forEach(rec => {
+      if (rec && rec.marker && rec.line && rec.baseLL) {
+        updateLeaderLine(rec.baseLL, rec.marker, rec.line);
+      }
+    });
+  });
+}
+
 window.addEventListener("load", initMap);
