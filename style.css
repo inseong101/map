@@ -1,0 +1,220 @@
+html, body { height: 100%; margin: 0; }
+#map, .leaflet-container { width: 100vw; height: 100vh; }
+
+/* 빈 배경(타일 없이 GeoJSON만 쓸 때 배경색) */
+.leaflet-container { background: #f5f6fa; }
+
+/* 라벨 박스 */
+.poi-label {
+  background: rgba(255,255,255,0.45);
+  color: #111;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(0,0,0,0.2);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  font-size: 13px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", Arial, sans-serif;
+  white-space: nowrap;
+  backdrop-filter: blur(2px);
+}
+.poi-label .title { font-weight: 700; }
+.poi-label .addr  { opacity: 0.9; font-size: 12px; margin-top: 2px; }
+
+/* 좌측 탭 패널 */
+.left-tabs {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 320px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  background: rgba(255,255,255,0.92);
+  border-radius: 12px;
+  box-shadow: 0 8px 22px rgba(0,0,0,.25);
+  z-index: 9999;
+  padding: 10px 10px 8px;
+  border: 1px solid rgba(0,0,0,0.15);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", Arial, sans-serif;
+}
+.left-tabs h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 800;
+  color: #111;
+}
+.tab-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 10px;
+  background: #f4f6fb;
+  border-radius: 10px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+.tab-item:hover { background: #eef2fb; }
+.tab-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: #111;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.tab-close {
+  width: 22px; height: 22px; line-height: 20px; text-align: center;
+  border-radius: 6px; background: #ffeded; color: #c00; font-weight: 900;
+  border: 1px solid rgba(255,0,0,0.35);
+  cursor: pointer;
+}
+.tab-close:hover { filter: brightness(0.97); }
+
+/* 우측 입력 패널 */
+.input-panel {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 340px;
+  max-width: 85vw;
+  background: rgba(11,19,43,0.95);
+  color: #fff;
+  padding: 12px 12px 10px;
+  border-radius: 12px;
+  box-shadow: 0 8px 22px rgba(0,0,0,.35);
+  z-index: 9999;
+}
+.input-panel h3 { margin: 0 0 8px; font-size: 16px; font-weight: 800; }
+.input-panel .row { margin-bottom: 8px; display: flex; gap: 6px; }
+.input-panel input[type="text"],
+.input-panel input[type="number"] {
+  flex: 1; min-width: 0;
+  padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.08); color: #fff;
+  outline: none;
+}
+.input-panel input::placeholder { color: rgba(255,255,255,0.7); }
+.input-panel .btn {
+  width: 100%; margin-top: 6px; padding: 10px 12px; border: none; border-radius: 10px;
+  background: #FF0000; color: #fff; font-weight: 800; cursor: pointer;
+}
+.input-panel .btn:hover { filter: brightness(1.05); }
+.input-panel .hint { font-size: 12px; opacity: .8; margin-top: 6px; line-height: 1.35; }
+
+/* 공통 패널 헤더 + 토글 버튼 */
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.panel-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: #111;
+}
+.panel-toggle {
+  width: 28px; height: 28px; line-height: 26px; text-align: center;
+  border-radius: 8px; border: 1px solid rgba(0,0,0,0.15);
+  background: #fff; color: #111; font-weight: 900; cursor: pointer;
+}
+.panel-toggle:hover { filter: brightness(0.98); }
+
+/* 접힘 상태 */
+.left-tabs.collapsed,
+.input-panel.collapsed {
+  background: rgba(255,255,255,0.9);
+  padding: 8px;
+  width: auto; height: auto;
+}
+.left-tabs.collapsed .panel-content,
+.input-panel.collapsed .panel-content {
+  display: none; /* 내용 숨김 */
+}
+
+/* 접힘 상태에서 헤더 간격 줄이기 */
+.left-tabs.collapsed .panel-header,
+.input-panel.collapsed .panel-header {
+  margin-bottom: 0;
+}
+
+/* 오른쪽 패널은 접힘 시 어두운 배경 유지하고 버튼만 보이게 */
+.input-panel {
+  background: rgba(11,19,43,0.95);
+}
+.input-panel.collapsed {
+  background: rgba(11,19,43,0.95);
+}
+.panel-toggle.dark {
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  border-color: rgba(255,255,255,0.25);
+}
+
+
+/* === Responsive panel widths (left/right) === */
+:root {
+  --left-panel-w: 320px;   /* 데스크톱 기본 */
+  --right-panel-w: 360px;
+}
+
+/* 패널 기본 폭을 변수로 통일 */
+.left-tabs   { width: var(--left-panel-w); }
+.input-panel { width: var(--right-panel-w); }
+
+/* 태블릿 이하: 살짝 좁게 */
+@media (max-width: 1024px) {
+  :root {
+    --left-panel-w: 260px;
+    --right-panel-w: 300px;
+  }
+}
+
+/* 모바일: 화면의 약 절반만 차지 (더 좁게 보이도록) */
+@media (max-width: 768px) {
+  :root {
+    --left-panel-w: 46vw;   /* 필요하면 40~50vw 사이로 조절 */
+    --right-panel-w: 46vw;
+  }
+
+  /* 패널 여백/폰트 살짝 줄이기 */
+  .left-tabs,
+  .input-panel {
+    padding: 10px 12px;
+    border-radius: 10px;
+  }
+  .panel-title { font-size: 14px; }
+  .panel-toggle { width: 26px; height: 26px; line-height: 24px; }
+
+  /* 스크롤 영역 키우기 */
+  .left-tabs .panel-content,
+  .input-panel .panel-content {
+    max-height: calc(100vh - 120px);
+    overflow: auto;
+  }
+
+  /* 입력 컨트롤 모바일 최적화 */
+  .input-panel .row {
+    display: block;
+    gap: 8px;
+  }
+  .input-panel .row input {
+    width: 100%;
+    margin-top: 6px;
+  }
+  .input-panel .btn {
+    width: 100%;
+  }
+}
+
+/* 초소형(예: 아이폰 SE)에서는 더 타이트하게 */
+@media (max-width: 380px) {
+  :root {
+    --left-panel-w: 80vw;
+    --right-panel-w: 80vw;
+  }
+}
