@@ -5,13 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>전졸협 합숙장소 후보지 인포그래픽</title>
 
-  <!-- Leaflet -->
+  <!-- Leaflet CSS -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
     crossorigin="anonymous"
   />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="map"></div>
+
+  <!-- 1) Leaflet JS -->
   <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
@@ -19,35 +25,16 @@
     defer
   ></script>
 
-  <link rel="stylesheet" href="style.css" />
-</head>
-<body>
-  <div id="map"></div>
-
-  <!-- 1) 데이터 먼저 -->
-  <script src="places.js" charset="utf-8" defer></script>
-
-  <!-- 2) (선택) Firebase: 익명 로그인 + Firestore 사용하려면 필요 -->
-  <!--    Firebase 콘솔 > 프로젝트 설정 > 내 앱 > SDK 설정 복사해서 아래에 붙여넣기 -->
+  <!-- 2) Firebase SDKs (항상 script.js보다 위) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
-  <script>
-    // ⚠️ 여기를 네 프로젝트 값으로 바꿔 넣기 (예시는 형식만 보여줌)
-{
-  apiKey: "AIzaSyD5M5IxzxEIdnNzky3ZijElrEP8clYX31Y",
-  authDomain: "jeonjolhyup.firebaseapp.com",
-  projectId: "jeonjolhyup",
-  storageBucket: "jeonjolhyup.firebasestorage.app",
-  messagingSenderId: "547424969197",
-  appId: "1:547424969197:web:92044afa9f174d6eda87e4",
-  measurementId: "G-CBQ6BLBRWJ"
-}
-      // (필요 시) storageBucket, messagingSenderId, appId 등 추가 가능
-    };
-  </script>
 
-  <!-- 3) 로직 마지막에 -->
-  <script src="script.js" charset="utf-8" defer></script>
+  <!-- 3) Firebase 설정 (반드시 window.FB_CONFIG = {...}; 형태) -->
+  <script src="config.js" defer></script>
+
+  <!-- 4) 데이터, 5) 로직 (마지막) -->
+  <script src="places.js" charset="utf-8" defer></script>
+  <script src="script.js"  charset="utf-8" defer></script>
 </body>
 </html>
