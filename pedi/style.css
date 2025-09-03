@@ -1,59 +1,43 @@
-/* 레벨별(장/절/항목) 시각 계층 */
-ul#list { list-style: none; padding: 0; margin: 16px 0; }
-li.chapter { margin: 10px 0 14px; }
+body {
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Noto Sans KR', Arial, sans-serif;
+  margin: 0;
+  background: #fafafa;
+}
+.wrap { max-width: 900px; margin: 48px auto; padding: 0 20px; }
+h1 { margin: 0 0 16px; font-size: 24px; }
 
-.chapter-line {
-  display: flex; align-items: center; gap: 8px;
-  background: #ffffff; border: 1px solid rgba(0,0,0,.12);
-  border-radius: 10px; padding: 8px 10px;
+/* 상단 바 */
+.topbar {
+  position: sticky; top: 0; background: #fff;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+  padding: 10px 20px;
 }
-.chapter-btn {
-  flex: 1; text-align: left; border: 0; background: transparent;
-  font-size: 16px; font-weight: 800; color: #111; cursor: pointer;
-}
-.section-btn {
-  border: 0; background: transparent; cursor: pointer;
-  font-size: 15px; font-weight: 700; color: #0a66c2; text-align: left;
-}
-
-.items {
-  margin: 6px 0 0 14px; padding-left: 12px;
-  border-left: 2px solid rgba(0,0,0,.08);
-}
-.item {
-  margin: 6px 0; padding: 6px 8px;
-  background: #fff; border: 1px solid rgba(0,0,0,.1);
-  border-radius: 8px; font-size: 14px; color:#222;
+.topbar a {
+  text-decoration: none; color: #0a66c2; font-weight: 700;
 }
 
-.item-line {
-  margin: 4px 0;
-  padding: 8px 10px;
+/* 기본 리스트 */
+ul { list-style: none; padding: 0; margin: 16px 0; }
+li { margin-bottom: 8px; }
+
+/* 공통 토글 블록 (장, 절) */
+.chapter-line, .section-line {
+  display: block;
+  padding: 10px 12px;
   border: 1px solid rgba(0,0,0,.12);
-  border-radius: 8px;
-  background: #fdfdfd;
+  border-radius: 10px;
+  background: #fff;
   cursor: pointer;
-  font-size: 14px;
+  position: relative;
 }
-.item-line:hover {
-  background: #eef6ff;
-}
+.chapter-line:hover, .section-line:hover { background: #f7f9ff; }
 
-/* 안내 메시지 */
-.empty, .error {
-  margin: 8px 2px; padding: 8px 10px; border-radius: 8px;
-  font-size: 14px;
-}
-.empty { background: #fafafa; border:1px solid rgba(0,0,0,.08); color:#555; }
-.error { background: #fff4f4; border:1px solid rgba(255,0,0,.2); color:#b00; }
-
-
-
-/* 카드 자체를 토글: + / − 아이콘 표시 */
-.chapter-line::after,
-.section-line::after {
+/* + / − 아이콘 */
+.chapter-line::after, .section-line::after {
   content: "+";
-  margin-left: auto;            /* 오른쪽 끝으로 */
+  position: absolute;
+  right: 12px; top: 50%;
+  transform: translateY(-50%);
   font-weight: 900;
   color: rgba(0,0,0,.55);
 }
@@ -62,14 +46,15 @@ li.chapter { margin: 10px 0 14px; }
   content: "−";
 }
 
-/* 펼침/접힘 표시 */
-.sections,
-.items { display: none; }
-.sections.visible,
+/* 들여쓰기 및 계층 스타일 */
+.sections { margin-left: 20px; display: none; }
+.sections.visible { display: block; }
+
+.items { margin-left: 20px; display: none; }
 .items.visible { display: block; }
 
-/* 하위가 비어도 ‘펼쳐졌다’는 느낌만 주는 얇은 여백 */
-.empty-space { height: 8px; }
+.chapter-line { font-size: 16px; font-weight: 700; color: #111; }
+.section-line { font-size: 15px; font-weight: 600; color: #333; }
 
 /* --- 하위 항목(1., 2., …) 박스 버튼 --- */
 ul.items {
@@ -79,7 +64,6 @@ ul.items {
   border-left: 2px solid rgba(0,0,0,.08);
 }
 
-/* 항목을 박스 버튼처럼 */
 .item-line {
   display: block;
   margin: 6px 0;
@@ -94,7 +78,7 @@ ul.items {
 }
 .item-line:hover { background: #eef6ff; }
 
-/* 섹션 열었는데 하위 항목이 아예 없을 때 “살짝 간격”용 빈 박스 */
+/* 하위가 비어도 ‘펼쳐졌다’는 느낌만 주는 얇은 여백/빈 박스 */
 .item-empty {
   display: block;
   margin: 6px 0;
