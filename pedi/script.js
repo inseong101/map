@@ -29,132 +29,164 @@ document.addEventListener('DOMContentLoaded', () => {
       "26장 소아의료윤리.md"
     ];
 
+ // 파싱 캐시
+  const parsedCache = new Map();
 
+  // 마크다운 파서: "# 1절 …" → "제1절 …", "- 1. …" → "1. …"
+  function parseChapter(md) {
+    const sections = [];
+    let current = null;
+    const lines = md.split(/\r?\n/);
 
- // 캐시
-const parsedCache = new Map();
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (!line) continue;
 
-// 마크다운 파싱 (제목: 제1절…, 항목: 1. …)
-function parseChapter(md) {
-  const sections = [];
-  let current = null;
-  const lines = md.split(/\r?\n/);
-
-  for (const raw of lines) {
-    const line = raw.trim();
-    if (!line) continue;
-
-    if (line.startsWith("# ")) {
-      // 절 헤더: "# 1절 …" -> "제1절 …"
-      if (current) sections.push(current);
-      const t = line.replace(/^#\s*/, ""); // "1절 …"
-      current = { title: "제" + t, items: [] };
-    } else if (line.startsWith("- ")) {
-      if (current) {
-        const item = line.replace(/^-+\s*/, "").trim(); // "- 1. …" -> "1. …"
-        current.items.push(item);
+      if (line.startsWith('# ')) {
+        if (current) sections.push(current);
+        const t = line.replace(/^#\s*/, ''); // "1절 …"
+        current = { title: '제' + t, items: [] };
+      } else if (line.startsWith('- ')) {
+        if (current) {
+          const item = line.replace(/^-+\s*/, '').trim(); // "1. …"
+          current.items.push(item);
+        }
       }
     }
+    if (current) sections.push(current);
+    return { sections };
   }
-  if (current) sections.push(current);
-  return { sections };
-}
 
-// 장 블록 생성
-function makeChapterRow(file) {
-  const title = `제${file.replace(/\.md$/, "")}`; // "제6장 소아양생(…)"
-  const li = document.createElement("li");
-  li.innerHTML = `
-    <div class="chapter-line" role="button" aria-expanded="false">${title}</div>
-    <div class="sections"></div>
-  `;
-  const $line = li.querySelector(".chapter-line");
-  const $sections = li.querySelector(".sections");
+  // 장 블록 DOM 생성
+  function makeChapterRow(file) {
+    const title = `제${file.replace(/\.md$/, '')}`;
+    const li = document.createElement('li');
+    li.className = 'chapter';
+    li.innerHTML = `
+      <div class="chapter-line" role="button" aria-expanded="false">${title}</div>
+      <div class="sections"></div>
+    `;
 
-  $line.addEventListener("click", async () => {
-    const open = $line.getAttribute("aria-expanded") === "true";
-    if (open) {
-      $sections.classList.remove("visible");
-      $line.setAttribute("aria-expanded", "false");
-      return;
-    }
+    const $line = li.querySelector('.chapter-line');
+    const $sections = li.querySelector('.sections');
 
-    // 최초 로드
-    if (!parsedCache.has(file)) {
-      try {
-        const res = await fetch(BASE + encodeURIComponent(file), { cache: "no-store" });
-        if (!res.ok) throw new Error("fetch failed " + res.status);
-        const md = await res.text();
-        parsedCache.set(file, parseChapter(md));
-      } catch (e) {
-        console.error("❌ fetch 실패:", file, e);
-        // 실패해도 '빈 공간'은 한번 보여서 토글 피드백을 주자
-        $sections.innerHTML = `<div class="empty-space"></div>`;
-        $sections.classList.add("visible");
-        $line.setAttribute("aria-expanded", "true");
+    // 장 토글
+    $line.addEventListener('click', async () => {
+      const open = $line.getAttribute('aria-expanded') === 'true';
+      if (open) {
+        $sections.classList.remove('visible');
+        $line.setAttribute('aria-expanded', 'false');
         return;
       }
-    }
 
-    // 렌더
-    if ($sections.childElementCount === 0) {
-      const { sections } = parsedCache.get(file);
-      if (!sections.length) {
-        // 섹션이 하나도 없으면 빈 간격만 보여줌
-        $sections.innerHTML = `<div class="empty-space"></div>`;
-      } else {
-        sections.forEach((sec) => {
-          const secWrap = document.createElement("div");
-          secWrap.innerHTML = `
-  <div class="section-line" role="button" aria-expanded="false">${sec.title}</div>
-  <ul class="items"></ul>
-`;
-          const $secLine = secWrap.querySelector(".section-line");
-          const $items = secWrap.querySelector(".items");
-
-$secLine.addEventListener("click", () => {
-  const secOpen = $secLine.getAttribute("aria-expanded") === "true";
-  if (secOpen) {
-    $items.classList.remove("visible");
-    $secLine.setAttribute("aria-expanded", "false");
-  } else {
-    if ($items.childElementCount === 0) {
-      if (sec.items.length === 0) {
-  const spacer = document.createElement("div");
-  spacer.className = "item-spacer";
-  $items.appendChild(spacer);
-      } else {
-        // 실제 항목들(1., 2., …)
-        sec.items.forEach((txt) => {
-          const li = document.createElement("li");
-          li.className = "item item-line";   // ← 이 클래스가 박스 스타일 적용 포인트
-          li.textContent = txt;
-          // 나중에 클릭 시 DB에서 문제/개념 불러올 때 이 핸들러에 붙이면 됨
-          // li.addEventListener('click', () => { ... });
-          $items.appendChild(li);
-        });
+      // 최초 로드 시 마크다운 가져와 파싱
+      if (!parsedCache.has(file)) {
+        try {
+          const res = await fetch(BASE + encodeURIComponent(file), { cache: 'no-store' });
+          if (!res.ok) throw new Error('fetch failed ' + res.status);
+          const md = await res.text();
+          parsedCache.set(file, parseChapter(md));
+        } catch (e) {
+          console.error('❌ fetch 실패:', file, e);
+          // 내용이 없어도 토글 피드백(간격)만 표시
+          $sections.innerHTML = `<div class="empty-space"></div>`;
+          $sections.classList.add('visible');
+          $line.setAttribute('aria-expanded', 'true');
+          return;
+        }
       }
-    }
-    $items.classList.add("visible");
-    $secLine.setAttribute("aria-expanded", "true");
+
+      // 섹션 렌더(최초 1회만)
+      if ($sections.childElementCount === 0) {
+        const { sections } = parsedCache.get(file) || { sections: [] };
+
+        if (!sections.length) {
+          $sections.innerHTML = `<div class="empty-space"></div>`;
+        } else {
+          sections.forEach((sec) => {
+            const secWrap = document.createElement('div');
+            secWrap.className = 'section';
+            secWrap.innerHTML = `
+              <div class="section-line" role="button" aria-expanded="false">${sec.title}</div>
+              <ul class="items"></ul>
+            `;
+
+            const $secLine = secWrap.querySelector('.section-line');
+            const $items = secWrap.querySelector('.items');
+
+            // 절 토글
+            $secLine.addEventListener('click', () => {
+              const secOpen = $secLine.getAttribute('aria-expanded') === 'true';
+              if (secOpen) {
+                $items.classList.remove('visible');
+                $secLine.setAttribute('aria-expanded', 'false');
+              } else {
+                // 절을 처음 펼칠 때 하위 항목 DOM 구성
+                if ($items.childElementCount === 0) {
+                  if (sec.items.length === 0) {
+                    // 항목이 없으면 간격만
+                    const spacer = document.createElement('div');
+                    spacer.className = 'item-spacer';
+                    $items.appendChild(spacer);
+                  } else {
+                    // 항목(1., 2., …) 각각도 토글 가능한 박스
+                    sec.items.forEach((txt) => {
+                      const itemLi = document.createElement('li');
+                      itemLi.className = 'item item-line';
+                      itemLi.setAttribute('role', 'button');
+                      itemLi.setAttribute('aria-expanded', 'false');
+                      itemLi.innerHTML = `
+                        <div class="item-title">${txt}</div>
+                        <div class="item-content"></div>
+                      `;
+
+                      const $content = itemLi.querySelector('.item-content');
+
+                      // 항목 토글 (나중에 DB 컨텐츠 여기에 삽입)
+                      itemLi.addEventListener('click', (ev) => {
+                        ev.stopPropagation(); // 절 토글로 전파 방지
+                        const isOpen = itemLi.getAttribute('aria-expanded') === 'true';
+                        if (isOpen) {
+                          $content.classList.remove('visible');
+                          itemLi.setAttribute('aria-expanded', 'false');
+                        } else {
+                          // 처음 열릴 때 빈 여백만 넣어도 되고,
+                          // 추후 여기서 Firestore 등에서 내용을 불러와 채우면 됨.
+                          if ($content.childElementCount === 0) {
+                            const spacer = document.createElement('div');
+                            spacer.className = 'item-spacer';
+                            $content.appendChild(spacer);
+                          }
+                          $content.classList.add('visible');
+                          itemLi.setAttribute('aria-expanded', 'true');
+                        }
+                      });
+
+                      $items.appendChild(itemLi);
+                    });
+                  }
+                }
+
+                $items.classList.add('visible');
+                $secLine.setAttribute('aria-expanded', 'true');
+              }
+            });
+
+            $sections.appendChild(secWrap);
+          });
+        }
+      }
+
+      $sections.classList.add('visible');
+      $line.setAttribute('aria-expanded', 'true');
+    });
+
+    return li;
   }
+
+  // 메인 렌더
+  const $list = document.getElementById('list');
+  CHAPTERS.forEach((file) => {
+    $list.appendChild(makeChapterRow(file));
+  });
 });
-
-          $sections.appendChild(secWrap);
-        });
-      }
-    }
-
-    $sections.classList.add("visible");
-    $line.setAttribute("aria-expanded", "true");
-  });
-
-  return li;
-}
-  // 메인
-  const $list = document.getElementById("list");
-  CHAPTERS.forEach((file, i) => {
-    $list.appendChild(makeChapterRow(file, i + 1));
-  });
-
-}); // ✅ 마지막 닫는 괄호, 세미콜론 꼭 있어야 함
