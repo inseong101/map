@@ -79,6 +79,7 @@ ul.items {
   border-left: 2px solid rgba(0,0,0,.08);
 }
 
+/* 항목을 박스 버튼처럼 */
 .item-line {
   display: block;
   margin: 6px 0;
@@ -91,9 +92,7 @@ ul.items {
   cursor: pointer;
   transition: background .15s ease;
 }
-.item-line:hover {
-  background: #eef6ff;
-}
+.item-line:hover { background: #eef6ff; }
 
 /* 섹션 열었는데 하위 항목이 아예 없을 때 “살짝 간격”용 빈 박스 */
 .item-empty {
