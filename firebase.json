@@ -7,14 +7,8 @@
       "**/node_modules/**"
     ],
     "rewrites": [
-      {
-        "source": "/map/**",
-        "destination": "/map/index.html"
-      },
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
+      { "source": "/map/**", "destination": "/map/index.html" },
+      { "source": "**",      "destination": "/index.html" }
     ]
   }
 }
