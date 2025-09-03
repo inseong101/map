@@ -28,98 +28,107 @@ document.addEventListener('DOMContentLoaded', () => {
       "25장 급증(손상).md",
       "26장 소아의료윤리.md"
     ];
-// 캐시
-const parsedCache = new Map();
 
-// 제목 파싱 함수
-function parseChapter(md) {
-  const sections = [];
-  let current = null;
-  const lines = md.split(/\r?\n/);
 
-  for (const line of lines) {
-    if (line.startsWith("# ")) {
-      // 절
-      if (current) sections.push(current);
-      const title = line.replace(/^#\s*/, "");
-      current = { title: "제" + title, items: [] };
-    } else if (line.startsWith("- ")) {
-      if (current) current.items.push(line.replace(/^-+\s*/, ""));
-    }
-  }
-  if (current) sections.push(current);
-  return { sections };
-}
 
-// 장 블록 만들기
-function makeChapterRow(file, idx) {
-  const title = `제${file.replace(/\.md$/, "")}`;
-  const li = document.createElement("li");
-  li.innerHTML = `
-    <div class="chapter-line" role="button" aria-expanded="false">${title}</div>
-    <div class="sections"></div>
-  `;
-  const $line = li.querySelector(".chapter-line");
-  const $sections = li.querySelector(".sections");
 
-  $line.addEventListener("click", async () => {
-    const open = $line.getAttribute("aria-expanded") === "true";
-    if (open) {
-      $sections.classList.remove("visible");
-      $line.setAttribute("aria-expanded", "false");
-      return;
-    }
+                          // 캐시
+  const parsedCache = new Map();
 
-    if (!parsedCache.has(file)) {
-      const res = await fetch(BASE + encodeURIComponent(file));
-      if (res.ok) {
-        const md = await res.text();
-        parsedCache.set(file, parseChapter(md));
+  // 제목 파싱: # 절, - 항목
+  function parseChapter(md) {
+    const sections = [];
+    let current = null;
+    const lines = md.split(/\r?\n/);
+
+    for (const line of lines) {
+      if (line.startsWith("# ")) {
+        if (current) sections.push(current);
+        const title = line.replace(/^#\s*/, "");
+        current = { title: "제" + title, items: [] }; // ← "제1절 ..." 형태
+      } else if (line.startsWith("- ")) {
+        if (current) current.items.push(line.replace(/^-+\s*/, ""));
       }
     }
+    if (current) sections.push(current);
+    return { sections };
+  }
 
-    if ($sections.childElementCount === 0) {
-      const { sections } = parsedCache.get(file);
-      sections.forEach((sec) => {
-        const secDiv = document.createElement("div");
-        secDiv.innerHTML = `
-          <div class="section-line" role="button" aria-expanded="false">${sec.title}</div>
-          <ul class="items"></ul>
-        `;
-        const $secLine = secDiv.querySelector(".section-line");
-        const $items = secDiv.querySelector(".items");
+  // 장 블록
+  function makeChapterRow(file) {
+    const title = `제${file.replace(/\.md$/, "")}`; // ← "제6장 소아양생..." 형태
+    const li = document.createElement("li");
+    li.innerHTML = `
+      <div class="chapter-line" role="button" aria-expanded="false">${title}</div>
+      <div class="sections"></div>
+    `;
+    const $line = li.querySelector(".chapter-line");
+    const $sections = li.querySelector(".sections");
 
-        $secLine.addEventListener("click", () => {
-          const secOpen = $secLine.getAttribute("aria-expanded") === "true";
-          if (secOpen) {
-            $items.classList.remove("visible");
-            $secLine.setAttribute("aria-expanded", "false");
-          } else {
-            if ($items.childElementCount === 0) {
-              sec.items.forEach((txt) => {
-                const li = document.createElement("li");
-                li.textContent = txt;
-                $items.appendChild(li);
-              });
+    $line.addEventListener("click", async () => {
+      const open = $line.getAttribute("aria-expanded") === "true";
+      if (open) {
+        $sections.classList.remove("visible");
+        $line.setAttribute("aria-expanded", "false");
+        return;
+      }
+
+      if (!parsedCache.has(file)) {
+        try {
+          // ✅ 캐시 방지
+          const res = await fetch(BASE + encodeURIComponent(file), { cache: "no-store" });
+          if (!res.ok) throw new Error("fetch failed " + res.status);
+          const md = await res.text();
+          parsedCache.set(file, parseChapter(md));
+        } catch (e) {
+          console.error(e);
+          $sections.innerHTML = `<div style="color:#c00;">불러오기 실패: ${e.message}</div>`; // ✅ 실패 표시
+        }
+      }
+
+      if ($sections.childElementCount === 0 && parsedCache.get(file)) {
+        const { sections } = parsedCache.get(file);
+        sections.forEach((sec) => {
+          const secDiv = document.createElement("div");
+          secDiv.innerHTML = `
+            <div class="section-line" role="button" aria-expanded="false">${sec.title}</div>
+            <ul class="items"></ul>
+          `;
+          const $secLine = secDiv.querySelector(".section-line");
+          const $items = secDiv.querySelector(".items");
+
+          $secLine.addEventListener("click", () => {
+            const secOpen = $secLine.getAttribute("aria-expanded") === "true";
+            if (secOpen) {
+              $items.classList.remove("visible");
+              $secLine.setAttribute("aria-expanded", "false");
+            } else {
+              if ($items.childElementCount === 0) {
+                sec.items.forEach((txt) => {
+                  const li = document.createElement("li");
+                  li.textContent = txt; // 마크다운의 1., 2. 그대로 유지
+                  $items.appendChild(li);
+                });
+              }
+              $items.classList.add("visible");
+              $secLine.setAttribute("aria-expanded", "true");
             }
-            $items.classList.add("visible");
-            $secLine.setAttribute("aria-expanded", "true");
-          }
+          });
+
+          $sections.appendChild(secDiv);
         });
+      }
 
-        $sections.appendChild(secDiv);
-      });
-    }
+      $sections.classList.add("visible");
+      $line.setAttribute("aria-expanded", "true");
+    });
 
-    $sections.classList.add("visible");
-    $line.setAttribute("aria-expanded", "true");
+    return li;
+  }
+
+  // 메인
+  const $list = document.getElementById("list");
+  CHAPTERS.forEach((file) => {
+    $list.appendChild(makeChapterRow(file));
   });
-
-  return li;
-}
-
-// 메인
-const $list = document.getElementById("list");
-CHAPTERS.forEach((file, i) => {
-  $list.appendChild(makeChapterRow(file, i + 1));
 });
