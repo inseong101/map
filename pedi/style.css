@@ -1,0 +1,50 @@
+/* 레벨별(장/절/항목) 시각 계층 */
+ul#list { list-style: none; padding: 0; margin: 16px 0; }
+li.chapter { margin: 10px 0 14px; }
+
+.chapter-line {
+  display: flex; align-items: center; gap: 8px;
+  background: #ffffff; border: 1px solid rgba(0,0,0,.12);
+  border-radius: 10px; padding: 8px 10px;
+}
+.chapter-btn {
+  flex: 1; text-align: left; border: 0; background: transparent;
+  font-size: 16px; font-weight: 800; color: #111; cursor: pointer;
+}
+.expand-btn {
+  width: 28px; height: 28px; border-radius: 8px;
+  border: 1px solid rgba(0,0,0,.15);
+  background: #f0f0f0; color: #111; font-weight: 900; cursor: pointer;
+}
+.expand-btn:hover { background: #e6e6e6; }
+
+.sections { margin-left: 16px; margin-top: 8px; }
+
+.section { margin: 8px 0; }
+.section-line {
+  display: flex; align-items: center;
+  background: #f7f9ff; border: 1px solid rgba(10,102,194,.18);
+  border-radius: 10px; padding: 6px 10px;
+}
+.section-btn {
+  border: 0; background: transparent; cursor: pointer;
+  font-size: 15px; font-weight: 700; color: #0a66c2; text-align: left;
+}
+
+.items {
+  margin: 6px 0 0 14px; padding-left: 12px;
+  border-left: 2px solid rgba(0,0,0,.08);
+}
+.item {
+  margin: 6px 0; padding: 6px 8px;
+  background: #fff; border: 1px solid rgba(0,0,0,.1);
+  border-radius: 8px; font-size: 14px; color:#222;
+}
+
+/* 안내 메시지 */
+.empty, .error {
+  margin: 8px 2px; padding: 8px 10px; border-radius: 8px;
+  font-size: 14px;
+}
+.empty { background: #fafafa; border:1px solid rgba(0,0,0,.08); color:#555; }
+.error { background: #fff4f4; border:1px solid rgba(255,0,0,.2); color:#b00; }
