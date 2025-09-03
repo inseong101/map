@@ -106,9 +106,9 @@ function makeChapterRow(file) {
         sections.forEach((sec) => {
           const secWrap = document.createElement("div");
           secWrap.innerHTML = `
-            <div class="section-line" role="button" aria-expanded="false">${sec.title}</div>
-            <div class="items"></div>
-          `;
+  <div class="section-line" role="button" aria-expanded="false">${sec.title}</div>
+  <ul class="items"></ul>
+`;
           const $secLine = secWrap.querySelector(".section-line");
           const $items = secWrap.querySelector(".items");
 
