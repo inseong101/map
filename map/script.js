@@ -325,7 +325,7 @@ function rightPanelHTML() {
   return '' +
   '<div class="input-panel" id="rightPanel">' +
     '<div class="panel-header">' +
-      '<h3 class="panel-title" style="color:#fff;">장소 추가/삭제</h3>' +
+      '<h3 class="panel-title" style="color:#111;">장소 추가/삭제</h3>' +
       '<button class="panel-toggle dark" id="rightToggle" aria-label="접기">−</button>' +
     '</div>' +
     '<div class="panel-content" id="rightContent">' +
