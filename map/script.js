@@ -363,45 +363,15 @@ function injectRightPanel() {
 document.getElementById("btn_add").onclick = async () => {
   if (!db) {
     alert("Firebase에 연결되지 않았어요. config.js와 Firestore 설정을 확인해주세요.");
-    return;   // 여기서 함수 종료
+    return;
   }
 
-  // … 입력 검증 및 Firestore 저장 코드 …
+  // Firestore 저장
+  await db.collection("places").doc(String(newId)).set(p, { merge: true });
 
-  // 마지막에 목록 갱신
+  // 저장 끝나면 목록 다시 그림
   rebuildTabs();
 };
-
-    const name = (document.getElementById("in_name").value || "").trim();
-    const address = (document.getElementById("in_addr").value || "").trim();
-    const lat = parseFloat(document.getElementById("in_lat").value);
-    const lon = parseFloat(document.getElementById("in_lon").value);
-
-    if (!name || isNaN(lat) || isNaN(lon)) {
-      alert("이름, 위도, 경도는 필수입니다.");
-      return;
-    }
-
-    const ids = (window.PLACES || []).map(p => Number(p.id) || 0);
-    const newId = ids.length ? Math.max(...ids) + 1 : 1;
-
-    const p = {
-      id: newId,
-      name,
-      address: address || "주소 없음",
-      lat,
-      lon,
-      deg: Math.random() * 360,
-      rad: 80 + Math.random() * 120
-    };
-
-    await db.collection("places").doc(String(newId)).set(p, { merge: true });
-
-    document.getElementById("in_name").value = "";
-    document.getElementById("in_addr").value = "";
-    document.getElementById("in_lat").value = "";
-    document.getElementById("in_lon").value = "";
-  };
 }
 
 /* ---------- Firestore 구독 ---------- */
