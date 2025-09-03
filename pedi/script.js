@@ -112,33 +112,35 @@ function makeChapterRow(file) {
           const $secLine = secWrap.querySelector(".section-line");
           const $items = secWrap.querySelector(".items");
 
-          $secLine.addEventListener("click", () => {
-            const secOpen = $secLine.getAttribute("aria-expanded") === "true";
-            if (secOpen) {
-              $items.classList.remove("visible");
-              $secLine.setAttribute("aria-expanded", "false");
-            } else {
-              if ($items.childElementCount === 0) {
-                if (!sec.items.length) {
-                  // 항목이 없으면 스페이서만
-                  $items.appendChild(document.createElement("div")).className = "empty-space";
-                } else {
-                  sec.items.forEach((txt) => {
-                    const d = document.createElement("div");
-                    d.className = "item-line";
-                    d.textContent = txt; // 나중에 클릭해서 DB 연결할 예정
-                    d.addEventListener("click", (ev) => {
-                      ev.stopPropagation(); // 절 토글로 버블링 방지
-                      alert(`👉 '${txt}' 버튼 클릭됨 (여기에 DB 내용 붙일 예정)`);
-                    });
-                    $items.appendChild(d);
-                  });
-                }
-              }
-              $items.classList.add("visible");
-              $secLine.setAttribute("aria-expanded", "true");
-            }
-          });
+$secLine.addEventListener("click", () => {
+  const secOpen = $secLine.getAttribute("aria-expanded") === "true";
+  if (secOpen) {
+    $items.classList.remove("visible");
+    $secLine.setAttribute("aria-expanded", "false");
+  } else {
+    if ($items.childElementCount === 0) {
+      if (sec.items.length === 0) {
+        // 항목이 하나도 없을 때: 빈 박스(간격 표시)
+        const empty = document.createElement("li");
+        empty.className = "item-empty";
+        empty.textContent = "항목 없음";
+        $items.appendChild(empty);
+      } else {
+        // 실제 항목들(1., 2., …)
+        sec.items.forEach((txt) => {
+          const li = document.createElement("li");
+          li.className = "item-line";   // ← 이 클래스가 박스 스타일 적용 포인트
+          li.textContent = txt;
+          // 나중에 클릭 시 DB에서 문제/개념 불러올 때 이 핸들러에 붙이면 됨
+          // li.addEventListener('click', () => { ... });
+          $items.appendChild(li);
+        });
+      }
+    }
+    $items.classList.add("visible");
+    $secLine.setAttribute("aria-expanded", "true");
+  }
+});
 
           $sections.appendChild(secWrap);
         });
