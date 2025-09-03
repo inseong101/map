@@ -529,42 +529,42 @@ async function loadUniversities() {
       window.universityLayer = null;
     }
 
-    // pane 준비 (markers(700)보다 위)
-    if (!map.getPane("pane-univ")) {
-      const paneUniv = map.createPane("pane-univ");
-      paneUniv.style.zIndex = 720;
-    }
-
-    window.universityLayer = L.layerGroup().addTo(map);
-
-    ok.forEach(u => {
-      const icon = L.divIcon({
-        className: "",
-        html: `<div style="
-          font-size:22px; line-height:22px;
-          transform: translate(-50%, -100%);
-          text-shadow: 0 1px 2px rgba(0,0,0,.35);
-        ">🚩</div>`,
-        iconSize: [22, 22],
-        iconAnchor: [11, 22],
-      });
-
-      L.marker([u.lat, u.lon], { icon, pane: "pane-univ", title: u.name })
-  .addTo(window.universityLayer)
-  .bindTooltip(u.name, {
-    permanent: true,       // 항상 표시
-    direction: "top",
-    offset: [0, -6],
-    className: "uni-label"
-  })
-  .bindPopup(`<b>${u.name}</b>${u.address ? `<br>${u.address}` : ""}`);
-
-    console.log(`[univ] loaded: total=${raw.length}, ok=${ok.length}, skipped=${bad.length}`);
-  } catch (e) {
-    console.error("[univ] load error:", e);
-  }
+// pane 준비 (markers(700)보다 위)
+if (!map.getPane("pane-univ")) {
+  const paneUniv = map.createPane("pane-univ");
+  paneUniv.style.zIndex = 720;
 }
 
+window.universityLayer = L.layerGroup().addTo(map);
+
+ok.forEach(u => {
+  const icon = L.divIcon({
+    className: "",
+    html: `<div style="
+      font-size:22px; line-height:22px;
+      transform: translate(-50%, -100%);
+      text-shadow: 0 1px 2px rgba(0,0,0,.35);
+    ">🚩</div>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 22],
+  });
+
+  L.marker([u.lat, u.lon], { icon, pane: "pane-univ", title: u.name })
+    .addTo(window.universityLayer)
+    .bindTooltip(u.name, {
+      permanent: true,       // 항상 표시
+      direction: "top",
+      offset: [0, -6],
+      className: "uni-label"
+    })
+    .bindPopup(`<b>${u.name}</b>${u.address ? `<br>${u.address}` : ""}`);
+}); // ← 이 닫는 괄호가 빠졌던 거예요
+
+console.log(`[univ] loaded: total=${raw.length}, ok=${ok.length}, skipped=${bad.length}`);
+
+
+
+    
 /* ---------- 초기화 ---------- */
 async function initMap() {
   await initFirebase();
