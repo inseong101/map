@@ -12,18 +12,18 @@ let linesLayer  = null;   // 선 컨테이너
 const layerById = {};     // id -> { marker, line, dot, baseLL }
 const SIDO_GEOJSON = "TL_SCCO_CTPRVN.json";
 
-const DEFAULT_DEG = 270;      // 폴백
-const DEFAULT_RAD = 100;      // 폴백
+const DEFAULT_DEG = 270;
+const DEFAULT_RAD = 100;
 
-// 🔹 /map/index.html 기준 경로. universities.json은 /map/data/universities.json 에 있어야 함
+/* ✅ /map/index.html 에서 <base href="/map/"> 를 쓰므로
+   상대경로 "data/universities.json" => /map/data/universities.json 로 정확히 해석됨 */
 const UNIVERSITY_JSON = "data/universities.json";
-let universityLayer = null;
 
 let db = null;
-const isDbMode = () => !!db;  // DB 연결 여부
+const isDbMode = () => !!db;
 let firstSnapshot = true;
 
-/* ---------- 유틸 함수들 ---------- */
+/* ---------- 유틸 ---------- */
 function toNum(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
 function isValidLatLng(lat, lon) { return Number.isFinite(lat) && Number.isFinite(lon); }
 function isValidPlace(p) { return isValidLatLng(p?.lat, p?.lon); }
@@ -61,7 +61,7 @@ async function initFirebase() {
   }
 }
 
-/* ---------- 유틸: deg/rad 보장(없으면 랜덤) ---------- */
+/* ---------- 유틸: deg/rad 보장 ---------- */
 function ensureDegRad(p) {
   if (typeof p.deg !== "number") p.deg = Math.random() * 360;
   if (typeof p.rad !== "number") p.rad = 80 + Math.random() * 120;
@@ -103,7 +103,7 @@ function addKoreaSilhouetteFromLocal() {
     .catch(err => console.error("[geojson] load failed:", err));
 }
 
-/* ---------- 선분-사각형 경계 교차(라벨 박스 내부 구간 숨김) ---------- */
+/* ---------- 선분-사각형 경계 교차 ---------- */
 function segmentRectIntersection(P0, P1, tl, size) {
   const xmin = tl.x, ymin = tl.y;
   const xmax = tl.x + size.w, ymax = tl.y + size.h;
@@ -137,7 +137,7 @@ function updateLeaderLine(baseLL, labelMarker, polyline) {
   const iconEl = labelMarker.getElement ? labelMarker.getElement() : labelMarker._icon;
   if (!iconEl) return;
 
-  const tl = L.DomUtil.getPosition(iconEl); // 라벨 좌상단(layer 좌표)
+  const tl = L.DomUtil.getPosition(iconEl);
   const rect = iconEl.getBoundingClientRect();
   const size = { w: rect.width, h: rect.height };
   const center = L.point(tl.x + size.w / 2, tl.y + size.h / 2);
@@ -156,8 +156,8 @@ function computeDegRad(baseLL, labelMarker) {
   const dx = labelPt.x - basePt.x;
   const dy = labelPt.y - basePt.y;
   const rad = Math.hypot(dx, dy);
-  let deg = Math.atan2(dy, dx) * 180 / Math.PI; // -180~180
-  if (deg < 0) deg += 360;                      // 0~360
+  let deg = Math.atan2(dy, dx) * 180 / Math.PI;
+  if (deg < 0) deg += 360;
   return { deg, rad };
 }
 
@@ -199,7 +199,6 @@ function addPlaceToMap(p, alsoAddTab = true) {
     console.warn("[addPlaceToMap] skip invalid place:", p);
     return;
   }
-  // DB 모드에서는 렌더 시 랜덤 부여 금지
   if (!isDbMode()) {
     if (typeof p.deg !== "number" || typeof p.rad !== "number") {
       ensureDegRad(p);
@@ -239,7 +238,6 @@ function addPlaceToMap(p, alsoAddTab = true) {
     color: "#FF0000", weight: 2.5, opacity: 1, pane: "pane-lines"
   }).addTo(linesLayer);
 
-  // 렌더 후 경계까지 선 갱신
   setTimeout(() => updateLeaderLine(baseLL, marker, line), 0);
   marker.on("drag",    e => updateLeaderLine(baseLL, e.target, line));
   marker.on("dragend", async (e) => {
@@ -361,7 +359,6 @@ function removePlace(id) {
   const el = document.getElementById("tab_" + id);
   if (el && el.parentNode) el.parentNode.removeChild(el);
 
-  // DB에서도 삭제하려면 아래 해제
   // if (db) db.collection("places").doc(String(id)).delete().catch(console.error);
 }
 
@@ -431,35 +428,6 @@ function injectRightPanel() {
   };
 }
 
-/* ---------- 패널 토글 공통 ---------- */
-function setupPanelToggle(containerId, toggleBtnId, storageKey) {
-  const $container = document.getElementById(containerId);
-  const $toggle = document.getElementById(toggleBtnId);
-  if (!$container || !$toggle) return;
-
-  try {
-    const saved = localStorage.getItem(storageKey);
-    if (saved === "collapsed") {
-      $container.classList.add("collapsed");
-      $toggle.textContent = "+";
-      $toggle.setAttribute("aria-label", "펼치기");
-    }
-  } catch (_) {}
-
-  $toggle.addEventListener("click", () => {
-    const collapsed = $container.classList.toggle("collapsed");
-    if (collapsed) {
-      $toggle.textContent = "+";
-      $toggle.setAttribute("aria-label", "펼치기");
-      try { localStorage.setItem(storageKey, "collapsed"); } catch (_) {}
-    } else {
-      $toggle.textContent = "−";
-      $toggle.setAttribute("aria-label", "접기");
-      try { localStorage.setItem(storageKey, "expanded"); } catch (_) {}
-    }
-  });
-}
-
 /* ---------- Firestore 구독 ---------- */
 async function subscribePlacesAndRender() {
   if (!db) { renderAll(); return; }
@@ -499,14 +467,14 @@ async function subscribePlacesAndRender() {
   });
 }
 
-/* ---------- 🎓 대학교 로더 ---------- */
+/* ---------- 🎓 대학교 로더 (깃발 + 상시 라벨) ---------- */
 async function loadUniversities() {
   try {
     const res = await fetch(UNIVERSITY_JSON, { cache: "no-store" });
+    console.log("[univ] fetch", { requested: UNIVERSITY_JSON, resolved: res.url, ok: res.ok });
     if (!res.ok) throw new Error(`fetch fail ${res.status} ${res.statusText}`);
     const raw = await res.json();
 
-    // 키 표준화 + 숫자 캐스팅
     const data = raw.map(u => ({
       name: u.name ?? u.title ?? "",
       address: u.address ?? u.addr ?? "",
@@ -514,45 +482,45 @@ async function loadUniversities() {
       lon: Number(u.lon ?? u.lng ?? u.long ?? u.longitude),
     }));
 
-    const ok  = data.filter(u => Number.isFinite(u.lat) && Number.isFinite(u.lon));
     const bad = data.filter(u => !Number.isFinite(u.lat) || !Number.isFinite(u.lon));
+    const ok  = data.filter(u =>  Number.isFinite(u.lat) &&  Number.isFinite(u.lon));
     if (bad.length) console.warn("[univ] skipped invalid coords:", bad);
 
-    if (universityLayer) {
-      universityLayer.removeFrom(map);
-      universityLayer = null;
+    if (window.universityLayer) {
+      window.universityLayer.removeFrom(map);
+      window.universityLayer = null;
     }
 
-    // 깃발 전용 pane (markers(700)보다 위)
     if (!map.getPane("pane-univ")) {
       const paneUniv = map.createPane("pane-univ");
-      paneUniv.style.zIndex = 720;
+      paneUniv.style.zIndex = 720; // markers(700)보다 위
     }
 
-    universityLayer = L.layerGroup([], { pane: "pane-univ" }).addTo(map);
+    window.universityLayer = L.layerGroup().addTo(map);
 
     ok.forEach(u => {
-      // 🚩 깃발 아이콘: 좌표의 "아래 중앙"이 기준점(정확히 그 지점에 찍힘)
+      // 아이콘을 좌표 정중앙 기준으로 앵커(가운데, 아래끝)로 설정
       const icon = L.divIcon({
-        className: "",          // 기본 클래스를 비움
-        html: "🚩",             // 간단한 이모지 (추가 transform 없음)
-        iconSize: [22, 22],     // 렌더 박스 크기
-        iconAnchor: [11, 22],   // (가로 중앙, 세로 아래) = 좌표를 정확히 깃발 아래끝 중심으로
+        className: "",
+        html: "🚩",
+        iconSize: [22, 22],
+        iconAnchor: [11, 22], // 중앙-아래
       });
 
       L.marker([u.lat, u.lon], { icon, pane: "pane-univ", title: u.name })
-        .addTo(universityLayer)
+        .addTo(window.universityLayer)
         .bindTooltip(u.name, {
-          permanent: true,       // 항상 표시
+          permanent: true,
           direction: "top",
           offset: [0, -6],
-          className: "uni-label" // (선택) 스타일 커스터마이즈하려면 CSS에서 .uni-label 정의
+          className: "uni-label"
         })
         .bindPopup(`<b>${u.name}</b>${u.address ? `<br>${u.address}` : ""}`);
     });
 
     console.log(`[univ] loaded: total=${raw.length}, ok=${ok.length}, skipped=${bad.length}`);
   } catch (e) {
+    // JSON 대신 HTML이 돌아오면 여기로 옴 (예: 잘못된 경로로 index.html이 리라이트됨)
     console.error("[univ] load error:", e);
   }
 }
@@ -577,7 +545,6 @@ async function initMap() {
   injectLeftTabs();
   injectRightPanel();
 
-  // 줌/뷰리셋: 저장된 deg/rad 기준으로 라벨 좌표 재배치
   map.on("zoomend viewreset", () => {
     Object.entries(layerById).forEach(([id, rec]) => {
       const p = getPlaceById(id);
@@ -585,7 +552,6 @@ async function initMap() {
     });
   });
 
-  // 이동/리사이즈: 라벨 위치 유지, 선만 경계까지 다시 맞춤
   map.on("move resize", () => {
     Object.values(layerById).forEach(rec => {
       if (rec && rec.marker && rec.line && rec.baseLL) {
@@ -595,7 +561,7 @@ async function initMap() {
   });
 
   await subscribePlacesAndRender();
-  await loadUniversities(); // 🎓 대학 깃발 + 이름 로드
+  await loadUniversities();
 }
 
 window.addEventListener("load", initMap);
