@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
   const BASE = './chapter/';
   const CHAPTERS = [
-      "1장 서론.md",
+      "1장 서론.md",
       "2장 소아의 진단.md",
       "3장 성장과 발달.md",
       "4장 유전.md",
@@ -31,11 +31,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
-
-                          // 캐시
+ // 캐시
   const parsedCache = new Map();
 
-  // 제목 파싱: # 절, - 항목
+  // 마크다운 파싱
   function parseChapter(md) {
     const sections = [];
     let current = null;
@@ -45,23 +44,24 @@ document.addEventListener('DOMContentLoaded', () => {
       if (line.startsWith("# ")) {
         if (current) sections.push(current);
         const title = line.replace(/^#\s*/, "");
-        current = { title: "제" + title, items: [] }; // ← "제1절 ..." 형태
+        current = { title: "제" + title, items: [] };
       } else if (line.startsWith("- ")) {
-        if (current) current.items.push(line.replace(/^-+\s*/, ""));
+        if (current) current.items.push(line.replace(/^-+\s*/, "").trim());
       }
     }
     if (current) sections.push(current);
     return { sections };
   }
 
-  // 장 블록
+  // 장 블록 생성
   function makeChapterRow(file) {
-    const title = `제${file.replace(/\.md$/, "")}`; // ← "제6장 소아양생..." 형태
+    const title = `제${file.replace(/\.md$/, "")}`;
     const li = document.createElement("li");
     li.innerHTML = `
       <div class="chapter-line" role="button" aria-expanded="false">${title}</div>
       <div class="sections"></div>
     `;
+
     const $line = li.querySelector(".chapter-line");
     const $sections = li.querySelector(".sections");
 
@@ -74,25 +74,23 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       if (!parsedCache.has(file)) {
-        try {
-          // ✅ 캐시 방지
-          const res = await fetch(BASE + encodeURIComponent(file), { cache: "no-store" });
-          if (!res.ok) throw new Error("fetch failed " + res.status);
+        const res = await fetch(BASE + encodeURIComponent(file));
+        if (res.ok) {
           const md = await res.text();
           parsedCache.set(file, parseChapter(md));
-        } catch (e) {
-          console.error(e);
-          $sections.innerHTML = `<div style="color:#c00;">불러오기 실패: ${e.message}</div>`; // ✅ 실패 표시
+        } else {
+          console.error("❌ fetch 실패:", file, res.status);
+          return;
         }
       }
 
-      if ($sections.childElementCount === 0 && parsedCache.get(file)) {
+      if ($sections.childElementCount === 0) {
         const { sections } = parsedCache.get(file);
         sections.forEach((sec) => {
           const secDiv = document.createElement("div");
           secDiv.innerHTML = `
             <div class="section-line" role="button" aria-expanded="false">${sec.title}</div>
-            <ul class="items"></ul>
+            <div class="items"></div>
           `;
           const $secLine = secDiv.querySelector(".section-line");
           const $items = secDiv.querySelector(".items");
@@ -105,9 +103,13 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
               if ($items.childElementCount === 0) {
                 sec.items.forEach((txt) => {
-                  const li = document.createElement("li");
-                  li.textContent = txt; // 마크다운의 1., 2. 그대로 유지
-                  $items.appendChild(li);
+                  const itemDiv = document.createElement("div");
+                  itemDiv.className = "item-line";
+                  itemDiv.textContent = txt;
+                  itemDiv.addEventListener("click", () => {
+                    alert(`👉 '${txt}' 버튼 클릭됨 (여기서 DB 연결 예정)`);
+                  });
+                  $items.appendChild(itemDiv);
                 });
               }
               $items.classList.add("visible");
