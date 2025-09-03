@@ -4,73 +4,20 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>소아과학 목차</title>
-  <style>
-    body {
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Noto Sans KR', Arial, sans-serif;
-      margin: 0;
-      background: #fafafa;
-    }
-    .wrap { max-width: 900px; margin: 48px auto; padding: 0 20px; }
-    h1 { margin: 0 0 16px; font-size: 24px; }
-
-    .topbar {
-      position: sticky; top: 0; background: #fff;
-      border-bottom: 1px solid rgba(0,0,0,.06);
-      padding: 10px 20px;
-    }
-    .topbar a {
-      text-decoration: none; color: #0a66c2; font-weight: 700;
-    }
-
-    ul { list-style: none; padding: 0; margin: 16px 0; }
-    li { margin-bottom: 8px; }
-
-    /* 공통 토글 블록 */
-    .chapter-line, .section-line {
-      display: block;
-      padding: 10px 12px;
-      border: 1px solid rgba(0,0,0,.12);
-      border-radius: 10px;
-      background: #fff;
-      cursor: pointer;
-      position: relative;
-    }
-    .chapter-line:hover, .section-line:hover { background: #f7f9ff; }
-
-    /* + / − 아이콘 */
-    .chapter-line::after, .section-line::after {
-      content: "+";
-      position: absolute;
-      right: 12px; top: 50%;
-      transform: translateY(-50%);
-      font-weight: 900;
-      color: rgba(0,0,0,.55);
-    }
-    .chapter-line[aria-expanded="true"]::after,
-    .section-line[aria-expanded="true"]::after {
-      content: "−";
-    }
-
-    /* 들여쓰기 및 계층 스타일 */
-    .sections { margin-left: 20px; display: none; }
-    .sections.visible { display: block; }
-
-    .items { margin-left: 20px; display: none; }
-    .items.visible { display: block; }
-
-    .chapter-line { font-size: 16px; font-weight: 700; color: #111; }
-    .section-line { font-size: 15px; font-weight: 600; color: #333; }
-    .items li { font-size: 14px; color: #444; margin: 4px 0; }
-  </style>
+  <!-- 외부 CSS 불러오기 -->
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="topbar"><a href="/">← 포털로 돌아가기</a></div>
+  <div class="topbar">
+    <a href="/">← 포털로 돌아가기</a>
+  </div>
+
   <div class="wrap">
     <h1>소아과학 목차</h1>
     <ul id="list"></ul>
   </div>
 
-  <!-- JS 분리 -->
+  <!-- 외부 JS 불러오기 -->
   <script src="script.js"></script>
 </body>
 </html>
