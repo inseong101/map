@@ -129,7 +129,7 @@ $secLine.addEventListener("click", () => {
         // 실제 항목들(1., 2., …)
         sec.items.forEach((txt) => {
           const li = document.createElement("li");
-          li.className = "item-line";   // ← 이 클래스가 박스 스타일 적용 포인트
+          li.className = "item item-line";   // ← 이 클래스가 박스 스타일 적용 포인트
           li.textContent = txt;
           // 나중에 클릭 시 DB에서 문제/개념 불러올 때 이 핸들러에 붙이면 됨
           // li.addEventListener('click', () => { ... });
