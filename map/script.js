@@ -504,10 +504,13 @@ async function loadUniversities() {
     ok.forEach(u => {
       // 아이콘을 좌표 정중앙 기준으로 앵커(가운데, 아래끝)로 설정
 const icon = L.divIcon({
-  className: "",   // transform 넣지 말 것!
-  html: "🚩",
+  className: "",
+  html: `<svg width="22" height="22" viewBox="0 0 24 24">
+           <path d="M6 2v20" stroke="#444" stroke-width="2"/>
+           <path d="M6 2h12l-3 5 3 5H6" fill="#e53935"/>
+         </svg>`,
   iconSize: [22, 22],
-  iconAnchor: [11, 22] // 중앙-아래 = 좌표가 딱 깃발 끝
+  iconAnchor: [6, 22], // 막대기 끝 기준
 });
 
 L.marker([u.lat, u.lon], { icon, pane: "pane-univ", title: u.name })
