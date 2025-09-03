@@ -248,7 +248,7 @@ function addPlaceToMap(p, alsoAddTab = true) {
   });
 
   layerById[p.id] = { marker, line, dot, baseLL };
-  if (alsoAddTab) appendTab(p);
+  if (alsoAddTab) rebuildTabs();
 }
 
 /* ---------- 전체 렌더 ---------- */
@@ -303,21 +303,6 @@ function setupPanelToggle(containerId, toggleBtnId, storageKey) {
       try { localStorage.setItem(storageKey, "expanded"); } catch (_) {}
     }
   });
-}
-
-function rebuildTabs() {
-  const list = document.getElementById("tabListRight"); // ← 변경
-  if (!list) return;
-  list.innerHTML = (window.PLACES || []).map(p => tabItemHTML(p)).join("");
-  bindTabEvents();
-}
-function appendTab(p) {
-  const list = document.getElementById("tabListRight"); // ← 변경
-  if (!list) return;
-  const div = document.createElement("div");
-  div.innerHTML = tabItemHTML(p);
-  list.appendChild(div.firstElementChild);
-  bindSingleTabEvents(p.id);
 }
 
 /* ---------- 우측 입력 패널 ---------- */
@@ -518,22 +503,22 @@ async function loadUniversities() {
 
     ok.forEach(u => {
       // 아이콘을 좌표 정중앙 기준으로 앵커(가운데, 아래끝)로 설정
-      const icon = L.divIcon({
-        className: "",
-        html: "🚩",
-        iconSize: [22, 22],
-        iconAnchor: [11, 22], // 중앙-아래
-      });
+const icon = L.divIcon({
+  className: "",   // transform 넣지 말 것!
+  html: "🚩",
+  iconSize: [22, 22],
+  iconAnchor: [11, 22] // 중앙-아래 = 좌표가 딱 깃발 끝
+});
 
-      L.marker([u.lat, u.lon], { icon, pane: "pane-univ", title: u.name })
-        .addTo(window.universityLayer)
-        .bindTooltip(u.name, {
-          permanent: true,
-          direction: "top",
-          offset: [0, -6],
-          className: "uni-label"
-        })
-        .bindPopup(`<b>${u.name}</b>${u.address ? `<br>${u.address}` : ""}`);
+L.marker([u.lat, u.lon], { icon, pane: "pane-univ", title: u.name })
+  .addTo(window.universityLayer)
+  .bindTooltip(u.name, {
+    permanent: true,
+    direction: "top",
+    offset: [0, -6],
+    className: "uni-label"
+  })
+  .bindPopup(`<b>${u.name}</b>${u.address ? `<br>${u.address}` : ""}`);
     });
 
     console.log(`[univ] loaded: total=${raw.length}, ok=${ok.length}, skipped=${bad.length}`);
