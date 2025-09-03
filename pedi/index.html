@@ -76,136 +76,128 @@ const CHAPTERS = [
       "26장 소아의료윤리.md"
     ];
 
-    const $root = document.getElementById('chapters');
+      // 파일명 → 버튼 라벨 변환: "6장 제목.md" → "제6장 제목"
+  function makeButtonLabel(filename) {
+    const base = decodeURIComponent(filename.replace(/\.md$/i, ''));
+    // 앞쪽 숫자 추출 (예: "6장", "14장", "10 장" 등 폭넓게 허용)
+    const m = base.match(/^(\d+)\s*장?\s*(.*)$/u);
+    if (m) {
+      const num = m[1];
+      const rest = m[2] || '';
+      return `제${num}장 ${rest}`; // 띄어쓰기 없이 제+숫자+장
+    }
+    return base;
+  }
 
-    // 장 카드 생성
-    CHAPTERS.forEach((fname, idx) => {
-      const chapterNo = idx + 1;
-      const friendly = fname.replace(/\.md$/,'');
-      const el = document.createElement('div');
-      el.className = 'chapter';
+  // Markdown을 아주 단순하게 HTML로 표시 (네가 써놓은 번호/문구 그대로 유지)
+  // - "# 1절 ..." → "제1절 ..." 로만 바꿔서 <h3>로 표시
+  // - "- " 로 시작하는 줄은 <ul><li>로 묶어줌 (번호는 네가 적은 텍스트 그대로 보존)
+  function renderMarkdown(mdText) {
+    // 절 제목을 "제1절"처럼 보이게 (띄어쓰기 없음)
+    mdText = mdText.replace(/^#\s*(\d+)\s*절\b/ugm, '# 제$1절');
 
-      el.innerHTML = `
-        <div class="chapter__head" data-fname="${fname}">
-          <div>
-            <div class="chapter__title">제 ${chapterNo}장 · ${friendly}</div>
-            <div class="chapter__desc">+ 버튼을 눌러 목차 펼치기</div>
-          </div>
-          <button class="toggle-btn" aria-label="펼치기" data-fname="${fname}">+</button>
-        </div>
-        <div class="chapter__body" id="body_${idx}"></div>
-      `;
-      $root.appendChild(el);
-    });
+    const lines = mdText.split(/\r?\n/);
+    let html = '';
+    let inList = false;
 
-    // 간단 파서: # 로 시작하면 '절', "- " 로 시작하고 뒤에 "숫자. " 있으면 항목
-    function parseMdToOutline(md) {
-      const lines = md.split(/\r?\n/);
-      const sections = [];
-      let current = null;
-      let secIndex = 0;
+    const flushList = () => {
+      if (inList) { html += '</ul>'; inList = false; }
+    };
 
-      for (const raw of lines) {
-        const line = raw.trim();
-        if (!line) continue;
+    for (const raw of lines) {
+      const line = raw.trim();
 
-        // 섹션: "# 제목"
-        if (/^#\s+/.test(line)) {
-          secIndex += 1;
-          const title = line.replace(/^#\s+/, '').replace(/^\d+절\s*/,'').trim();
-          current = { index: secIndex, title, items: [] };
-          sections.push(current);
-          continue;
-        }
+      if (!line) { flushList(); continue; }
 
-        // 항목: "- 1. 내용" 또는 "- 내용" (번호 없으면 자동 번호)
-        if (/^-\s+/.test(line) && current) {
-          // "- 12. 텍스트" 포맷 잡기
-          const m = line.match(/^-\s*(\d+)\.\s*(.+)$/);
-          if (m) {
-            current.items.push(m[2].trim());
-          } else {
-            // "- 텍스트"면 번호 없이 들어온 거 → 그대로 넣고 나중에 표시 때 번호 부여
-            const text = line.replace(/^-+\s*/, '').trim();
-            current.items.push(text);
+      // 절 제목 (# ...)
+      if (line.startsWith('# ')) {
+        flushList();
+        const text = line.replace(/^#\s+/, '');
+        html += `<h3>${escapeHtml(text)}</h3>`;
+        continue;
+      }
+
+      // 일반 항목: "- "로 시작하면 그대로 리스트 표시
+      if (/^- /.test(line)) {
+        if (!inList) { html += '<ul>'; inList = true; }
+        const item = line.replace(/^- /, ''); // 앞의 '-'만 제거, 네가 적은 "1. ..."은 그대로 남김
+        html += `<li>${escapeHtml(item)}</li>`;
+        continue;
+      }
+
+      // 그 외 줄: 단락으로 표시
+      flushList();
+      html += `<p>${escapeHtml(line)}</p>`;
+    }
+    flushList();
+    return html;
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"]/g, c => ({
+      '&': '&nbsp;&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'
+    }[c]));
+  }
+
+  // 버튼 목록 생성 + 펼침/접힘
+  const $list = document.getElementById('list');
+  CHAPTERS.forEach(name => {
+    const li = document.createElement('li');
+
+    const btn = document.createElement('a');
+    btn.href = 'javascript:void(0)';
+    btn.textContent = makeButtonLabel(name);
+
+    // 펼침 영역
+    const panel = document.createElement('div');
+    panel.style.display = 'none';
+    panel.style.margin = '6px 0 12px';
+    panel.style.padding = '10px 12px';
+    panel.style.border = '1px solid rgba(0,0,0,.12)';
+    panel.style.borderRadius = '10px';
+    panel.style.background = '#fff';
+
+    // + 토글 버튼
+    const toggle = document.createElement('button');
+    toggle.textContent = '+';
+    toggle.style.marginLeft = '8px';
+    toggle.style.fontWeight = '800';
+    toggle.style.cursor = 'pointer';
+
+    // 상단 줄: 본문 버튼 + 토글
+    const header = document.createElement('div');
+    header.appendChild(btn);
+    header.appendChild(toggle);
+
+    li.appendChild(header);
+    li.appendChild(panel);
+    $list.appendChild(li);
+
+    // 토글 클릭 시 md 로드/표시
+    let loaded = false;
+    toggle.addEventListener('click', async () => {
+      if (panel.style.display === 'none') {
+        // 펼침
+        panel.style.display = 'block';
+        toggle.textContent = '−';
+
+        if (!loaded) {
+          try {
+            const url = BASE + encodeURIComponent(name);
+            const res = await fetch(url, { cache: 'no-store' });
+            if (!res.ok) throw new Error('fetch failed ' + res.status);
+            const md = await res.text();
+            panel.innerHTML = renderMarkdown(md);
+            loaded = true;
+          } catch (e) {
+            panel.innerHTML = `<div style="color:#c00">불러오기 실패: ${e.message}</div>`;
           }
         }
+      } else {
+        // 접힘
+        panel.style.display = 'none';
+        toggle.textContent = '+';
       }
-      return sections;
-    }
-
-    // 절/항목 HTML로 그리기
-    function renderOutline(sections) {
-      if (!sections.length) return '<div class="error">목차를 찾지 못했습니다.</div>';
-
-      let html = '';
-      sections.forEach((sec) => {
-        html += `<div class="section">
-          <div class="section__title">${sec.index}. ${sec.title}</div>`;
-        if (sec.items?.length) {
-          html += '<ol class="items">';
-          sec.items.forEach((t, i) => {
-            html += `<li>${i + 1}. ${t}</li>`;
-          });
-          html += '</ol>';
-        }
-        html += '</div>';
-      });
-      return html;
-    }
-
-    // 펼치기/접기 + 로딩/캐시
-    const cache = new Map(); // fname -> { sections }
-    async function toggleChapter(fname, bodyEl, btnEl) {
-      const isOpen = bodyEl.style.display === 'block';
-      if (isOpen) {
-        bodyEl.style.display = 'none';
-        btnEl.textContent = '+';
-        btnEl.setAttribute('aria-label','펼치기');
-        return;
-      }
-
-      btnEl.textContent = '…';
-      bodyEl.style.display = 'block';
-      bodyEl.innerHTML = '<div class="loading">불러오는 중…</div>';
-
-      try {
-        let sections;
-        if (cache.has(fname)) {
-          sections = cache.get(fname);
-        } else {
-          const url = BASE + encodeURIComponent(fname);
-          const res = await fetch(url, { cache: 'no-store' });
-          if (!res.ok) throw new Error('fetch failed ' + res.status);
-          const md = await res.text();
-          sections = parseMdToOutline(md);
-          cache.set(fname, sections);
-        }
-        bodyEl.innerHTML = renderOutline(sections);
-        btnEl.textContent = '−';
-        btnEl.setAttribute('aria-label','접기');
-      } catch (e) {
-        bodyEl.innerHTML = `<div class="error">불러오기 실패\n- 파일: ${fname}\n- 에러: ${e.message}</div>`;
-        btnEl.textContent = '+';
-      }
-    }
-
-    // 이벤트 위임
-    $root.addEventListener('click', (ev) => {
-      const head = ev.target.closest('.chapter__head');
-      const btn = ev.target.closest('.toggle-btn');
-      if (!head && !btn) return;
-
-      const fname = (btn || head).dataset.fname;
-      if (!fname) return;
-
-      // body 찾기
-      const card = (btn || head).closest('.chapter');
-      const bodyEl = card.querySelector('.chapter__body');
-      const btnEl = card.querySelector('.toggle-btn');
-
-      toggleChapter(fname, bodyEl, btnEl);
     });
-  </script>
-</body>
-</html>
+  });
+</script>
