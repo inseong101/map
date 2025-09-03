@@ -16,7 +16,7 @@ const SIDO_GEOJSON = "TL_SCCO_CTPRVN.json";
 const DEFAULT_DEG = 270;      // 폴백
 const DEFAULT_RAD = 100;      // 폴백
 
-const UNIVERSITY_JSON = "/map/universities.json";
+const UNIVERSITY_JSON = "/data/universities.json";
 let universityLayer = null;
 
 let db = null;
