@@ -11,71 +11,70 @@
     header .title { font-weight:700; }
     #container { flex:1; position:relative; }
     #mindmap { position:absolute; inset:0; }
+    #status { color:#666; }
   </style>
 
-  <!-- Markmap (D3 + markmap-lib + markmap-view) CDN -->
+  <!-- ✅ 순서 중요: d3 -> markmap-lib(UMD) -> markmap-view(UMD) -->
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.15.10/dist/index.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.15.10/dist/index.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.15.10/dist/index.umd.min.js"></script>
 </head>
 <body>
   <header>
     <a href="./">← 목록</a>
     <span class="title" id="title">소아과학 마인드맵</span>
-    <span id="status" style="color:#666;"></span>
+    <span id="status"></span>
   </header>
   <div id="container">
     <svg id="mindmap"></svg>
   </div>
 
+  <!-- ✅ 라이브러리 로드가 끝난 뒤 실행 -->
   <script>
-    const params = new URLSearchParams(location.search);
-    const file = params.get('file') || 'md/1.md';
+    window.addEventListener('DOMContentLoaded', () => {
+      const params = new URLSearchParams(location.search);
+      const file = params.get('file') || 'md/1.md';
 
-    const titleEl = document.getElementById('title');
-    const statusEl = document.getElementById('status');
-    titleEl.textContent = `마인드맵: ${file.split('/').pop()}`;
+      const titleEl = document.getElementById('title');
+      const statusEl = document.getElementById('status');
+      const svg = document.getElementById('mindmap');
 
-    async function loadMarkdown(url) {
-      statusEl.textContent = `로딩 중… (${url})`;
-      const res = await fetch(url, { cache: 'no-store' });
-      if (!res.ok) throw new Error(`fetch ${res.status} ${res.statusText}`);
-      return await res.text();
-    }
+      titleEl.textContent = `마인드맵: ${file.split('/').pop()}`;
 
-    function firstHeading(md) {
-      const m = md.match(/^\s{0,3}#{1,6}\s+(.+)$/m);
-      return m ? m[1].trim() : null;
-    }
-
-    (async () => {
-      try {
-        const md = await loadMarkdown(file);
-        const h = firstHeading(md);
-        if (h) titleEl.textContent = h;
-
-        // 마크맵 변환 + 렌더
-        const { Transformer } = window.markmap;
-        const transformer = new Transformer();
-        const { root } = transformer.transform(md);
-        const { Markmap } = window.markmap;
-        const svg = document.getElementById('mindmap');
-
-        // 테마/옵션은 기본으로, 필요 시 확장 가능
-        const mm = Markmap.create(svg, {
-          fit: true,
-          color: undefined
-        }, root);
-
-        // 창 크기변경 시 자동 리핏
-        window.addEventListener('resize', () => mm.fit());
-        statusEl.textContent = '';
-      } catch (e) {
-        console.error(e);
-        statusEl.textContent = '로드 실패';
-        alert('마크다운을 불러오지 못했습니다: ' + e.message);
+      async function loadMarkdown(url) {
+        statusEl.textContent = `로딩 중… (${url})`;
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`fetch ${res.status} ${res.statusText}`);
+        return await res.text();
       }
-    })();
+
+      function firstHeading(md) {
+        const m = md.match(/^\s{0,3}#{1,6}\s+(.+)$/m);
+        return m ? m[1].trim() : null;
+      }
+
+      (async () => {
+        try {
+          // ✅ 여기서 window.markmap이 이미 준비돼 있어야 함
+          const { Transformer, Markmap } = window.markmap;
+
+          const md = await loadMarkdown(file);
+          const h = firstHeading(md);
+          if (h) titleEl.textContent = h;
+
+          const transformer = new Transformer();
+          const { root } = transformer.transform(md);
+
+          const mm = Markmap.create(svg, { fit: true }, root);
+          window.addEventListener('resize', () => mm.fit());
+          statusEl.textContent = '';
+        } catch (e) {
+          console.error(e);
+          statusEl.textContent = '로드 실패';
+          alert('마크다운을 불러오지 못했습니다: ' + e.message);
+        }
+      })();
+    });
   </script>
 </body>
 </html>
