@@ -79,11 +79,12 @@ html, body { height: 100%; margin: 0; }
   right: 12px;
   width: 340px;
   max-width: 85vw;
-  background: rgba(11,19,43,0.95);
-  color: #fff;
+  background: rgba(255,255,255,0.95); /* 흰색 바탕 */
+  color: #111; /* 글자 진한 검정 */
   padding: 12px 12px 10px;
   border-radius: 12px;
-  box-shadow: 0 8px 22px rgba(0,0,0,.35);
+  box-shadow: 0 8px 22px rgba(0,0,0,.15);
+  border: 1px solid rgba(0,0,0,0.1);
   z-index: 9999;
 }
 .input-panel h3 { margin: 0 0 8px; font-size: 16px; font-weight: 800; }
@@ -91,17 +92,22 @@ html, body { height: 100%; margin: 0; }
 .input-panel input[type="text"],
 .input-panel input[type="number"] {
   flex: 1; min-width: 0;
-  padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15);
-  background: rgba(255,255,255,0.08); color: #fff;
+  padding: 8px 10px; border-radius: 8px;
+  border: 1px solid rgba(0,0,0,0.2);
+  background: #fff; color: #111;
   outline: none;
 }
-.input-panel input::placeholder { color: rgba(255,255,255,0.7); }
+.input-panel input::placeholder { color: rgba(0,0,0,0.5); }
 .input-panel .btn {
-  width: 100%; margin-top: 6px; padding: 10px 12px; border: none; border-radius: 10px;
-  background: #FF0000; color: #fff; font-weight: 800; cursor: pointer;
+  width: 100%; margin-top: 6px; padding: 10px 12px;
+  border: none; border-radius: 10px;
+  background: #FF0000; color: #fff;
+  font-weight: 800; cursor: pointer;
 }
 .input-panel .btn:hover { filter: brightness(1.05); }
-.input-panel .hint { font-size: 12px; opacity: .8; margin-top: 6px; line-height: 1.35; }
+.input-panel .hint {
+  font-size: 12px; opacity: .8; margin-top: 6px; line-height: 1.35;
+}
 
 /* 공통 패널 헤더 + 토글 버튼 */
 .panel-header {
