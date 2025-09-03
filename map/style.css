@@ -286,3 +286,45 @@ html, body { height: 100%; margin: 0; }
 
 /* leaflet 내부 레이어 z-index 내려서 상단바 위로 안 올라오게 */
 .leaflet-container { z-index: 0 !important; }
+
+
+/* 우측 패널에 공존하는 목록 스타일 */
+#rightContent .divider {
+  margin: 12px 0;
+  border: 0;
+  border-top: 1px solid rgba(255,255,255,0.15);
+}
+
+#tabListRight {
+  max-height: 40vh;      /* 목록이 길어질 때 스크롤 */
+  overflow: auto;
+  margin-top: 8px;
+}
+
+#tabListRight .tab-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.06);
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+#tabListRight .tab-item:hover {
+  background: rgba(255,255,255,0.12);
+}
+#tabListRight .tab-title {
+  font-size: 13px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+#tabListRight .tab-close {
+  font-weight: 700;
+  opacity: 0.75;
+}
+#tabListRight .tab-close:hover { opacity: 1; }
