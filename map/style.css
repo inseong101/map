@@ -334,3 +334,19 @@ html, body { height: 100%; margin: 0; }
   opacity: 0.75;
 }
 #tabListRight .tab-close:hover { opacity: 1; }
+
+
+/* 오른쪽 패널의 접기 버튼만 진하게 보이도록 */
+#rightToggle {
+  background: #1f2937 !important;   /* 진회색 배경 */
+  color: #fff !important;            /* 흰색 기호(−) */
+  border: 1px solid rgba(0,0,0,.35) !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,.2);
+}
+#rightToggle:hover {
+  background: #111827 !important;    /* 살짝 더 진하게 */
+}
+#rightToggle:focus-visible {
+  outline: 2px solid #0a66c2;
+  outline-offset: 2px;
+}
