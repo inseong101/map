@@ -151,3 +151,10 @@ function makeChapterRow(file) {
 
   return li;
 }
+  // 메인
+  const $list = document.getElementById("list");
+  CHAPTERS.forEach((file, i) => {
+    $list.appendChild(makeChapterRow(file, i + 1));
+  });
+
+}); // ✅ 마지막 닫는 괄호, 세미콜론 꼭 있어야 함
