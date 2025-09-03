@@ -16,6 +16,9 @@ const SIDO_GEOJSON = "TL_SCCO_CTPRVN.json";
 const DEFAULT_DEG = 270;      // 폴백
 const DEFAULT_RAD = 100;      // 폴백
 
+const UNIVERSITY_JSON = "universities.json";
+let universityLayer = null;
+
 let db = null;
 const isDbMode = () => !!db;  // DB 연결 여부
 let firstSnapshot = true;
@@ -502,34 +505,47 @@ async function subscribePlacesAndRender() {
 /* ---------- 🎓 대학교 로더 ---------- */
 async function loadUniversities() {
   try {
-    const res = await fetch("universities.json", { cache: "no-store" });
-    if (!res.ok) throw new Error("universities.json fetch failed: " + res.status);
-    const list = await res.json();
-
-    if (uniLayer) {
-      uniLayer.removeFrom(map);
-      uniLayer = null;
+    const res = await fetch(UNIVERSITY_JSON, { cache: "no-store" });
+    if (!res.ok) {
+      console.warn("[univ] fetch failed:", res.status, res.statusText);
+      return;
     }
-    uniLayer = L.layerGroup().addTo(map);
+    const data = await res.json();
+    if (universityLayer) {
+      universityLayer.removeFrom(map);
+    }
+    // 대학교 깃발은 라벨/선보다 위에 보이도록 별도 pane 사용
+    if (!map.getPane("pane-univ")) {
+      const paneUniv = map.createPane("pane-univ");
+      paneUniv.style.zIndex = 720; // markers(700)보다 살짝 위
+    }
+    universityLayer = L.layerGroup([], { pane: "pane-univ" }).addTo(map);
 
-    list.forEach(u => {
-      if (!Number.isFinite(u.lat) || !Number.isFinite(u.lon)) return;
+    data.forEach(u => {
+      const lat = Number(u.lat), lon = Number(u.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
 
+      // 깃발 이모지 마커 (심플)
       const icon = L.divIcon({
-        className: "",
-        html: `<div class="uni-flag"><span class="emoji">🎓</span>${u.name}</div>`,
-        iconSize: null,
-        iconAnchor: [0, 0]
+        className: "", // 기본 클래스 제거
+        html: `<div style="
+            font-size:20px;
+            line-height:20px;
+            transform: translate(-50%, -100%);
+            text-shadow: 0 1px 2px rgba(0,0,0,.35);
+          ">🚩</div>`,
+        iconSize: [20, 20],
+        iconAnchor: [10, 20] // 좌표 기준점(아래끝)
       });
 
-      L.marker([u.lat, u.lon], { icon, pane: "pane-markers" })
-        .bindTooltip(`${u.name}<br>${u.address}`, { direction: "top" })
-        .addTo(uniLayer);
+      const m = L.marker([lat, lon], { icon, pane: "pane-univ", title: u.name });
+      m.bindPopup(`<b>${u.name}</b><br>${u.address ?? ""}`);
+      m.addTo(universityLayer);
     });
 
-    console.log(`[uni] loaded: ${list.length}`);
+    console.log(`[univ] loaded ${data.length} universities`);
   } catch (e) {
-    console.error("[uni] load failed:", e);
+    console.error("[univ] load error:", e);
   }
 }
 
