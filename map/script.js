@@ -328,7 +328,7 @@ function bindTabEvents() {
       ev.stopPropagation();
       removePlace(id);
     };
-  });
+  }); 
 }
 function bindSingleTabEvents(id) {
   const el = document.getElementById("tab_" + id);
