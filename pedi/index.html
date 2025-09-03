@@ -5,199 +5,30 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>소아과학 목차</title>
   <style>
-    :root { color-scheme: light; }
-    body { font-family: system-ui, -apple-system, "Noto Sans KR", Segoe UI, Roboto, Arial, sans-serif; margin:0; background:#fafbfc; }
-    .topbar { position: sticky; top:0; z-index:10; background:#fff; border-bottom:1px solid rgba(0,0,0,.08); padding:10px 16px; }
-    .topbar a { text-decoration:none; color:#0a66c2; font-weight:700; }
-    .wrap { max-width: 960px; margin: 32px auto; padding: 0 16px; }
-    h1 { margin: 0 0 12px; font-size: 24px; }
-
-    /* 장 카드 */
-    .chapter { background:#fff; border:1px solid rgba(0,0,0,.08); border-radius:12px; margin-bottom:12px; overflow:hidden; }
-    .chapter__head { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px 14px; cursor:pointer; }
-    .chapter__title { font-weight:800; color:#111; }
-    .chapter__desc { color:#666; font-size:12px; }
-    .toggle-btn {
-      width:28px; height:28px; border-radius:8px; border:1px solid rgba(0,0,0,.12);
-      background:#f5f6f8; color:#111; font-weight:900; display:flex; align-items:center; justify-content:center;
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Noto Sans KR', Arial, sans-serif; margin:0; }
+    .wrap { max-width: 900px; margin: 48px auto; padding: 0 20px; }
+    h1 { margin: 0 0 16px; font-size: 24px; }
+    .topbar { position: sticky; top: 0; background: #fff; border-bottom: 1px solid rgba(0,0,0,.06); padding: 10px 20px; }
+    .topbar a { text-decoration: none; color: #0a66c2; font-weight: 700; }
+    ul { list-style: none; padding: 0; margin: 16px 0; }
+    li { margin-bottom: 8px; }
+    .chapter-btn {
+      display:block; padding:10px 12px; border:1px solid rgba(0,0,0,.12);
+      border-radius:10px; text-decoration:none; color:#111; background:#fff;
     }
-    .toggle-btn:hover { background:#eef2f8; }
-    .chapter__body { display:none; border-top:1px solid rgba(0,0,0,.06); padding:8px 12px 12px; }
-
-    /* 절/항목 렌더링 */
-    .section { margin:10px 0; }
-    .section__title { font-weight:800; margin:8px 0 6px; }
-    .items { margin:0; padding-left:18px; }
-    .items li { margin:4px 0; }
-
-    /* 로딩/오류 */
-    .loading { color:#666; font-size:13px; padding:6px 2px; }
-    .error { color:#b00020; font-size:13px; padding:6px 2px; white-space:pre-line; }
+    .chapter-btn:hover { background:#f7f9ff; }
+    .sublist { margin-left: 20px; display:none; }
+    .sublist.visible { display:block; }
   </style>
 </head>
 <body>
   <div class="topbar"><a href="/">← 포털로 돌아가기</a></div>
   <div class="wrap">
     <h1>소아과학 목차</h1>
-    <div id="chapters"></div>
+    <ul id="list"></ul>
   </div>
 
-  <script>
-    // 📁 마크다운 파일들이 있는 폴더
-    const BASE = './chapter/';
-
-    // 🔤 실제 파일명 목록 (필요시 추가/수정)
-const CHAPTERS = [
-      "1장 서론.md",
-      "2장 소아의 진단.md",
-      "3장 성장과 발달.md",
-      "4장 유전.md",
-      "5장 소아의 영양.md",
-      "6장 소아 양생(小兒 養生).md",
-      "7장 소아 치료법.md",
-      "8장 신생아 및 초생병.md",
-      "9장 감염병.md",
-      "10장 호흡기계의 병증 및 질환.md",
-      "11장 소화기계의 병증 및 질환.md",
-      "12장 신경계의 병증 및 질환.md",
-      "13장 소아청소년기 정신장애.md",
-      "14장 심혈관계.md",
-      "15장 간담계의 병증 및 질환.md",
-      "16장 비뇨생식기계의 병증 및 질환.md",
-      "17장 알레르기 질환.md",
-      "18장 면역질환.md",
-      "19장 근·골격계 질환.md",
-      "20장 내분비질환.md",
-      "21장 종양.md",
-      "22장 피부질환.md",
-      "23장 안질환.md",
-      "24장 증후.md",
-      "25장 급증(손상).md",
-      "26장 소아의료윤리.md"
-    ];
-
-      // 파일명 → 버튼 라벨 변환: "6장 제목.md" → "제6장 제목"
-  function makeButtonLabel(filename) {
-    const base = decodeURIComponent(filename.replace(/\.md$/i, ''));
-    // 앞쪽 숫자 추출 (예: "6장", "14장", "10 장" 등 폭넓게 허용)
-    const m = base.match(/^(\d+)\s*장?\s*(.*)$/u);
-    if (m) {
-      const num = m[1];
-      const rest = m[2] || '';
-      return `제${num}장 ${rest}`; // 띄어쓰기 없이 제+숫자+장
-    }
-    return base;
-  }
-
-  // Markdown을 아주 단순하게 HTML로 표시 (네가 써놓은 번호/문구 그대로 유지)
-  // - "# 1절 ..." → "제1절 ..." 로만 바꿔서 <h3>로 표시
-  // - "- " 로 시작하는 줄은 <ul><li>로 묶어줌 (번호는 네가 적은 텍스트 그대로 보존)
-  function renderMarkdown(mdText) {
-    // 절 제목을 "제1절"처럼 보이게 (띄어쓰기 없음)
-    mdText = mdText.replace(/^#\s*(\d+)\s*절\b/ugm, '# 제$1절');
-
-    const lines = mdText.split(/\r?\n/);
-    let html = '';
-    let inList = false;
-
-    const flushList = () => {
-      if (inList) { html += '</ul>'; inList = false; }
-    };
-
-    for (const raw of lines) {
-      const line = raw.trim();
-
-      if (!line) { flushList(); continue; }
-
-      // 절 제목 (# ...)
-      if (line.startsWith('# ')) {
-        flushList();
-        const text = line.replace(/^#\s+/, '');
-        html += `<h3>${escapeHtml(text)}</h3>`;
-        continue;
-      }
-
-      // 일반 항목: "- "로 시작하면 그대로 리스트 표시
-      if (/^- /.test(line)) {
-        if (!inList) { html += '<ul>'; inList = true; }
-        const item = line.replace(/^- /, ''); // 앞의 '-'만 제거, 네가 적은 "1. ..."은 그대로 남김
-        html += `<li>${escapeHtml(item)}</li>`;
-        continue;
-      }
-
-      // 그 외 줄: 단락으로 표시
-      flushList();
-      html += `<p>${escapeHtml(line)}</p>`;
-    }
-    flushList();
-    return html;
-  }
-
-  function escapeHtml(s) {
-    return s.replace(/[&<>"]/g, c => ({
-      '&': '&nbsp;&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'
-    }[c]));
-  }
-
-  // 버튼 목록 생성 + 펼침/접힘
-  const $list = document.getElementById('list');
-  CHAPTERS.forEach(name => {
-    const li = document.createElement('li');
-
-    const btn = document.createElement('a');
-    btn.href = 'javascript:void(0)';
-    btn.textContent = makeButtonLabel(name);
-
-    // 펼침 영역
-    const panel = document.createElement('div');
-    panel.style.display = 'none';
-    panel.style.margin = '6px 0 12px';
-    panel.style.padding = '10px 12px';
-    panel.style.border = '1px solid rgba(0,0,0,.12)';
-    panel.style.borderRadius = '10px';
-    panel.style.background = '#fff';
-
-    // + 토글 버튼
-    const toggle = document.createElement('button');
-    toggle.textContent = '+';
-    toggle.style.marginLeft = '8px';
-    toggle.style.fontWeight = '800';
-    toggle.style.cursor = 'pointer';
-
-    // 상단 줄: 본문 버튼 + 토글
-    const header = document.createElement('div');
-    header.appendChild(btn);
-    header.appendChild(toggle);
-
-    li.appendChild(header);
-    li.appendChild(panel);
-    $list.appendChild(li);
-
-    // 토글 클릭 시 md 로드/표시
-    let loaded = false;
-    toggle.addEventListener('click', async () => {
-      if (panel.style.display === 'none') {
-        // 펼침
-        panel.style.display = 'block';
-        toggle.textContent = '−';
-
-        if (!loaded) {
-          try {
-            const url = BASE + encodeURIComponent(name);
-            const res = await fetch(url, { cache: 'no-store' });
-            if (!res.ok) throw new Error('fetch failed ' + res.status);
-            const md = await res.text();
-            panel.innerHTML = renderMarkdown(md);
-            loaded = true;
-          } catch (e) {
-            panel.innerHTML = `<div style="color:#c00">불러오기 실패: ${e.message}</div>`;
-          }
-        }
-      } else {
-        // 접힘
-        panel.style.display = 'none';
-        toggle.textContent = '+';
-      }
-    });
-  });
-</script>
+  <!-- JS 분리 -->
+  <script src="script.js"></script>
+</body>
+</html>
