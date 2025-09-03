@@ -3,31 +3,27 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>전졸협</title>
-
-  <!-- 핵심 -->
-  <base href="/map/">
-
-  <!-- Leaflet -->
-  <link rel="stylesheet"
-        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        crossorigin="anonymous" />
-  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-          crossorigin="anonymous"></script>
-
-  <!-- Firebase v8 -->
-  <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-
-  <!-- 네가 만든 config.js (있으면) -->
-  <script defer src="config.js"></script>
-
-  <!-- 스타일 -->
-  <link rel="stylesheet" href="style.css" />
+  <title>전졸협 포털</title>
+  <!-- 절대 <base> 쓰지 마! -->
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Noto Sans KR', Arial, sans-serif; margin:0; }
+    .wrap { max-width: 900px; margin: 64px auto; padding: 0 20px; }
+    h1 { margin: 0 0 20px; font-size: 28px; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+    a.card { display:block; padding:16px; border-radius:12px; border:1px solid rgba(0,0,0,.1); text-decoration:none; color:#111; background:#fff; }
+    a.card:hover { background:#f7f9ff; }
+    small { color:#666; }
+  </style>
 </head>
 <body>
-  <div id="map"></div>
-  <script defer src="script.js"></script>
+  <div class="wrap">
+    <h1>전졸협 포털</h1>
+    <div class="cards">
+      <a class="card" href="/map/">
+        <b>지도 보기</b><br><small>합숙장소/대학교 위치</small>
+      </a>
+      <!-- 탭 더 생기면 여기에 카드 추가 -->
+    </div>
+  </div>
 </body>
 </html>
