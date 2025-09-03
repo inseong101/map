@@ -550,9 +550,14 @@ async function loadUniversities() {
       });
 
       L.marker([u.lat, u.lon], { icon, pane: "pane-univ", title: u.name })
-        .bindPopup(`<b>${u.name}</b>${u.address ? `<br>${u.address}` : ""}`)
-        .addTo(window.universityLayer);
-    });
+  .addTo(window.universityLayer)
+  .bindTooltip(u.name, {
+    permanent: true,       // 항상 표시
+    direction: "top",
+    offset: [0, -6],
+    className: "uni-label"
+  })
+  .bindPopup(`<b>${u.name}</b>${u.address ? `<br>${u.address}` : ""}`);
 
     console.log(`[univ] loaded: total=${raw.length}, ok=${ok.length}, skipped=${bad.length}`);
   } catch (e) {
