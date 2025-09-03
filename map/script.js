@@ -360,12 +360,17 @@ function injectRightPanel() {
   }
   setupPanelToggle("rightPanel", "rightToggle", "rightPanelState");
 
-  document.getElementById("btn_add").onclick = async () => {
-    if (!db) {
-      alert("Firebase에 연결되지 않았어요. config.js와 Firestore 설정을 확인해주세요.");
-      return;
-      rebuildTabs();
-}
+document.getElementById("btn_add").onclick = async () => {
+  if (!db) {
+    alert("Firebase에 연결되지 않았어요. config.js와 Firestore 설정을 확인해주세요.");
+    return;   // 여기서 함수 종료
+  }
+
+  // … 입력 검증 및 Firestore 저장 코드 …
+
+  // 마지막에 목록 갱신
+  rebuildTabs();
+};
 
     const name = (document.getElementById("in_name").value || "").trim();
     const address = (document.getElementById("in_addr").value || "").trim();
