@@ -28,151 +28,98 @@ document.addEventListener('DOMContentLoaded', () => {
       "25장 급증(손상).md",
       "26장 소아의료윤리.md"
     ];
+// 캐시
+const parsedCache = new Map();
 
-const $list = document.getElementById('list');
-  if (!$list) return;
+// 제목 파싱 함수
+function parseChapter(md) {
+  const sections = [];
+  let current = null;
+  const lines = md.split(/\r?\n/);
 
-  // 파일별 파싱 캐시(한 번 읽은 md는 다시 fetch 안 함)
-  const parsedCache = new Map();
+  for (const line of lines) {
+    if (line.startsWith("# ")) {
+      // 절
+      if (current) sections.push(current);
+      const title = line.replace(/^#\s*/, "");
+      current = { title: "제" + title, items: [] };
+    } else if (line.startsWith("- ")) {
+      if (current) current.items.push(line.replace(/^-+\s*/, ""));
+    }
+  }
+  if (current) sections.push(current);
+  return { sections };
+}
 
-  // 파일명 → 버튼 표시용 "제n장 ..." 으로 변환
-  const chapterTitleFromFile = (file) => {
-    const clean = file.normalize('NFC').replace(/\.md$/i, ''); // "6장 소아양생(…)"
-    // 이미 "n장 ..." 형태이니 앞에 "제"만 붙임
-    return '제' + clean;
-  };
+// 장 블록 만들기
+function makeChapterRow(file, idx) {
+  const title = `제${file.replace(/\.md$/, "")}`;
+  const li = document.createElement("li");
+  li.innerHTML = `
+    <div class="chapter-line" role="button" aria-expanded="false">${title}</div>
+    <div class="sections"></div>
+  `;
+  const $line = li.querySelector(".chapter-line");
+  const $sections = li.querySelector(".sections");
 
-  // "# 1절 ..." → "제1절 ..." 로 변환 (이미 '제'가 있으면 중복 금지)
-  const toJeJeol = (heading) => {
-    const text = heading.replace(/^#+\s*/, '').trim(); // "1절 태아…"
-    const m = text.match(/^(?:제)?\s*(\d+)\s*절\s*(.*)$/);
-    if (m) return `제${m[1]}절 ${m[2] || ''}`.trim();
-    // "1절" 패턴이 아니면 그대로
-    return text;
-  };
+  $line.addEventListener("click", async () => {
+    const open = $line.getAttribute("aria-expanded") === "true";
+    if (open) {
+      $sections.classList.remove("visible");
+      $line.setAttribute("aria-expanded", "false");
+      return;
+    }
 
-  // Markdown 한 장(파일) 파싱 → { sections: [{ title, items[] }] }
-  const parseChapter = (md) => {
-    const lines = md.split(/\r?\n/);
-    const sections = [];
-    let cur = null;
-
-    for (const raw of lines) {
-      const line = raw.trim();
-      if (!line) continue;
-
-      if (line.startsWith('#')) {
-        // 절 시작
-        const title = toJeJeol(line);
-        cur = { title, items: [] };
-        sections.push(cur);
-      } else if (line.startsWith('-')) {
-        // 항목(네가 이미 '1.', '2.' 번호를 적어둔 그대로 표시)
-        const item = line.replace(/^-+\s*/, '').trim();
-        if (cur) cur.items.push(item);
-      } else {
-        // 그 외 라인은 무시(빈 줄, 주석 등)
+    if (!parsedCache.has(file)) {
+      const res = await fetch(BASE + encodeURIComponent(file));
+      if (res.ok) {
+        const md = await res.text();
+        parsedCache.set(file, parseChapter(md));
       }
     }
-    return { sections };
-  };
 
-  // DOM: 장 블록 만들기
-  const makeChapterRow = (file) => {
-    const title = chapterTitleFromFile(file);
-    const li = document.createElement('li');
-    li.className = 'chapter';
+    if ($sections.childElementCount === 0) {
+      const { sections } = parsedCache.get(file);
+      sections.forEach((sec) => {
+        const secDiv = document.createElement("div");
+        secDiv.innerHTML = `
+          <div class="section-line" role="button" aria-expanded="false">${sec.title}</div>
+          <ul class="items"></ul>
+        `;
+        const $secLine = secDiv.querySelector(".section-line");
+        const $items = secDiv.querySelector(".items");
 
-    li.innerHTML = `
-      <div class="chapter-line">
-        <button class="chapter-btn" type="button">${title}</button>
-        <button class="expand-btn" type="button" aria-label="펼치기">+</button>
-      </div>
-      <div class="sections" hidden></div>
-    `;
-
-    const $expand = li.querySelector('.expand-btn');
-    const $sections = li.querySelector('.sections');
-
-    // 펼침 버튼: 장을 펼치면 "절 버튼"들이 등장
-    $expand.addEventListener('click', async (ev) => {
-      ev.stopPropagation();
-
-      if ($sections.hasAttribute('hidden')) {
-        // 최초 로드 시 md fetch → parse → section 버튼 렌더
-        if (!parsedCache.has(file)) {
-          // 파일 경로 인코딩(한글/공백 안전)
-          const url = BASE + encodeURIComponent(file);
-          const res = await fetch(url, { cache: 'no-store' });
-          if (!res.ok) {
-            $sections.innerHTML = `<div class="error">불러오기 실패: ${res.status}</div>`;
-            $sections.hidden = false;
-            $expand.textContent = '−';
-            return;
-          }
-          const md = await res.text();
-          parsedCache.set(file, parseChapter(md));
-        }
-
-        // 렌더(이미 렌더되어 있으면 재사용)
-        if ($sections.childElementCount === 0) {
-          const { sections } = parsedCache.get(file);
-
-          if (!sections.length) {
-            $sections.innerHTML = `<div class="empty">절이 없습니다</div>`;
+        $secLine.addEventListener("click", () => {
+          const secOpen = $secLine.getAttribute("aria-expanded") === "true";
+          if (secOpen) {
+            $items.classList.remove("visible");
+            $secLine.setAttribute("aria-expanded", "false");
           } else {
-            sections.forEach((sec, idx) => {
-              const secWrap = document.createElement('div');
-              secWrap.className = 'section';
-
-              // 절 버튼(눌러야 항목 표시)
-              secWrap.innerHTML = `
-                <div class="section-line">
-                  <button class="section-btn" type="button">${sec.title}</button>
-                </div>
-                <ul class="items" hidden></ul>
-              `;
-              const $secBtn = secWrap.querySelector('.section-btn');
-              const $items = secWrap.querySelector('.items');
-
-              $secBtn.addEventListener('click', () => {
-                if ($items.hasAttribute('hidden')) {
-                  // 항목 렌더(한 번만 생성)
-                  if ($items.childElementCount === 0) {
-                    sec.items.forEach((txt) => {
-                      const li = document.createElement('li');
-                      li.className = 'item';
-                      li.textContent = txt; // 네가 붙인 "1. …" 그대로 유지
-                      $items.appendChild(li);
-                    });
-                  }
-                  $items.hidden = false;
-                } else {
-                  $items.hidden = true;
-                }
+            if ($items.childElementCount === 0) {
+              sec.items.forEach((txt) => {
+                const li = document.createElement("li");
+                li.textContent = txt;
+                $items.appendChild(li);
               });
-
-              $sections.appendChild(secWrap);
-            });
+            }
+            $items.classList.add("visible");
+            $secLine.setAttribute("aria-expanded", "true");
           }
-        }
+        });
 
-        $sections.hidden = false;
-        $expand.textContent = '−';
-      } else {
-        $sections.hidden = true;
-        $expand.textContent = '+';
-      }
-    });
+        $sections.appendChild(secDiv);
+      });
+    }
 
-    // “장 제목” 클릭해도 펼치도록
-    li.querySelector('.chapter-btn').addEventListener('click', () => $expand.click());
-
-    return li;
-  };
-
-  // 목록 렌더
-  CHAPTERS.forEach((file) => {
-    $list.appendChild(makeChapterRow(file));
+    $sections.classList.add("visible");
+    $line.setAttribute("aria-expanded", "true");
   });
+
+  return li;
+}
+
+// 메인
+const $list = document.getElementById("list");
+CHAPTERS.forEach((file, i) => {
+  $list.appendChild(makeChapterRow(file, i + 1));
 });
