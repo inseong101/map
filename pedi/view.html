@@ -5,76 +5,67 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>소아과학 마인드맵</title>
   <style>
-    body { margin:0; height:100vh; display:flex; flex-direction:column; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", Arial, sans-serif; }
-    header { padding:10px 14px; border-bottom:1px solid rgba(0,0,0,.08); display:flex; gap:10px; align-items:center; }
-    header a { color:#06f; text-decoration:none; }
-    header .title { font-weight:700; }
-    #container { flex:1; position:relative; }
-    #mindmap { position:absolute; inset:0; }
-    #status { color:#666; }
+    html, body { height: 100%; margin: 0; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Noto Sans KR', Arial, sans-serif; }
+    .topbar {
+      position: fixed; top: 10px; left: 10px; z-index: 10;
+      background: #fff; border: 1px solid rgba(0,0,0,.15); border-radius: 8px;
+      padding: 6px 10px; box-shadow: 0 4px 12px rgba(0,0,0,.12);
+    }
+    .topbar a { color: #0a66c2; text-decoration: none; font-weight: 700; margin-right: 8px; }
+    #title { font-weight: 800; color:#111; }
+    #container { height: 100%; }
+    svg#mindmap { width: 100%; height: 100%; }
   </style>
 
-  <!-- ✅ 순서 중요: d3 -> markmap-lib(UMD) -> markmap-view(UMD) -->
-  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.15.10/dist/index.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.15.10/dist/index.umd.min.js"></script>
+  <!-- Markmap: d3 → view → lib (이 순서로) -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.16.0/dist/index.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.16.0/dist/index.min.js"></script>
 </head>
 <body>
-  <header>
-    <a href="./">← 목록</a>
-    <span class="title" id="title">소아과학 마인드맵</span>
-    <span id="status"></span>
-  </header>
+  <div class="topbar">
+    <a href="/pediatrics/">← 목록으로</a>
+    <a href="/">포털</a>
+    <span id="title"></span>
+  </div>
   <div id="container">
     <svg id="mindmap"></svg>
   </div>
 
-  <!-- ✅ 라이브러리 로드가 끝난 뒤 실행 -->
   <script>
-    window.addEventListener('DOMContentLoaded', () => {
+    (async function () {
       const params = new URLSearchParams(location.search);
-      const file = params.get('file') || 'md/1.md';
-
-      const titleEl = document.getElementById('title');
-      const statusEl = document.getElementById('status');
-      const svg = document.getElementById('mindmap');
-
-      titleEl.textContent = `마인드맵: ${file.split('/').pop()}`;
-
-      async function loadMarkdown(url) {
-        statusEl.textContent = `로딩 중… (${url})`;
-        const res = await fetch(url, { cache: 'no-store' });
-        if (!res.ok) throw new Error(`fetch ${res.status} ${res.statusText}`);
-        return await res.text();
+      const file = params.get('file'); // 예: "14장 심혈관계.md"
+      const $title = document.getElementById('title');
+      if (!file) {
+        $title.textContent = '파일이 지정되지 않았습니다';
+        return;
       }
+      $title.textContent = file.replace(/\.md$/i, '');
 
-      function firstHeading(md) {
-        const m = md.match(/^\s{0,3}#{1,6}\s+(.+)$/m);
-        return m ? m[1].trim() : null;
+      // /pediatrics/chapters/ 아래에서 로드
+      const url = './chapters/' + encodeURIComponent(file);
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) {
+        alert('마크다운을 불러오지 못했습니다: ' + res.status + ' ' + res.statusText);
+        return;
       }
+      const md = await res.text();
 
-      (async () => {
-        try {
-          // ✅ 여기서 window.markmap이 이미 준비돼 있어야 함
-          const { Transformer, Markmap } = window.markmap;
+      // Markmap 변환 및 렌더
+      const { Markmap, Transformer, loadCSS, loadJS } = window.markmap;
+      const transformer = new Transformer();
+      const { root, features } = transformer.transform(md);
+      const assets = Transformer.getAssets(features);
+      if (assets?.styles) await loadCSS(assets.styles);
+      if (assets?.scripts) await loadJS(assets.scripts);
 
-          const md = await loadMarkdown(file);
-          const h = firstHeading(md);
-          if (h) titleEl.textContent = h;
-
-          const transformer = new Transformer();
-          const { root } = transformer.transform(md);
-
-          const mm = Markmap.create(svg, { fit: true }, root);
-          window.addEventListener('resize', () => mm.fit());
-          statusEl.textContent = '';
-        } catch (e) {
-          console.error(e);
-          statusEl.textContent = '로드 실패';
-          alert('마크다운을 불러오지 못했습니다: ' + e.message);
-        }
-      })();
-    });
+      Markmap.create('#mindmap', {
+        autoFit: true,            // 화면에 꽉 차도록
+        initialExpandLevel: 2     // 처음 펼침 레벨 (원하면 조절)
+      }, root);
+    })();
   </script>
 </body>
 </html>
