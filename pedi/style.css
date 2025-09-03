@@ -70,3 +70,39 @@ li.chapter { margin: 10px 0 14px; }
 
 /* 하위가 비어도 ‘펼쳐졌다’는 느낌만 주는 얇은 여백 */
 .empty-space { height: 8px; }
+
+/* --- 하위 항목(1., 2., …) 박스 버튼 --- */
+ul.items {
+  list-style: none;
+  margin: 8px 0 0 16px;
+  padding: 0;
+  border-left: 2px solid rgba(0,0,0,.08);
+}
+
+.item-line {
+  display: block;
+  margin: 6px 0;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,.12);
+  border-radius: 8px;
+  font-size: 14px;
+  color: #222;
+  cursor: pointer;
+  transition: background .15s ease;
+}
+.item-line:hover {
+  background: #eef6ff;
+}
+
+/* 섹션 열었는데 하위 항목이 아예 없을 때 “살짝 간격”용 빈 박스 */
+.item-empty {
+  display: block;
+  margin: 6px 0;
+  padding: 8px 10px;
+  background: #fafafa;
+  border: 1px dashed rgba(0,0,0,.15);
+  border-radius: 8px;
+  color: #666;
+  font-size: 13px;
+}
