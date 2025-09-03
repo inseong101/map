@@ -20,19 +20,22 @@
   <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
-  <!-- 🔐 네가 만든 config.js (window.FB_CONFIG 제공) -->
+  <!-- 네가 만든 Firebase 설정 -->
   <script defer src="./config.js"></script>
 
-  <!-- CSS -->
+  <!-- 스타일 -->
   <link rel="stylesheet" href="./style.css" />
+
+  <!-- 안전용: 지도 높이 강제(스타일 실패해도 지도 보이게) -->
+  <style>
+    html, body, #map { height: 100%; margin: 0; }
+    #map { position: fixed; inset: 0; }
+  </style>
 </head>
 <body>
   <div id="map"></div>
 
-  <!-- ❌ 데이터 파일(places.js) 제거 -->
-  <!-- <script src="places.js" defer></script> -->
-
   <!-- 앱 로직 -->
-  <script src="./script.js" defer></script>
+  <script defer src="./script.js"></script>
 </body>
 </html>
