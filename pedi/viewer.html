@@ -6,68 +6,86 @@
   <title>소아과학 마인드맵 뷰어</title>
   <style>
     html, body { height: 100%; margin: 0; }
-    body { font-family: -apple-system, system-ui, "Noto Sans KR", Arial, sans-serif; }
+    body { font-family: -apple-system, system-ui, "Noto Sans KR", Arial, sans-serif; background:#fff; color:#111; }
     .topbar {
       position: sticky; top: 0; z-index: 10;
-      display:flex; gap:12px; align-items:center;
+      display:flex; gap:12px; align-items:center; flex-wrap: wrap;
       padding:10px 14px; border-bottom:1px solid rgba(0,0,0,.08); background:#fff;
     }
     .topbar a { text-decoration:none; color:#0a66c2; font-weight:700; }
+    .topbar a:hover { text-decoration: underline; }
+    .title { font-weight:700; }
     #container { height: calc(100vh - 48px); }
     /* markmap 캔버스가 꽉 차도록 */
     svg { width: 100%; height: 100%; }
+    .status { padding: 16px; line-height: 1.6; white-space: pre-wrap; }
+    .muted { color: #666; }
   </style>
 
-  <!-- ✅ 브라우저용 UMD 번들: 자동 로더 하나면 끝 -->
+  <!-- ✅ 자동로더 하나로 markmap + 플러그인 전부 로드 -->
   <script src="https://cdn.jsdelivr.net/npm/markmap-autoloader@0.16.0"></script>
 </head>
 <body>
   <div class="topbar">
-    <a href="../index.html">← 포털로 돌아가기</a>
-    <div id="title"></div>
+    <a href="./index.html">← 목차로</a>
+    <a href="../index.html">← 포털로</a>
+    <span class="title" id="title"></span>
   </div>
 
-  <!-- autoloader가 이 <pre> 안의 Markdown을 찾아 자동으로 mindmap으로 바꿔줌 -->
+  <!-- autoloader가 이 <pre> 안의 Markdown을 찾아 mindmap으로 바꿔줌 -->
   <div id="container">
-    <pre class="markmap" id="mm"></pre>
+    <pre class="markmap" id="mm"><span class="status muted">로딩 중…</span></pre>
   </div>
 
- <script>
-  const params = new URLSearchParams(location.search);
-  let file = params.get('file'); // 예: 'chapter/14장 심혈관계.md' 또는 '14장 심혈관계.md'
+  <script>
+    (async function () {
+      const params = new URLSearchParams(location.search);
+      let file = params.get('file'); // 예: 'chapter/14장 심혈관계.md' 또는 '14장 심혈관계.md'
 
-  async function main() {
-    // 파일 경로 보정: 'chapter/' 누락 시 붙여줌
-    if (file && !file.includes('/')) file = 'chapter/' + file;
+      // 1) 파라미터 없으면 안내
+      if (!file) {
+        document.getElementById('mm').textContent =
+          '# 파일이 지정되지 않았습니다\n- URL에 ?file=chapter/파일명.md 를 추가하세요';
+        window.markmap?.autoLoader?.renderAll();
+        return;
+      }
 
-    if (!file) {
-      document.getElementById('mm').textContent =
-        '# 파일이 지정되지 않았습니다\n- URL에 ?file=chapter/파일명.md 를 추가하세요';
-      window.markmap?.autoLoader?.renderAll();
-      return;
-    }
+      // 2) 경로 보정: 'chapter/' 누락 시 자동 붙이기
+      if (!file.includes('/')) file = 'chapter/' + file;
 
-    try {
-      const res = await fetch(file, { cache: 'no-store' });
-      if (!res.ok) throw new Error('fetch failed ' + res.status);
-
-      const md = await res.text();
-      // 제목 표시
+      // 3) 제목 영역에 파일명 표시
       const base = decodeURIComponent(file.split('/').pop());
-      document.getElementById('title').textContent = base;
+      document.getElementById('title').textContent = ' · ' + base;
 
-      // Markdown 주입 후 렌더
-      const pre = document.getElementById('mm');
-      pre.textContent = md;
-      window.markmap.autoLoader.renderAll();
-    } catch (e) {
-      console.error(e);
-      document.getElementById('mm').textContent =
-        '# 불러오기 실패\n- 경로: ' + file + '\n- 에러: ' + e.message;
-      window.markmap?.autoLoader?.renderAll();
-    }
-  }
-  main();
-</script>
+      try {
+        // 4) 파일 가져오기
+        const res = await fetch(file, { cache: 'no-store' });
+        if (!res.ok) throw new Error('fetch failed ' + res.status + ' ' + res.statusText);
+
+        const md = await res.text();
+
+        // 5) Markdown 주입
+        const pre = document.getElementById('mm');
+        pre.textContent = md;
+
+        // 6) markmap 렌더 (없으면 안전하게 패스)
+        if (window.markmap?.autoLoader?.renderAll) {
+          window.markmap.autoLoader.renderAll();
+        } else {
+          // autoloader가 아직 준비 전에 스크립트가 실행된 경우를 대비한 재시도
+          const tick = () => new Promise(r => setTimeout(r, 0));
+          for (let i = 0; i < 10 && !window.markmap?.autoLoader?.renderAll; i++) await tick();
+          window.markmap?.autoLoader?.renderAll?.();
+        }
+      } catch (e) {
+        console.error(e);
+        document.getElementById('mm').textContent =
+          '# 불러오기 실패\n'
+          + '- 경로: ' + file + '\n'
+          + '- 에러: ' + (e && e.message ? e.message : e);
+        window.markmap?.autoLoader?.renderAll();
+      }
+    })();
+  </script>
 </body>
 </html>
