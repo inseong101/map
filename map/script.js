@@ -9,14 +9,14 @@ console.log("[debug] PLACES length =", window.PLACES.length);
 let map;
 let labelsLayer = null;   // 라벨/점 컨테이너
 let linesLayer  = null;   // 선 컨테이너
-let uniLayer    = null;   // 🎓 대학교 깃발 레이어
 const layerById = {};     // id -> { marker, line, dot, baseLL }
 const SIDO_GEOJSON = "TL_SCCO_CTPRVN.json";
 
 const DEFAULT_DEG = 270;      // 폴백
 const DEFAULT_RAD = 100;      // 폴백
 
-const UNIVERSITY_JSON = "/data/universities.json";
+// 🔹 /map/index.html 기준 경로. universities.json은 /map/data/universities.json 에 있어야 함
+const UNIVERSITY_JSON = "/map/data/universities.json";
 let universityLayer = null;
 
 let db = null;
@@ -328,7 +328,7 @@ function bindTabEvents() {
       ev.stopPropagation();
       removePlace(id);
     };
-  }); 
+  });
 }
 function bindSingleTabEvents(id) {
   const el = document.getElementById("tab_" + id);
@@ -409,11 +409,9 @@ function injectRightPanel() {
       return;
     }
 
-    // 현재 스냅샷 기준 새 숫자 ID
     const ids = (window.PLACES || []).map(p => Number(p.id) || 0);
     const newId = ids.length ? Math.max(...ids) + 1 : 1;
 
-    // 최초 1회만 라벨 각도/거리 생성해서 DB에 저장
     const p = {
       id: newId,
       name,
@@ -426,7 +424,6 @@ function injectRightPanel() {
 
     await db.collection("places").doc(String(newId)).set(p, { merge: true });
 
-    // 입력 초기화
     document.getElementById("in_name").value = "";
     document.getElementById("in_addr").value = "";
     document.getElementById("in_lat").value = "";
@@ -503,14 +500,13 @@ async function subscribePlacesAndRender() {
 }
 
 /* ---------- 🎓 대학교 로더 ---------- */
-// 대학교 깃발 로드
 async function loadUniversities() {
   try {
     const res = await fetch(UNIVERSITY_JSON, { cache: "no-store" });
     if (!res.ok) throw new Error(`fetch fail ${res.status} ${res.statusText}`);
     const raw = await res.json();
 
-    // 키 이름 표준화: lat/lon 없으면 latitude/longitude, lng/long 도 인식
+    // 키 표준화 + 숫자 캐스팅
     const data = raw.map(u => ({
       name: u.name ?? u.title ?? "",
       address: u.address ?? u.addr ?? "",
@@ -518,53 +514,49 @@ async function loadUniversities() {
       lon: Number(u.lon ?? u.lng ?? u.long ?? u.longitude),
     }));
 
-    // 유효/무효 분리해서 디버깅 로그
+    const ok  = data.filter(u => Number.isFinite(u.lat) && Number.isFinite(u.lon));
     const bad = data.filter(u => !Number.isFinite(u.lat) || !Number.isFinite(u.lon));
-    const ok  = data.filter(u =>  Number.isFinite(u.lat) &&  Number.isFinite(u.lon));
     if (bad.length) console.warn("[univ] skipped invalid coords:", bad);
 
-    // 기존 레이어 제거
-    if (window.universityLayer) {
-      window.universityLayer.removeFrom(map);
-      window.universityLayer = null;
+    if (universityLayer) {
+      universityLayer.removeFrom(map);
+      universityLayer = null;
     }
 
-// pane 준비 (markers(700)보다 위)
-if (!map.getPane("pane-univ")) {
-  const paneUniv = map.createPane("pane-univ");
-  paneUniv.style.zIndex = 720;
+    // 깃발 전용 pane (markers(700)보다 위)
+    if (!map.getPane("pane-univ")) {
+      const paneUniv = map.createPane("pane-univ");
+      paneUniv.style.zIndex = 720;
+    }
+
+    universityLayer = L.layerGroup([], { pane: "pane-univ" }).addTo(map);
+
+    ok.forEach(u => {
+      // 🚩 깃발 아이콘: 좌표의 "아래 중앙"이 기준점(정확히 그 지점에 찍힘)
+      const icon = L.divIcon({
+        className: "",          // 기본 클래스를 비움
+        html: "🚩",             // 간단한 이모지 (추가 transform 없음)
+        iconSize: [22, 22],     // 렌더 박스 크기
+        iconAnchor: [11, 22],   // (가로 중앙, 세로 아래) = 좌표를 정확히 깃발 아래끝 중심으로
+      });
+
+      L.marker([u.lat, u.lon], { icon, pane: "pane-univ", title: u.name })
+        .addTo(universityLayer)
+        .bindTooltip(u.name, {
+          permanent: true,       // 항상 표시
+          direction: "top",
+          offset: [0, -6],
+          className: "uni-label" // (선택) 스타일 커스터마이즈하려면 CSS에서 .uni-label 정의
+        })
+        .bindPopup(`<b>${u.name}</b>${u.address ? `<br>${u.address}` : ""}`);
+    });
+
+    console.log(`[univ] loaded: total=${raw.length}, ok=${ok.length}, skipped=${bad.length}`);
+  } catch (e) {
+    console.error("[univ] load error:", e);
+  }
 }
 
-window.universityLayer = L.layerGroup().addTo(map);
-
-ok.forEach(u => {
-  const icon = L.divIcon({
-    className: "",
-    html: `<div style="
-      font-size:22px; line-height:22px;
-      transform: translate(-50%, -100%);
-      text-shadow: 0 1px 2px rgba(0,0,0,.35);
-    ">🚩</div>`,
-    iconSize: [22, 22],
-    iconAnchor: [11, 22],
-  });
-
-  L.marker([u.lat, u.lon], { icon, pane: "pane-univ", title: u.name })
-    .addTo(window.universityLayer)
-    .bindTooltip(u.name, {
-      permanent: true,       // 항상 표시
-      direction: "top",
-      offset: [0, -6],
-      className: "uni-label"
-    })
-    .bindPopup(`<b>${u.name}</b>${u.address ? `<br>${u.address}` : ""}`);
-}); // ← 이 닫는 괄호가 빠졌던 거예요
-
-console.log(`[univ] loaded: total=${raw.length}, ok=${ok.length}, skipped=${bad.length}`);
-
-
-
-    
 /* ---------- 초기화 ---------- */
 async function initMap() {
   await initFirebase();
@@ -602,9 +594,8 @@ async function initMap() {
     });
   });
 
-  // Firestore 구독(없으면 로컬 렌더)
-await subscribePlacesAndRender();
-await loadUniversities(); // ← 이 줄 추가
+  await subscribePlacesAndRender();
+  await loadUniversities(); // 🎓 대학 깃발 + 이름 로드
 }
 
 window.addEventListener("load", initMap);
