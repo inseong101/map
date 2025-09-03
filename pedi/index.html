@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>소아과학 목차</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", Arial, sans-serif; margin:0; background:#fafafa; }
+    .wrap { max-width: 980px; margin: 48px auto; padding: 0 20px; }
+    h1 { margin: 0 0 16px; font-size: 28px; }
+    .desc { color:#555; margin-bottom: 18px; }
+    .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap:12px; }
+    a.card { display:block; padding:14px 16px; border-radius:12px; background:#fff; border:1px solid rgba(0,0,0,.08); color:#111; text-decoration:none; }
+    a.card:hover { background:#f7f9ff; }
+    .back { display:inline-block; margin-bottom:16px; color:#06f; text-decoration:none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="/">← 포털로 돌아가기</a>
+    <h1>소아과학 목차</h1>
+    <div class="desc">아래에서 장을 선택하면 해당 장의 <b>마인드맵</b>이 열립니다.</div>
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <script>
+    // 1~25 자동 카드 생성 (제목은 나중에 view에서 마크다운 첫 줄을 읽어 표시)
+    const grid = document.getElementById('grid');
+    for (let i = 1; i <= 25; i++) {
+      const a = document.createElement('a');
+      a.className = 'card';
+      a.href = `./view.html?file=md/${i}.md`;
+      a.innerHTML = `<b>${i}장</b><br><small>마인드맵 보기</small>`;
+      grid.appendChild(a);
+    }
+  </script>
+</body>
+</html>
