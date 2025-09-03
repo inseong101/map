@@ -13,12 +13,18 @@ let linesLayer  = null;   // 선 컨테이너
 const layerById = {};     // id -> { marker, line, dot, baseLL }
 const SIDO_GEOJSON = "TL_SCCO_CTPRVN.json";
 
-const DEFAULT_DEG = 270;      // 폴백(거의 안 씀)
-const DEFAULT_RAD = 100;      // 폴백
+const DEFAULT_DEG = 270;
+const DEFAULT_RAD = 100;
 
 let db = null;
-const isDbMode = () => !!db;              // DB 연결 여부
-let firstSnapshot = true; // ← 이 줄 추가
+const isDbMode = () => !!db;
+let firstSnapshot = true;
+
+/* ▼▼▼ 추가: 대학교 전용 레이어/데이터 ▼▼▼ */
+let universitiesLayer = null;   // 깃발 마커 레이어
+let UNIVERSITIES = [];          // 로컬 JSON에서 불러온 데이터
+const UNIVERSITIES_JSON = "universities.json"; // 파일 위치: 같은 폴더에 두는 경우
+/* ▲▲▲ 추가 끝 ▲▲▲ */
 
 /* ---------- 유틸 함수들 ---------- */
 function toNum(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
@@ -41,6 +47,56 @@ function setLabelPositionFromDegRad(p, rec) {
 }
 function getPlaceById(id) {
   return (window.PLACES || []).find(p => String(p.id) === String(id));
+}
+
+/* ---------- 대학교(로컬 JSON) 로드 & 렌더 ---------- */
+async function loadUniversitiesFromLocal() {
+  try {
+    const res = await fetch(UNIVERSITIES_JSON, { cache: "no-store" });
+    if (!res.ok) throw new Error("failed to fetch universities.json");
+    const arr = await res.json();
+    // 안전한 숫자화 + 필수 필드만
+    UNIVERSITIES = (arr || []).map(u => ({
+      id: u.id ?? u.name,                      // id 없으면 name로 대체
+      name: u.name || "이름없음",
+      address: u.address || "",
+      lat: Number(u.lat),
+      lon: Number(u.lon),
+    })).filter(u => Number.isFinite(u.lat) && Number.isFinite(u.lon));
+
+    renderUniversities();
+  } catch (e) {
+    console.error("[universities] load failed:", e);
+  }
+}
+
+function renderUniversities() {
+  // 레이어 초기화
+  if (universitiesLayer) universitiesLayer.removeFrom(map);
+  universitiesLayer = L.layerGroup().addTo(map);
+
+  // 깃발 아이콘(Leaflet 기본 마커로도 충분; 커스텀 하고 싶으면 icon 옵션 변경)
+  const icon = L.icon({
+    iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+    iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+    shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+    iconSize:    [25, 41],
+    iconAnchor:  [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize:  [41, 41]
+  });
+
+  UNIVERSITIES.forEach(u => {
+    const m = L.marker([u.lat, u.lon], { icon, pane: "pane-markers" })
+      .addTo(universitiesLayer)
+      .bindTooltip(`<strong>${u.name}</strong><br>${u.address}`, {
+        direction: "top",
+        opacity: 0.95,
+        sticky: true
+      });
+    // 필요하면 클릭 시 이동:
+    // m.on("click", () => map.setView([u.lat, u.lon], Math.max(map.getZoom(), 10), { animate: true }));
+  });
 }
 
 /* ---------- Firebase ---------- */
@@ -565,5 +621,8 @@ map.on("move resize", () => {
   // Firestore 구독(없으면 로컬 렌더)
   await subscribePlacesAndRender();
 }
+  /* ▼▼▼ 추가: 대학교 로컬 데이터 로드 ▼▼▼ */
+  loadUniversitiesFromLocal();
+  /* ▲▲▲ 추가 끝 ▲▲▲ */
 
 window.addEventListener("load", initMap);
