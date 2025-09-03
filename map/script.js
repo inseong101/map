@@ -304,115 +304,53 @@ function setupPanelToggle(containerId, toggleBtnId, storageKey) {
     }
   });
 }
-/* ---------- 좌측 탭 ---------- */
-function leftPanelHTML() {
-  return '' +
-    '<div class="left-tabs" id="leftTabs">' +
-      '<div class="panel-header">' +
-        '<h3 class="panel-title">장소 목록</h3>' +
-        '<button class="panel-toggle" id="leftToggle" aria-label="접기">−</button>' +
-      '</div>' +
-      '<div class="panel-content" id="leftContent">' +
-        '<div id="tabList"></div>' +
-      '</div>' +
-    '</div>';
-}
-function tabItemHTML(p) {
-  return '' +
-    '<div class="tab-item" id="tab_' + p.id + '">' +
-      '<div class="tab-title" title="' + p.name + ' (' + (p.address || '') + ')">' + p.name + '</div>' +
-      '<div class="tab-close" title="삭제" data-id="' + p.id + '">×</div>' +
-    '</div>';
-}
-function injectLeftTabs() {
-  const root = document.body;
-  if (!document.getElementById("leftTabs")) {
-    const wrap = document.createElement("div");
-    wrap.innerHTML = leftPanelHTML();
-    root.appendChild(wrap.firstElementChild);
-  }
-  setupPanelToggle("leftTabs", "leftToggle", "leftPanelState");
-  rebuildTabs();
-}
+
 function rebuildTabs() {
-  const list = document.getElementById("tabList");
+  const list = document.getElementById("tabListRight"); // ← 변경
   if (!list) return;
   list.innerHTML = (window.PLACES || []).map(p => tabItemHTML(p)).join("");
   bindTabEvents();
 }
 function appendTab(p) {
-  const list = document.getElementById("tabList");
+  const list = document.getElementById("tabListRight"); // ← 변경
   if (!list) return;
   const div = document.createElement("div");
   div.innerHTML = tabItemHTML(p);
   list.appendChild(div.firstElementChild);
   bindSingleTabEvents(p.id);
 }
-function bindTabEvents() {
-  document.querySelectorAll(".tab-item").forEach(el => {
-    const id = parseInt(el.id.replace("tab_", ""));
-    const p = (window.PLACES || []).find(x => x.id === id);
-    if (!p) return;
-    el.querySelector(".tab-title").onclick = () => centerOnPlace(p);
-    el.querySelector(".tab-close").onclick = ev => {
-      ev.stopPropagation();
-      removePlace(id);
-    };
-  });
-}
-function bindSingleTabEvents(id) {
-  const el = document.getElementById("tab_" + id);
-  if (!el) return;
-  const p = (window.PLACES || []).find(x => x.id === id);
-  if (!p) return;
-  el.querySelector(".tab-title").onclick = () => centerOnPlace(p);
-  el.querySelector(".tab-close").onclick = ev => {
-    ev.stopPropagation();
-    removePlace(id);
-  };
-}
-function centerOnPlace(p) {
-  const rec = layerById[p.id];
-  if (rec && rec.marker) map.setView(rec.marker.getLatLng(), Math.max(map.getZoom(), 10), { animate: true });
-  else map.setView([p.lat, p.lon], Math.max(map.getZoom(), 10), { animate: true });
-}
-function removePlace(id) {
-  const idx = (window.PLACES || []).findIndex(x => x.id === id);
-  if (idx >= 0) window.PLACES.splice(idx, 1);
-
-  const rec = layerById[id];
-  if (rec) {
-    if (rec.marker) rec.marker.remove();
-    if (rec.line)   rec.line.remove();
-    if (rec.dot)    rec.dot.remove();
-    delete layerById[id];
-  }
-
-  const el = document.getElementById("tab_" + id);
-  if (el && el.parentNode) el.parentNode.removeChild(el);
-
-  // if (db) db.collection("places").doc(String(id)).delete().catch(console.error);
-}
 
 /* ---------- 우측 입력 패널 ---------- */
 function rightPanelHTML() {
   return '' +
-    '<div class="input-panel" id="rightPanel">' +
-      '<div class="panel-header">' +
-        '<h3 class="panel-title" style="color:#fff;">장소 추가</h3>' +
-        '<button class="panel-toggle dark" id="rightToggle" aria-label="접기">−</button>' +
+  '<div class="input-panel" id="rightPanel">' +
+    '<div class="panel-header">' +
+      '<h3 class="panel-title" style="color:#fff;">장소 추가</h3>' +
+      '<button class="panel-toggle dark" id="rightToggle" aria-label="접기">−</button>' +
+    '</div>' +
+    '<div class="panel-content" id="rightContent">' +
+
+      // 입력 폼
+      '<div class="row"><input id="in_name" type="text" placeholder="이름 (필수)" /></div>' +
+      '<div class="row"><input id="in_addr" type="text" placeholder="주소 (선택)" /></div>' +
+      '<div class="row">' +
+        '<input id="in_lat" type="number" step="0.000001" placeholder="위도 (필수)" />' +
+        '<input id="in_lon" type="number" step="0.000001" placeholder="경도 (필수)" />' +
       '</div>' +
-      '<div class="panel-content" id="rightContent">' +
-        '<div class="row"><input id="in_name" type="text" placeholder="이름 (필수)" /></div>' +
-        '<div class="row"><input id="in_addr" type="text" placeholder="주소 (필수)" /></div>' +
-        '<div class="row">' +
-          '<input id="in_lat" type="number" step="0.000001" placeholder="위도 (필수)" />' +
-          '<input id="in_lon" type="number" step="0.000001" placeholder="경도 (필수)" />' +
-        '</div>' +
-        '<button class="btn" id="btn_add">추가</button>' +
-        '<div class="hint">라벨은 추가 후 드래그해서 위치를 조정할 수 있어요.</div>' +
+      '<button class="btn" id="btn_add">추가</button>' +
+      '<div class="hint">라벨은 추가 후 드래그해서 위치를 조정할 수 있어요.</div>' +
+
+      // 구분선
+      '<hr class="divider" />' +
+
+      // 장소 목록 (← 여기로 이사)
+      '<div class="panel-header small">' +
+        '<h3 class="panel-title">장소 목록</h3>' +
       '</div>' +
-    '</div>';
+      '<div id="tabListRight" class="tab-list"></div>' +
+
+    '</div>' +
+  '</div>';
 }
 function injectRightPanel() {
   if (!document.querySelector(".input-panel")) {
@@ -426,7 +364,8 @@ function injectRightPanel() {
     if (!db) {
       alert("Firebase에 연결되지 않았어요. config.js와 Firestore 설정을 확인해주세요.");
       return;
-    }
+      rebuildTabs();
+}
 
     const name = (document.getElementById("in_name").value || "").trim();
     const address = (document.getElementById("in_addr").value || "").trim();
@@ -573,8 +512,6 @@ async function initMap() {
   map.getPane("pane-geo").style.pointerEvents = "none";
 
   addKoreaSilhouetteFromLocal();
-
-  injectLeftTabs();
   injectRightPanel();
 
   map.on("zoomend viewreset", () => {
