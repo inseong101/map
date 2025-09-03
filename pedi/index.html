@@ -5,25 +5,48 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>소아과학 목차</title>
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Noto Sans KR', Arial, sans-serif; margin:0; }
-    .wrap { max-width: 900px; margin: 48px auto; padding: 0 20px; }
-    h1 { margin: 0 0 16px; font-size: 24px; }
-    .topbar { position: sticky; top: 0; background: #fff; border-bottom: 1px solid rgba(0,0,0,.06); padding: 10px 20px; }
-    .topbar a { text-decoration: none; color: #0a66c2; font-weight: 700; }
-    ul { list-style: none; padding: 0; margin: 16px 0; }
-    li a { display:block; padding:10px 12px; border:1px solid rgba(0,0,0,.12); border-radius:10px; margin-bottom:8px; text-decoration:none; color:#111; background:#fff; }
-    li a:hover { background:#f7f9ff; }
+    :root { color-scheme: light; }
+    body { font-family: system-ui, -apple-system, "Noto Sans KR", Segoe UI, Roboto, Arial, sans-serif; margin:0; background:#fafbfc; }
+    .topbar { position: sticky; top:0; z-index:10; background:#fff; border-bottom:1px solid rgba(0,0,0,.08); padding:10px 16px; }
+    .topbar a { text-decoration:none; color:#0a66c2; font-weight:700; }
+    .wrap { max-width: 960px; margin: 32px auto; padding: 0 16px; }
+    h1 { margin: 0 0 12px; font-size: 24px; }
+
+    /* 장 카드 */
+    .chapter { background:#fff; border:1px solid rgba(0,0,0,.08); border-radius:12px; margin-bottom:12px; overflow:hidden; }
+    .chapter__head { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px 14px; cursor:pointer; }
+    .chapter__title { font-weight:800; color:#111; }
+    .chapter__desc { color:#666; font-size:12px; }
+    .toggle-btn {
+      width:28px; height:28px; border-radius:8px; border:1px solid rgba(0,0,0,.12);
+      background:#f5f6f8; color:#111; font-weight:900; display:flex; align-items:center; justify-content:center;
+    }
+    .toggle-btn:hover { background:#eef2f8; }
+    .chapter__body { display:none; border-top:1px solid rgba(0,0,0,.06); padding:8px 12px 12px; }
+
+    /* 절/항목 렌더링 */
+    .section { margin:10px 0; }
+    .section__title { font-weight:800; margin:8px 0 6px; }
+    .items { margin:0; padding-left:18px; }
+    .items li { margin:4px 0; }
+
+    /* 로딩/오류 */
+    .loading { color:#666; font-size:13px; padding:6px 2px; }
+    .error { color:#b00020; font-size:13px; padding:6px 2px; white-space:pre-line; }
   </style>
 </head>
 <body>
   <div class="topbar"><a href="/">← 포털로 돌아가기</a></div>
   <div class="wrap">
     <h1>소아과학 목차</h1>
-    <ul id="list"></ul>
+    <div id="chapters"></div>
   </div>
 
   <script>
-    // 여기에 실제 파일명 나열 (pedi/chapter/ 안의 md들)
+    // 📁 마크다운 파일들이 있는 폴더
+    const BASE = './chapter/';
+
+    // 🔤 실제 파일명 목록 (필요시 추가/수정)
 const CHAPTERS = [
       "1장 서론.md",
       "2장 소아의 진단.md",
@@ -53,19 +76,135 @@ const CHAPTERS = [
       "26장 소아의료윤리.md"
     ];
 
+    const $root = document.getElementById('chapters');
 
-    const $list = document.getElementById('list');
+    // 장 카드 생성
+    CHAPTERS.forEach((fname, idx) => {
+      const chapterNo = idx + 1;
+      const friendly = fname.replace(/\.md$/,'');
+      const el = document.createElement('div');
+      el.className = 'chapter';
 
-    // 현재 경로를 기준으로 viewer.html로 안전하게 링크 생성
-    const here = location.pathname.replace(/[^/]+$/, ''); // '/pedi/'
-    const viewerBase = here + 'viewer.html?file=';
+      el.innerHTML = `
+        <div class="chapter__head" data-fname="${fname}">
+          <div>
+            <div class="chapter__title">제 ${chapterNo}장 · ${friendly}</div>
+            <div class="chapter__desc">+ 버튼을 눌러 목차 펼치기</div>
+          </div>
+          <button class="toggle-btn" aria-label="펼치기" data-fname="${fname}">+</button>
+        </div>
+        <div class="chapter__body" id="body_${idx}"></div>
+      `;
+      $root.appendChild(el);
+    });
 
-    CHAPTERS.forEach(name => {
-      const li = document.createElement('li');
-      const fileParam = encodeURIComponent('chapter/' + name);
-      const url = viewerBase + fileParam;  // '/pedi/viewer.html?file=chapter%2F...'
-      li.innerHTML = `<a href="${url}">${name}</a>`;
-      $list.appendChild(li);
+    // 간단 파서: # 로 시작하면 '절', "- " 로 시작하고 뒤에 "숫자. " 있으면 항목
+    function parseMdToOutline(md) {
+      const lines = md.split(/\r?\n/);
+      const sections = [];
+      let current = null;
+      let secIndex = 0;
+
+      for (const raw of lines) {
+        const line = raw.trim();
+        if (!line) continue;
+
+        // 섹션: "# 제목"
+        if (/^#\s+/.test(line)) {
+          secIndex += 1;
+          const title = line.replace(/^#\s+/, '').replace(/^\d+절\s*/,'').trim();
+          current = { index: secIndex, title, items: [] };
+          sections.push(current);
+          continue;
+        }
+
+        // 항목: "- 1. 내용" 또는 "- 내용" (번호 없으면 자동 번호)
+        if (/^-\s+/.test(line) && current) {
+          // "- 12. 텍스트" 포맷 잡기
+          const m = line.match(/^-\s*(\d+)\.\s*(.+)$/);
+          if (m) {
+            current.items.push(m[2].trim());
+          } else {
+            // "- 텍스트"면 번호 없이 들어온 거 → 그대로 넣고 나중에 표시 때 번호 부여
+            const text = line.replace(/^-+\s*/, '').trim();
+            current.items.push(text);
+          }
+        }
+      }
+      return sections;
+    }
+
+    // 절/항목 HTML로 그리기
+    function renderOutline(sections) {
+      if (!sections.length) return '<div class="error">목차를 찾지 못했습니다.</div>';
+
+      let html = '';
+      sections.forEach((sec) => {
+        html += `<div class="section">
+          <div class="section__title">${sec.index}. ${sec.title}</div>`;
+        if (sec.items?.length) {
+          html += '<ol class="items">';
+          sec.items.forEach((t, i) => {
+            html += `<li>${i + 1}. ${t}</li>`;
+          });
+          html += '</ol>';
+        }
+        html += '</div>';
+      });
+      return html;
+    }
+
+    // 펼치기/접기 + 로딩/캐시
+    const cache = new Map(); // fname -> { sections }
+    async function toggleChapter(fname, bodyEl, btnEl) {
+      const isOpen = bodyEl.style.display === 'block';
+      if (isOpen) {
+        bodyEl.style.display = 'none';
+        btnEl.textContent = '+';
+        btnEl.setAttribute('aria-label','펼치기');
+        return;
+      }
+
+      btnEl.textContent = '…';
+      bodyEl.style.display = 'block';
+      bodyEl.innerHTML = '<div class="loading">불러오는 중…</div>';
+
+      try {
+        let sections;
+        if (cache.has(fname)) {
+          sections = cache.get(fname);
+        } else {
+          const url = BASE + encodeURIComponent(fname);
+          const res = await fetch(url, { cache: 'no-store' });
+          if (!res.ok) throw new Error('fetch failed ' + res.status);
+          const md = await res.text();
+          sections = parseMdToOutline(md);
+          cache.set(fname, sections);
+        }
+        bodyEl.innerHTML = renderOutline(sections);
+        btnEl.textContent = '−';
+        btnEl.setAttribute('aria-label','접기');
+      } catch (e) {
+        bodyEl.innerHTML = `<div class="error">불러오기 실패\n- 파일: ${fname}\n- 에러: ${e.message}</div>`;
+        btnEl.textContent = '+';
+      }
+    }
+
+    // 이벤트 위임
+    $root.addEventListener('click', (ev) => {
+      const head = ev.target.closest('.chapter__head');
+      const btn = ev.target.closest('.toggle-btn');
+      if (!head && !btn) return;
+
+      const fname = (btn || head).dataset.fname;
+      if (!fname) return;
+
+      // body 찾기
+      const card = (btn || head).closest('.chapter');
+      const bodyEl = card.querySelector('.chapter__body');
+      const btnEl = card.querySelector('.toggle-btn');
+
+      toggleChapter(fname, bodyEl, btnEl);
     });
   </script>
 </body>
