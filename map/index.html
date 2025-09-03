@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>전졸협 합숙장소 후보지 인포그래픽</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin="anonymous" />
+  <script defer
+          src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+          crossorigin="anonymous"></script>
+
+  <!-- Firebase v8 (app, auth, firestore) -->
+  <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+  <!-- 네가 만든 Firebase 설정 -->
+  <script defer src="./config.js"></script>
+
+  <!-- 스타일 -->
+  <link rel="stylesheet" href="./style.css" />
+
+  <!-- 안전용: 지도 높이 강제(스타일 실패해도 지도 보이게) -->
+  <style>
+  html, body { height: 100%; margin: 0; }
+  #map { height: 100vh; }  /* 높이만 보장, 고정 포지션 제거 */
+</style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <!-- 앱 로직 -->
+  <script defer src="./script.js"></script>
+</body>
+</html>
