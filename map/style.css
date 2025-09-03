@@ -252,3 +252,24 @@ html, body { height: 100%; margin: 0; }
   font-weight: 700;
   padding: 4px 8px;
 }
+
+
+/* 포털로 돌아가기 버튼 */
+.topbar {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 2000;           /* Leaflet 기본 컨트롤(1000)보다 위 */
+  background: #fff;
+  border: 1px solid rgba(0,0,0,.15);
+  border-radius: 8px;
+  padding: 6px 10px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.12);
+  font-size: 14px;
+}
+.topbar a {
+  color: #0a66c2;
+  text-decoration: none;
+  font-weight: 700;
+}
+.topbar a:hover { text-decoration: underline; }
