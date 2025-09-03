@@ -17,7 +17,7 @@ const DEFAULT_RAD = 100;
 
 /* ✅ /map/index.html 에서 <base href="/map/"> 를 쓰므로
    상대경로 "data/universities.json" => /map/data/universities.json 로 정확히 해석됨 */
-const UNIVERSITY_JSON = "data/universities.json";
+const UNIVERSITY_JSON = "/data/universities.json";
 
 let db = null;
 const isDbMode = () => !!db;
