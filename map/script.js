@@ -16,7 +16,7 @@ const DEFAULT_DEG = 270;      // 폴백
 const DEFAULT_RAD = 100;      // 폴백
 
 // 🔹 /map/index.html 기준 경로. universities.json은 /map/data/universities.json 에 있어야 함
-const UNIVERSITY_JSON = "/map/data/universities.json";
+const UNIVERSITY_JSON = "data/universities.json";
 let universityLayer = null;
 
 let db = null;
