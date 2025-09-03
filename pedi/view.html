@@ -32,40 +32,42 @@
     <pre class="markmap" id="mm"></pre>
   </div>
 
-  <script>
-    // ?file= 경로 파라미터 읽어서 해당 md 가져오기
-    const params = new URLSearchParams(location.search);
-    const file = params.get('file'); // 예: md/14장%20심혈관계.md
+ <script>
+  const params = new URLSearchParams(location.search);
+  let file = params.get('file'); // 예: 'chapter/14장 심혈관계.md' 또는 '14장 심혈관계.md'
 
-    async function main() {
-      if (!file) {
-        document.getElementById('mm').textContent = '# 파일이 지정되지 않았습니다\n- URL에 ?file=md/파일명.md 를 추가하세요';
-        window.markmap?.autoLoader?.renderAll();
-        return;
-      }
-      try {
-        const res = await fetch(file, { cache: 'no-store' });
-        if (!res.ok) throw new Error('fetch failed ' + res.status);
-        const md = await res.text();
+  async function main() {
+    // 파일 경로 보정: 'chapter/' 누락 시 붙여줌
+    if (file && !file.includes('/')) file = 'chapter/' + file;
 
-        // 제목 표시(파일명만 추출)
-        const base = decodeURIComponent(file.split('/').pop());
-        document.getElementById('title').textContent = base;
-
-        // Markdown 주입
-        const pre = document.getElementById('mm');
-        pre.textContent = md;
-
-        // ✅ autoloader로 렌더
-        window.markmap.autoLoader.renderAll();
-      } catch (e) {
-        console.error(e);
-        document.getElementById('mm').textContent =
-          '# 불러오기 실패\n- 경로: ' + file + '\n- 에러: ' + e.message;
-        window.markmap?.autoLoader?.renderAll();
-      }
+    if (!file) {
+      document.getElementById('mm').textContent =
+        '# 파일이 지정되지 않았습니다\n- URL에 ?file=chapter/파일명.md 를 추가하세요';
+      window.markmap?.autoLoader?.renderAll();
+      return;
     }
-    main();
-  </script>
+
+    try {
+      const res = await fetch(file, { cache: 'no-store' });
+      if (!res.ok) throw new Error('fetch failed ' + res.status);
+
+      const md = await res.text();
+      // 제목 표시
+      const base = decodeURIComponent(file.split('/').pop());
+      document.getElementById('title').textContent = base;
+
+      // Markdown 주입 후 렌더
+      const pre = document.getElementById('mm');
+      pre.textContent = md;
+      window.markmap.autoLoader.renderAll();
+    } catch (e) {
+      console.error(e);
+      document.getElementById('mm').textContent =
+        '# 불러오기 실패\n- 경로: ' + file + '\n- 에러: ' + e.message;
+      window.markmap?.autoLoader?.renderAll();
+    }
+  }
+  main();
+</script>
 </body>
 </html>
