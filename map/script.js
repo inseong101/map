@@ -16,7 +16,7 @@ const SIDO_GEOJSON = "TL_SCCO_CTPRVN.json";
 const DEFAULT_DEG = 270;      // 폴백
 const DEFAULT_RAD = 100;      // 폴백
 
-const UNIVERSITY_JSON = "universities.json";
+cconst UNIVERSITY_JSON = "./universities.json"; // 파일이 /map/ 폴더 안에 있을 때
 let universityLayer = null;
 
 let db = null;
