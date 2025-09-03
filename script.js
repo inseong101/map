@@ -18,6 +18,7 @@ const DEFAULT_RAD = 100;      // 폴백
 
 let db = null;
 const isDbMode = () => !!db;              // DB 연결 여부
+let firstSnapshot = true; // ← 이 줄 추가
 
 /* ---------- 유틸 함수들 ---------- */
 function toNum(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
@@ -487,11 +488,6 @@ async function subscribePlacesAndRender() {
 
   // (선택) 현재 문서 개요만 확인해도 되지만, 시드 안 할 거면 없어도 됨
   // const snap = await db.collection("places").get();
-
-  // ❌ 시드 로직 비활성화
-  if (ENABLE_SEED) {
-    // ... (이 블록 통째로 지우거나 ENABLE_SEED=false로 둠)
-  }
 
   // ✅ Firestore 실시간 구독만으로 렌더
   db.collection("places").onSnapshot((ss) => {
