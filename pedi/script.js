@@ -32,49 +32,58 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const $list = document.getElementById('list');
 
-  CHAPTERS.forEach((name, idx) => {
+  CHAPTERS.forEach((file, idx) => {
+    // 파일명 정규화 (맥에서 NFD → NFC)
+    const clean = file.normalize('NFC').replace(/\.md$/, '');
+    // "6장 ..." → "제6장 ..." 으로 표시
+    const title = '제' + clean;
+
+    // li 요소
     const li = document.createElement('li');
-
-    // 큰 버튼 (장)
-    const btn = document.createElement('button');
-    btn.className = 'chapter-btn';
-    btn.textContent = `제${idx + 1}장 · ${name.replace(/^\d+장\s*/, '')}`;
-    li.appendChild(btn);
-
-    // 소절/항목 자리 (fetch 후 넣기)
-    const sub = document.createElement('ul');
-    sub.className = 'sublist';
-    li.appendChild(sub);
-
-    btn.addEventListener('click', async () => {
-      if (sub.childElementCount === 0) {
-        try {
-          const res = await fetch(BASE + name);
-          const md = await res.text();
-          const lines = md.split('\n');
-
-          lines.forEach(line => {
-            if (line.startsWith('# ')) {
-              // 절 (제N절)
-              const text = line.replace(/^#\s*/, '').trim();
-              const li2 = document.createElement('li');
-              li2.textContent = text.startsWith('제') ? text : '제' + text;
-              sub.appendChild(li2);
-            } else if (line.startsWith('- ')) {
-              // 항목 (넘버링 그대로)
-              const text = line.replace(/^-+\s*/, '').trim();
-              const li2 = document.createElement('li');
-              li2.textContent = text;
-              sub.appendChild(li2);
-            }
-          });
-        } catch (e) {
-          sub.innerHTML = `<li>불러오기 실패: ${e.message}</li>`;
-        }
-      }
-      sub.classList.toggle('visible');
-    });
-
+    li.innerHTML = `
+      <div class="chapter">
+        <button class="chapter-btn">${title}</button>
+        <button class="expand-btn">+</button>
+        <div class="chapter-content" style="display:none"></div>
+      </div>
+    `;
     $list.appendChild(li);
+
+    const expandBtn = li.querySelector('.expand-btn');
+    const contentEl = li.querySelector('.chapter-content');
+
+    expandBtn.addEventListener('click', async () => {
+      if (contentEl.style.display === 'none') {
+        try {
+          const res = await fetch(BASE + file);
+          if (!res.ok) throw new Error('fetch fail');
+          const md = await res.text();
+
+          // 절(# ...)은 "제n절"로, 나머지는 그대로
+          const html = md.split('\n').map(line => {
+            if (line.startsWith('#')) {
+              return '<div class="section"><b>제' +
+                     line.replace(/^#+\s*/, '') +
+                     '</b></div>';
+            } else if (line.startsWith('-')) {
+              return '<div class="item">' +
+                     line.replace(/^-+\s*/, '') +
+                     '</div>';
+            }
+            return '';
+          }).join('');
+
+          contentEl.innerHTML = html;
+          contentEl.style.display = 'block';
+          expandBtn.textContent = '−';
+        } catch (e) {
+          contentEl.textContent = '불러오기 실패: ' + e.message;
+          contentEl.style.display = 'block';
+        }
+      } else {
+        contentEl.style.display = 'none';
+        expandBtn.textContent = '+';
+      }
+    });
   });
 });
