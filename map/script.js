@@ -400,7 +400,16 @@ function injectRightPanel() {
     rebuildTabs();
   };
 }
-
+// 탭 아이템 HTML 생성 (이름/주소와 닫기 버튼)
+function tabItemHTML(p) {
+  return '' +
+    '<div class="tab-item" id="tab_' + p.id + '">' +
+      '<div class="tab-title" title="' + p.name + (p.address ? ' (' + p.address + ')' : '') + '">' +
+        p.name +
+      '</div>' +
+      '<div class="tab-close" title="삭제" data-id="' + p.id + '">×</div>' +
+    '</div>';
+}
 /* ---------- 좌/우 목록 동시에 재구성 ---------- */
 function rebuildTabs() {
   // 공통 탭 HTML
