@@ -15,7 +15,7 @@
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
           crossorigin="anonymous"></script>
 
-  <!-- Firebase v8 (app, auth, firestore) -->
+  <!-- Firebase v8 -->
   <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -26,20 +26,21 @@
   <!-- 스타일 -->
   <link rel="stylesheet" href="./style.css" />
 
-  <!-- 안전용: 지도 높이 강제(스타일 실패해도 지도 보이게) -->
+  <!-- 페이지 전용 스타일 -->
   <style>
-  html, body { height: 100%; margin: 0; }
-    <body>
-  <div class="topbar"><a href="/">← 포털로 돌아가기</a></div>
-  <div id="map"></div>
-
-  <!-- 앱 로직 -->
-  <script defer src="./script.js"></script>
-</body>
-  #map { height: 100vh; }  /* 높이만 보장, 고정 포지션 제거 */
-</style>
+    html, body { height: 100%; margin: 0; }
+    .topbar {
+      position: sticky; top: 0; z-index: 1000;
+      background: #fff; border-bottom: 1px solid rgba(0,0,0,.1);
+      padding: 10px 14px; font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Noto Sans KR', Arial, sans-serif;
+    }
+    .topbar a { text-decoration: none; color: #0a66c2; font-weight: 700; }
+    /* 상단바 높이만큼 지도 높이 보정 */
+    #map { height: calc(100vh - 44px); }
+  </style>
 </head>
 <body>
+  <div class="topbar"><a href="/">← 포털로 돌아가기</a></div>
   <div id="map"></div>
 
   <!-- 앱 로직 -->
