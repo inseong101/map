@@ -41,6 +41,19 @@ li.chapter { margin: 10px 0 14px; }
   border-radius: 8px; font-size: 14px; color:#222;
 }
 
+.item-line {
+  margin: 4px 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(0,0,0,.12);
+  border-radius: 8px;
+  background: #fdfdfd;
+  cursor: pointer;
+  font-size: 14px;
+}
+.item-line:hover {
+  background: #eef6ff;
+}
+
 /* 안내 메시지 */
 .empty, .error {
   margin: 8px 2px; padding: 8px 10px; border-radius: 8px;
