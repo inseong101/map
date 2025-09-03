@@ -273,3 +273,16 @@ html, body { height: 100%; margin: 0; }
   font-weight: 700;
 }
 .topbar a:hover { text-decoration: underline; }
+
+/* ---- topbar가 가려지지 않도록 #map 풀스크린 고정 해제 ---- */
+#map {
+  position: relative !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: auto !important;
+  height: calc(100vh - 44px) !important; /* topbar 높이만큼 보정 */
+}
+
+/* leaflet 내부 레이어 z-index 내려서 상단바 위로 안 올라오게 */
+.leaflet-container { z-index: 0 !important; }
