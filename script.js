@@ -1,6 +1,10 @@
 /* global L, firebase */
 "use strict";
 
+// 👉 places.js 안 씀: 초기 배열은 빈 배열
+window.PLACES = [];
+const ENABLE_SEED = false; // places.js → Firestore 업로드(시드) 완전히 끔
+
 /* ---------- 초기 데이터(places.js) ---------- */
 window.PLACES = window.PLACES || [];
 console.log("[debug] PLACES length =", window.PLACES.length);
@@ -412,45 +416,45 @@ function injectRightPanel() {
   }
   setupPanelToggle("rightPanel", "rightToggle", "rightPanelState");
 
-  document.getElementById("btn_add").onclick = async function () {
-    const name = (document.getElementById("in_name").value || "").trim();
-    const address = (document.getElementById("in_addr").value || "").trim();
-    const lat = parseFloat(document.getElementById("in_lat").value);
-    const lon = parseFloat(document.getElementById("in_lon").value);
+document.getElementById("btn_add").onclick = async () => {
+  if (!db) {
+    alert("Firebase에 연결되지 않았어요. config.js와 Firestore 설정을 확인해주세요.");
+    return;
+  }
 
-    if (!name || isNaN(lat) || isNaN(lon)) {
-      alert("이름, 위도, 경도는 필수입니다.");
-      return;
-    }
+  const name = (document.getElementById("in_name").value || "").trim();
+  const address = (document.getElementById("in_addr").value || "").trim();
+  const lat = parseFloat(document.getElementById("in_lat").value);
+  const lon = parseFloat(document.getElementById("in_lon").value);
 
-    // 아이디 계산(현재 목록 기준)
-    const ids = (window.PLACES || []).map(p => Number(p.id) || 0);
-    const newId = (ids.length ? Math.max(...ids) + 1 : 1);
+  if (!name || isNaN(lat) || isNaN(lon)) {
+    alert("이름, 위도, 경도는 필수입니다.");
+    return;
+  }
 
-    const p = { id: newId, name, address: address || "주소 없음", lat, lon };
+  // 현재 스냅샷 기준 새 숫자 ID
+  const ids = (window.PLACES || []).map(p => Number(p.id) || 0);
+  const newId = ids.length ? Math.max(...ids) + 1 : 1;
 
-    if (db) {
-      // 시드 시 1회만 deg/rad 생성해서 DB에 저장
-      ensureDegRad(p);
-      await upsertPlaceDoc(p);
-      // 입력 초기화
-      document.getElementById("in_name").value = "";
-      document.getElementById("in_addr").value = "";
-      document.getElementById("in_lat").value = "";
-      document.getElementById("in_lon").value = "";
-    } else {
-      // 로컬 모드
-      ensureDegRad(p);
-      (window.PLACES || (window.PLACES = [])).push(p);
-      addPlaceToMap(p, false);
-      appendTab(p);
-      document.getElementById("in_name").value = "";
-      document.getElementById("in_addr").value = "";
-      document.getElementById("in_lat").value = "";
-      document.getElementById("in_lon").value = "";
-    }
+  // ✨ 최초 1회만 라벨 각도/거리 생성해서 DB에 저장
+  const p = {
+    id: newId,
+    name,
+    address: address || "주소 없음",
+    lat,
+    lon,
+    deg: Math.random() * 360,
+    rad: 80 + Math.random() * 120
   };
-}
+
+  await db.collection("places").doc(String(newId)).set(p, { merge: true });
+
+  // 입력 초기화
+  document.getElementById("in_name").value = "";
+  document.getElementById("in_addr").value = "";
+  document.getElementById("in_lat").value = "";
+  document.getElementById("in_lon").value = "";
+};
 
 /* ---------- 패널 토글 공통 ---------- */
 function setupPanelToggle(containerId, toggleBtnId, storageKey) {
@@ -483,45 +487,28 @@ function setupPanelToggle(containerId, toggleBtnId, storageKey) {
 
 /* ---------- Firestore 구독 + 초기 시드 ---------- */
 async function subscribePlacesAndRender() {
-  if (!db) {
-    // 로컬 모드: places.js 그대로 렌더
-    renderAll();
-    return;
+  if (!db) { renderAll(); return; }
+
+  // (선택) 현재 문서 개요만 확인해도 되지만, 시드 안 할 거면 없어도 됨
+  // const snap = await db.collection("places").get();
+
+  // ❌ 시드 로직 비활성화
+  if (ENABLE_SEED) {
+    // ... (이 블록 통째로 지우거나 ENABLE_SEED=false로 둠)
   }
 
-  // 1) DB에 현재 문서 목록 확인
-  const snap = await db.collection("places").get();
-  const existingIds = new Set(snap.docs.map(d => d.id));
-
-  // 2) places.js에 있는데 DB에 없는 항목은 '시드' 업서트(이때만 랜덤 생성)
-  for (const p0 of (window.PLACES || [])) {
-    const idStr = String(p0.id);
-    if (!existingIds.has(idStr)) {
-      const seed = { ...p0, lat: toNum(p0.lat), lon: toNum(p0.lon) };
-      if (!isValidPlace(seed)) {
-        console.warn("[seed] skip invalid seed:", seed);
-        continue;
-      }
-      if (typeof seed.deg !== "number" || typeof seed.rad !== "number") {
-        ensureDegRad(seed);
-      }
-      await upsertPlaceDoc(seed);
-    }
-  }
-
-  // 3) 실시간 구독 → 첫 스냅샷에서만 fitBounds + 렌더
+  // ✅ Firestore 실시간 구독만으로 렌더
+  let firstSnapshot = true;
   db.collection("places").onSnapshot((ss) => {
     const arr = [];
     ss.forEach(doc => {
       const d = doc.data() || {};
-      const lat = toNum(d.lat);
-      const lon = toNum(d.lon);
-      if (!isValidLatLng(lat, lon)) {
-        console.warn("[snapshot] skip invalid lat/lon doc:", doc.id, d);
-        return;
-      }
+      const lat = Number(d.lat), lon = Number(d.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+
       const idNum = Number(doc.id);
-      const id = Number.isFinite(idNum) ? idNum : (toNum(d.id) ?? doc.id);
+      const id = Number.isFinite(idNum) ? idNum : (Number(d.id) || doc.id);
+
       arr.push({
         id,
         name: d.name ?? "",
@@ -536,7 +523,7 @@ async function subscribePlacesAndRender() {
 
     if (firstSnapshot) {
       firstSnapshot = false;
-      const latlngs = arr.filter(isValidPlace).map(p => [p.lat, p.lon]);
+      const latlngs = arr.map(p => [p.lat, p.lon]);
       if (latlngs.length) map.fitBounds(latlngs);
     }
 
