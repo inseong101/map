@@ -149,13 +149,6 @@ html, body { height: 100%; margin: 0; }
   margin-bottom: 0;
 }
 
-/* 오른쪽 패널은 접힘 시 어두운 배경 유지하고 버튼만 보이게 */
-.input-panel {
-  background: rgba(11,19,43,0.95);
-}
-.input-panel.collapsed {
-  background: rgba(11,19,43,0.95);
-}
 .panel-toggle.dark {
   background: rgba(255,255,255,0.08);
   color: #fff;
