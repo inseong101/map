@@ -330,7 +330,6 @@ function rightPanelHTML() {
     '</div>' +
     '<div class="panel-content" id="rightContent">' +
 
-      // 입력 폼
       '<div class="row"><input id="in_name" type="text" placeholder="이름 (필수)" /></div>' +
       '<div class="row"><input id="in_addr" type="text" placeholder="주소 (선택)" /></div>' +
       '<div class="row">' +
@@ -340,10 +339,8 @@ function rightPanelHTML() {
       '<button class="btn" id="btn_add">추가</button>' +
       '<div class="hint">라벨은 추가 후 드래그해서 위치를 조정할 수 있어요.</div>' +
 
-      // 구분선
       '<hr class="divider" />' +
 
-      // 장소 목록 (← 여기로 이사)
       '<div class="panel-header small">' +
         '<h3 class="panel-title">장소 목록</h3>' +
       '</div>' +
@@ -352,6 +349,7 @@ function rightPanelHTML() {
     '</div>' +
   '</div>';
 }
+
 function injectRightPanel() {
   if (!document.querySelector(".input-panel")) {
     const wrap = document.createElement("div");
@@ -360,18 +358,83 @@ function injectRightPanel() {
   }
   setupPanelToggle("rightPanel", "rightToggle", "rightPanelState");
 
-document.getElementById("btn_add").onclick = async () => {
-  if (!db) {
-    alert("Firebase에 연결되지 않았어요. config.js와 Firestore 설정을 확인해주세요.");
-    return;
-  }
+  document.getElementById("btn_add").onclick = async () => {
+    if (!db) {
+      alert("Firebase에 연결되지 않았어요. config.js와 Firestore 설정을 확인해주세요.");
+      return;
+    }
 
-  // Firestore 저장
-  await db.collection("places").doc(String(newId)).set(p, { merge: true });
+    const name = (document.getElementById("in_name").value || "").trim();
+    const address = (document.getElementById("in_addr").value || "").trim();
+    const lat = parseFloat(document.getElementById("in_lat").value);
+    const lon = parseFloat(document.getElementById("in_lon").value);
 
-  // 저장 끝나면 목록 다시 그림
-  rebuildTabs();
-};
+    if (!name || !Number.isFinite(lat) || !Number.isFinite(lon)) {
+      alert("이름, 위도, 경도는 필수입니다.");
+      return;
+    }
+
+    const ids = (window.PLACES || []).map(p => Number(p.id) || 0);
+    const newId = ids.length ? Math.max(...ids) + 1 : 1;
+
+    const p = {
+      id: newId,
+      name,
+      address: address || "주소 없음",
+      lat,
+      lon,
+      deg: Math.random() * 360,
+      rad: 80 + Math.random() * 120
+    };
+
+    await db.collection("places").doc(String(newId)).set(p, { merge: true });
+
+    // 입력 초기화
+    document.getElementById("in_name").value = "";
+    document.getElementById("in_addr").value = "";
+    document.getElementById("in_lat").value = "";
+    document.getElementById("in_lon").value = "";
+
+    // 스냅샷을 기다리지 않고 목록도 바로 갱신 (낙관적 업데이트)
+    window.PLACES.push(p);
+    rebuildTabs();
+  };
+}
+
+/* ---------- 좌/우 목록 동시에 재구성 ---------- */
+function rebuildTabs() {
+  // 공통 탭 HTML
+  const html = (window.PLACES || []).map(p => (
+    '<div class="tab-item" id="tab_' + p.id + '">' +
+      '<div class="tab-title" title="' + p.name + ' (' + (p.address || '') + ')">' + p.name + '</div>' +
+      '<div class="tab-close" title="삭제" data-id="' + p.id + '">×</div>' +
+    '</div>'
+  )).join("");
+
+  // 왼쪽 패널이 남아있으면 거기도 갱신
+  const left = document.getElementById("tabList");
+  if (left) left.innerHTML = html;
+
+  // 오른쪽 패널(병합된 목록) 갱신
+  const right = document.getElementById("tabListRight");
+  if (right) right.innerHTML = html;
+
+  // 이벤트 바인딩 (양쪽 다 같은 .tab-item 클래스)
+  document.querySelectorAll(".tab-item").forEach(el => {
+    const id = parseInt(el.id.replace("tab_", ""), 10);
+    const p = (window.PLACES || []).find(x => x.id === id);
+    if (!p) return;
+
+    const titleEl = el.querySelector(".tab-title");
+    if (titleEl) titleEl.onclick = () => centerOnPlace(p);
+
+    const closeEl = el.querySelector(".tab-close");
+    if (closeEl) closeEl.onclick = ev => {
+      ev.stopPropagation();
+      removePlace(id);
+      rebuildTabs(); // 한 항목 삭제 시 즉시 반영
+    };
+  });
 }
 
 /* ---------- Firestore 구독 ---------- */
