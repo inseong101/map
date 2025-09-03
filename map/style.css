@@ -79,7 +79,7 @@ html, body { height: 100%; margin: 0; }
   right: 12px;
   width: 340px;
   max-width: 85vw;
-  background: rgba(255,255,255,0.95); /* 흰색 바탕 */
+  background: rgba(255,255,255,0.85); /* 밝은 투명 회색 */
   color: #111; /* 글자 진한 검정 */
   padding: 12px 12px 10px;
   border-radius: 12px;
@@ -94,7 +94,8 @@ html, body { height: 100%; margin: 0; }
   flex: 1; min-width: 0;
   padding: 8px 10px; border-radius: 8px;
   border: 1px solid rgba(0,0,0,0.2);
-  background: #fff; color: #111;
+  background: rgba(255,255,255,0.95); /* 입력칸은 좀 더 선명한 흰색 */
+  color: #111;
   outline: none;
 }
 .input-panel input::placeholder { color: rgba(0,0,0,0.5); }
