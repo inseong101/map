@@ -243,3 +243,12 @@ html, body { height: 100%; margin: 0; }
 @media (pointer: coarse) {
   .uni-flag .label { display:none; }
 }
+
+
+.leaflet-tooltip.uni-label {
+  background: rgba(255,255,255,0.95);
+  border: 1px solid rgba(0,0,0,0.15);
+  border-radius: 8px;
+  font-weight: 700;
+  padding: 4px 8px;
+}
