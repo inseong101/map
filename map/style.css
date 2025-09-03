@@ -219,54 +219,12 @@ html, body { height: 100%; margin: 0; }
   }
 }
 
-/* === University flag markers === */
-.uni-flag {
-  position: relative;
-  transform: translate(-50%, -100%); /* 좌표가 깃대 바닥에 오도록 */
-  pointer-events: auto;
-  user-select: none;
-}
-
-.uni-flag .pole {
-  width: 2px;
-  height: 16px;
-  background: #444;
-  margin: 0 auto;
-  border-radius: 1px;
-}
-
-.uni-flag .flag {
-  width: 14px;
-  height: 10px;
-  background: #e53935;          /* 깃발 빨강 */
-  border-radius: 2px 2px 2px 0;
-  margin-left: 2px;
-  box-shadow: 0 1px 2px rgba(0,0,0,.25);
-  position: relative;
-}
-
-.uni-flag .dot {
-  width: 6px; height: 6px;
-  background: #e53935;
-  border-radius: 50%;
-  margin: 2px auto 0;
-  box-shadow: 0 0 0 2px rgba(229,57,53,.15);
-}
-
-.uni-flag .label {
-  margin-top: 4px;
-  padding: 2px 4px;
-  background: rgba(255,255,255,.9);
-  border: 1px solid rgba(0,0,0,.15);
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
-  color: #111;
-  transform: translateX(-50%);
-  position: absolute;
-  left: 50%;
-}
+/* University flag markers */
+.uni-flag { position: relative; transform: translate(-50%, -100%); user-select: none; }
+.uni-flag .flag { width:14px; height:10px; background:#e53935; border-radius:2px 2px 2px 0; margin-left:2px; box-shadow:0 1px 2px rgba(0,0,0,.25); }
+.uni-flag .pole { width:2px; height:16px; background:#444; margin:0 auto; border-radius:1px; }
+.uni-flag .dot { width:6px; height:6px; background:#e53935; border-radius:50%; margin:2px auto 0; box-shadow:0 0 0 2px rgba(229,57,53,.15); }
+.uni-flag .label { position:absolute; left:50%; transform:translateX(-50%); margin-top:4px; padding:2px 4px; background:rgba(255,255,255,.9); border:1px solid rgba(0,0,0,.15); border-radius:6px; font-size:12px; font-weight:700; white-space:nowrap; color:#111; }
 
 /* 줌 작으면 라벨 숨김 */
 .leaflet-zoom-anim .uni-flag .label { display:none; }
