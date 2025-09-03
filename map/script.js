@@ -336,7 +336,7 @@ function bindSingleTabEvents(id) {
   el.querySelector(".tab-close").onclick = ev => {
     ev.stopPropagation();
     removePlace(id);
-  });
+  };
 }
 function centerOnPlace(p) {
   const rec = layerById[p.id];
