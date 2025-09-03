@@ -21,7 +21,7 @@ const isDbMode = () => !!db;
 let firstSnapshot = true;
 
 /* ▼▼▼ 추가: 대학교 전용 레이어/데이터 ▼▼▼ */
-let universitiesLayer = null;   // 깃발 마커 레이어
+let uniLayer = null; // 대학교 레이어
 let UNIVERSITIES = [];          // 로컬 JSON에서 불러온 데이터
 const UNIVERSITIES_JSON = "universities.json"; // 파일 위치: 같은 폴더에 두는 경우
 /* ▲▲▲ 추가 끝 ▲▲▲ */
@@ -50,23 +50,36 @@ function getPlaceById(id) {
 }
 
 /* ---------- 대학교(로컬 JSON) 로드 & 렌더 ---------- */
-async function loadUniversitiesFromLocal() {
+async function loadUniversities() {
   try {
-    const res = await fetch(UNIVERSITIES_JSON, { cache: "no-store" });
-    if (!res.ok) throw new Error("failed to fetch universities.json");
-    const arr = await res.json();
-    // 안전한 숫자화 + 필수 필드만
-    UNIVERSITIES = (arr || []).map(u => ({
-      id: u.id ?? u.name,                      // id 없으면 name로 대체
-      name: u.name || "이름없음",
-      address: u.address || "",
-      lat: Number(u.lat),
-      lon: Number(u.lon),
-    })).filter(u => Number.isFinite(u.lat) && Number.isFinite(u.lon));
+    const res = await fetch("universities.json", { cache: "no-store" });
+    if (!res.ok) throw new Error("universities.json fetch failed: " + res.status);
+    const list = await res.json();
 
-    renderUniversities();
+    if (uniLayer) {
+      uniLayer.removeFrom(map);
+      uniLayer = null;
+    }
+    uniLayer = L.layerGroup().addTo(map);
+
+    list.forEach(u => {
+      if (!Number.isFinite(u.lat) || !Number.isFinite(u.lon)) return;
+
+      const icon = L.divIcon({
+        className: "",
+        html: `<div class="uni-flag"><span class="emoji">🎓</span>${u.name}</div>`,
+        iconSize: null,
+        iconAnchor: [0, 0]
+      });
+
+      L.marker([u.lat, u.lon], { icon, pane: "pane-markers" })
+        .bindTooltip(`${u.name}<br>${u.address}`, { direction: "top" })
+        .addTo(uniLayer);
+    });
+
+    console.log(`[uni] loaded: ${list.length}`);
   } catch (e) {
-    console.error("[universities] load failed:", e);
+    console.error("[uni] load failed:", e);
   }
 }
 
@@ -619,10 +632,7 @@ map.on("move resize", () => {
 });
 
   // Firestore 구독(없으면 로컬 렌더)
-  await subscribePlacesAndRender();
-}
-  /* ▼▼▼ 추가: 대학교 로컬 데이터 로드 ▼▼▼ */
-  loadUniversitiesFromLocal();
-  /* ▲▲▲ 추가 끝 ▲▲▲ */
+await subscribePlacesAndRender();
+await loadUniversities(); // 🎓 대학교 표시
 
 window.addEventListener("load", initMap);
