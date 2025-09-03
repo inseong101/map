@@ -271,7 +271,39 @@ function renderAll() {
   rebuildTabs();
   console.log("[render] rendered places:", (window.PLACES || []).length);
 }
+/* ---------- 패널 토글 공통 ---------- */
+function setupPanelToggle(containerId, toggleBtnId, storageKey) {
+  const $container = document.getElementById(containerId);
+  const $toggle = document.getElementById(toggleBtnId);
+  if (!$container || !$toggle) return;
 
+  // 접힘 상태 복원
+  try {
+    const saved = localStorage.getItem(storageKey);
+    if (saved === "collapsed") {
+      $container.classList.add("collapsed");
+      $toggle.textContent = "+";
+      $toggle.setAttribute("aria-label", "펼치기");
+    } else {
+      $toggle.textContent = "−";
+      $toggle.setAttribute("aria-label", "접기");
+    }
+  } catch (_) {}
+
+  // 토글 동작
+  $toggle.addEventListener("click", () => {
+    const collapsed = $container.classList.toggle("collapsed");
+    if (collapsed) {
+      $toggle.textContent = "+";
+      $toggle.setAttribute("aria-label", "펼치기");
+      try { localStorage.setItem(storageKey, "collapsed"); } catch (_) {}
+    } else {
+      $toggle.textContent = "−";
+      $toggle.setAttribute("aria-label", "접기");
+      try { localStorage.setItem(storageKey, "expanded"); } catch (_) {}
+    }
+  });
+}
 /* ---------- 좌측 탭 ---------- */
 function leftPanelHTML() {
   return '' +
