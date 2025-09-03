@@ -5,36 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>전졸협 합숙장소 후보지 인포그래픽</title>
 
-  <!-- Leaflet CSS -->
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-    crossorigin="anonymous"
-  />
+  <!-- Leaflet -->
+  <link rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin="anonymous" />
+  <script defer
+          src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+          crossorigin="anonymous"></script>
+
+  <!-- Firebase v8 (app, auth, firestore) -->
+  <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+  <!-- 🔐 네가 만든 config.js (window.FB_CONFIG 제공) -->
+  <script defer src="config.js"></script>
+
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div id="map"></div>
 
-  <!-- 1) Leaflet JS -->
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-    crossorigin="anonymous"
-    defer
-  ></script>
+  <!-- ❌ 데이터 파일(places.js) 제거 -->
+  <!-- <script src="places.js" defer></script> -->
 
-  <!-- 2) Firebase SDKs (항상 script.js보다 위) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" defer></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js" defer></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
-
-  <!-- 3) Firebase 설정 (반드시 window.FB_CONFIG = {...}; 형태) -->
-  <script src="config.js" defer></script>
-
-  <!-- 4) 데이터, 5) 로직 (마지막) -->
-  <script src="places.js" charset="utf-8" defer></script>
-  <script src="script.js"  charset="utf-8" defer></script>
+  <!-- 앱 로직 -->
+  <script src="script.js" defer></script>
 </body>
 </html>
