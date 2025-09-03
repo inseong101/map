@@ -107,3 +107,33 @@ ul.items {
 .item-spacer {
   height: 10px;
 }
+
+/* --- (1) item(1., 2., …)에도 + / − 아이콘 표시 --- */
+.item-line {
+  position: relative;
+  padding-right: 36px;       /* 아이콘 자리 */
+}
+.item-line::after {
+  content: "+";
+  position: absolute;
+  right: 12px; top: 50%;
+  transform: translateY(-50%);
+  font-weight: 900;
+  color: rgba(0,0,0,.55);
+  pointer-events: none;       /* 아이콘 위 클릭도 토글되게 */
+}
+.item-line[aria-expanded="true"]::after {
+  content: "−";
+}
+
+/* --- (2) 항목 토글 본문 영역 표시/숨김 --- */
+.item-content { 
+  display: none; 
+  margin-top: 6px;
+}
+.item-content.visible { 
+  display: block; 
+}
+
+/* --- (3) ‘내용 없음’ 대신 간격만 주는 스페이서 --- */
+.item-spacer { height: 10px; }
