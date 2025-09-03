@@ -1,9 +1,6 @@
 /* global L, firebase */
 "use strict";
 
-// 👉 places.js 안 씀: 초기 배열은 빈 배열
-window.PLACES = [];
-const ENABLE_SEED = false; // places.js → Firestore 업로드(시드) 완전히 끔
 
 /* ---------- 초기 데이터(places.js) ---------- */
 window.PLACES = window.PLACES || [];
@@ -18,10 +15,8 @@ const SIDO_GEOJSON = "TL_SCCO_CTPRVN.json";
 
 const DEFAULT_DEG = 270;      // 폴백(거의 안 씀)
 const DEFAULT_RAD = 100;      // 폴백
-let nextPlaceId = (window.PLACES.length || 0) + 1;
 
 let db = null;
-let firstSnapshot = true;                 // 첫 Firestore 스냅샷인지
 const isDbMode = () => !!db;              // DB 연결 여부
 
 /* ---------- 유틸 함수들 ---------- */
@@ -455,6 +450,7 @@ document.getElementById("btn_add").onclick = async () => {
   document.getElementById("in_lat").value = "";
   document.getElementById("in_lon").value = "";
 };
+}
 
 /* ---------- 패널 토글 공통 ---------- */
 function setupPanelToggle(containerId, toggleBtnId, storageKey) {
@@ -498,7 +494,6 @@ async function subscribePlacesAndRender() {
   }
 
   // ✅ Firestore 실시간 구독만으로 렌더
-  let firstSnapshot = true;
   db.collection("places").onSnapshot((ss) => {
     const arr = [];
     ss.forEach(doc => {
