@@ -28,9 +28,9 @@
 
   <!-- 안전용: 지도 높이 강제(스타일 실패해도 지도 보이게) -->
   <style>
-    html, body, #map { height: 100%; margin: 0; }
-    #map { position: fixed; inset: 0; }
-  </style>
+  html, body { height: 100%; margin: 0; }
+  #map { height: 100vh; }  /* 높이만 보장, 고정 포지션 제거 */
+</style>
 </head>
 <body>
   <div id="map"></div>
