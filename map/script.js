@@ -503,6 +503,7 @@ async function subscribePlacesAndRender() {
 }
 
 /* ---------- 🎓 대학교 로더 ---------- */
+// 대학교 깃발 로드
 async function loadUniversities() {
   try {
     const res = await fetch(UNIVERSITY_JSON, { cache: "no-store" });
@@ -511,13 +512,17 @@ async function loadUniversities() {
       return;
     }
     const data = await res.json();
+
+    // 기존 레이어 있으면 제거
     if (universityLayer) {
       universityLayer.removeFrom(map);
+      universityLayer = null;
     }
+
     // 대학교 깃발은 라벨/선보다 위에 보이도록 별도 pane 사용
     if (!map.getPane("pane-univ")) {
       const paneUniv = map.createPane("pane-univ");
-      paneUniv.style.zIndex = 720; // markers(700)보다 살짝 위
+      paneUniv.style.zIndex = 720; // markers(700)보다 위
     }
     universityLayer = L.layerGroup([], { pane: "pane-univ" }).addTo(map);
 
@@ -525,22 +530,22 @@ async function loadUniversities() {
       const lat = Number(u.lat), lon = Number(u.lon);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
 
-      // 깃발 이모지 마커 (심플)
+      // 🚩 깃발 이모지 마커 (심플)
       const icon = L.divIcon({
-        className: "", // 기본 클래스 제거
+        className: "",
         html: `<div style="
-            font-size:20px;
-            line-height:20px;
-            transform: translate(-50%, -100%);
-            text-shadow: 0 1px 2px rgba(0,0,0,.35);
-          ">🚩</div>`,
+          font-size:20px;
+          line-height:20px;
+          transform: translate(-50%, -100%);
+          text-shadow: 0 1px 2px rgba(0,0,0,.35);
+        ">🚩</div>`,
         iconSize: [20, 20],
         iconAnchor: [10, 20] // 좌표 기준점(아래끝)
       });
 
-      const m = L.marker([lat, lon], { icon, pane: "pane-univ", title: u.name });
-      m.bindPopup(`<b>${u.name}</b><br>${u.address ?? ""}`);
-      m.addTo(universityLayer);
+      L.marker([lat, lon], { icon, pane: "pane-univ", title: u.name })
+        .bindPopup(`<b>${u.name}</b><br>${u.address ?? ""}`)
+        .addTo(universityLayer);
     });
 
     console.log(`[univ] loaded ${data.length} universities`);
@@ -587,10 +592,8 @@ async function initMap() {
   });
 
   // Firestore 구독(없으면 로컬 렌더)
-  await subscribePlacesAndRender();
-
-  // 🎓 대학교 깃발 로드
-  await loadUniversities();
+await subscribePlacesAndRender();
+await loadUniversities(); // ← 이 줄 추가
 }
 
 window.addEventListener("load", initMap);
