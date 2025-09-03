@@ -3,69 +3,69 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>소아과학 마인드맵</title>
+  <title>소아과학 마인드맵 뷰어</title>
   <style>
     html, body { height: 100%; margin: 0; }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Noto Sans KR', Arial, sans-serif; }
+    body { font-family: -apple-system, system-ui, "Noto Sans KR", Arial, sans-serif; }
     .topbar {
-      position: fixed; top: 10px; left: 10px; z-index: 10;
-      background: #fff; border: 1px solid rgba(0,0,0,.15); border-radius: 8px;
-      padding: 6px 10px; box-shadow: 0 4px 12px rgba(0,0,0,.12);
+      position: sticky; top: 0; z-index: 10;
+      display:flex; gap:12px; align-items:center;
+      padding:10px 14px; border-bottom:1px solid rgba(0,0,0,.08); background:#fff;
     }
-    .topbar a { color: #0a66c2; text-decoration: none; font-weight: 700; margin-right: 8px; }
-    #title { font-weight: 800; color:#111; }
-    #container { height: 100%; }
-    svg#mindmap { width: 100%; height: 100%; }
+    .topbar a { text-decoration:none; color:#0a66c2; font-weight:700; }
+    #container { height: calc(100vh - 48px); }
+    /* markmap 캔버스가 꽉 차도록 */
+    svg { width: 100%; height: 100%; }
   </style>
 
-  <!-- Markmap: d3 → view → lib (이 순서로) -->
-  <script src="https://cdn.jsdelivr.net/npm/d3@6"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.16.0/dist/index.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.16.0/dist/index.min.js"></script>
+  <!-- ✅ 브라우저용 UMD 번들: 자동 로더 하나면 끝 -->
+  <script src="https://cdn.jsdelivr.net/npm/markmap-autoloader@0.16.0"></script>
 </head>
 <body>
   <div class="topbar">
-    <a href="/pediatrics/">← 목록으로</a>
-    <a href="/">포털</a>
-    <span id="title"></span>
+    <a href="/">← 포털로 돌아가기</a>
+    <div id="title"></div>
   </div>
+
+  <!-- autoloader가 이 <pre> 안의 Markdown을 찾아 자동으로 mindmap으로 바꿔줌 -->
   <div id="container">
-    <svg id="mindmap"></svg>
+    <pre class="markmap" id="mm"></pre>
   </div>
 
   <script>
-    (async function () {
-      const params = new URLSearchParams(location.search);
-      const file = params.get('file'); // 예: "14장 심혈관계.md"
-      const $title = document.getElementById('title');
+    // ?file= 경로 파라미터 읽어서 해당 md 가져오기
+    const params = new URLSearchParams(location.search);
+    const file = params.get('file'); // 예: md/14장%20심혈관계.md
+
+    async function main() {
       if (!file) {
-        $title.textContent = '파일이 지정되지 않았습니다';
+        document.getElementById('mm').textContent = '# 파일이 지정되지 않았습니다\n- URL에 ?file=md/파일명.md 를 추가하세요';
+        window.markmap?.autoLoader?.renderAll();
         return;
       }
-      $title.textContent = file.replace(/\.md$/i, '');
+      try {
+        const res = await fetch(file, { cache: 'no-store' });
+        if (!res.ok) throw new Error('fetch failed ' + res.status);
+        const md = await res.text();
 
-      // /pediatrics/chapters/ 아래에서 로드
-      const url = './chapters/' + encodeURIComponent(file);
-      const res = await fetch(url, { cache: 'no-store' });
-      if (!res.ok) {
-        alert('마크다운을 불러오지 못했습니다: ' + res.status + ' ' + res.statusText);
-        return;
+        // 제목 표시(파일명만 추출)
+        const base = decodeURIComponent(file.split('/').pop());
+        document.getElementById('title').textContent = base;
+
+        // Markdown 주입
+        const pre = document.getElementById('mm');
+        pre.textContent = md;
+
+        // ✅ autoloader로 렌더
+        window.markmap.autoLoader.renderAll();
+      } catch (e) {
+        console.error(e);
+        document.getElementById('mm').textContent =
+          '# 불러오기 실패\n- 경로: ' + file + '\n- 에러: ' + e.message;
+        window.markmap?.autoLoader?.renderAll();
       }
-      const md = await res.text();
-
-      // Markmap 변환 및 렌더
-      const { Markmap, Transformer, loadCSS, loadJS } = window.markmap;
-      const transformer = new Transformer();
-      const { root, features } = transformer.transform(md);
-      const assets = Transformer.getAssets(features);
-      if (assets?.styles) await loadCSS(assets.styles);
-      if (assets?.scripts) await loadJS(assets.scripts);
-
-      Markmap.create('#mindmap', {
-        autoFit: true,            // 화면에 꽉 차도록
-        initialExpandLevel: 2     // 처음 펼침 레벨 (원하면 조절)
-      }, root);
-    })();
+    }
+    main();
   </script>
 </body>
 </html>
