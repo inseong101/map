@@ -120,11 +120,9 @@ $secLine.addEventListener("click", () => {
   } else {
     if ($items.childElementCount === 0) {
       if (sec.items.length === 0) {
-        // 항목이 하나도 없을 때: 빈 박스(간격 표시)
-        const empty = document.createElement("li");
-        empty.className = "item-empty";
-        empty.textContent = "항목 없음";
-        $items.appendChild(empty);
+  const spacer = document.createElement("div");
+  spacer.className = "item-spacer";
+  $items.appendChild(spacer);
       } else {
         // 실제 항목들(1., 2., …)
         sec.items.forEach((txt) => {
