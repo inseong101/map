@@ -6,9 +6,24 @@
       "**/.*",
       "**/node_modules/**"
     ],
-    "rewrites": [
-      { "source": "**", "destination": "/index.html" }
-    ],
+"rewrites": [
+  {
+    "source": "/map/index.html",
+    "destination": "/map/index.html"
+  },
+  {
+    "source": "/map/**.json",
+    "destination": "/map/:path*"
+  },
+  {
+    "source": "/map/**",
+    "destination": "/map/index.html"
+  },
+  {
+    "source": "**",
+    "destination": "/index.html"
+  }
+],
     "headers": [
       {
         "source": "/map/*.json",
