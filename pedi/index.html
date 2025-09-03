@@ -23,8 +23,12 @@
   </div>
 
 <script>
-  // md들이 있는 경로 prefix
-  const BASE = './chapter/';
+  // md들이 있는 경로 prefix (pedi/chapter/ 안)
+  const BASE = 'chapter/';
+
+  // ★ '현재 경로에서 index.html만 떼고' 같은 폴더의 viewer.html로 만든다
+  const HERE = location.pathname.replace(/index\.html?$/,''); // 예: /map/pedi/
+
   const CHAPTERS = [
       "1장 서론.md",
       "2장 소아의 진단.md",
@@ -52,16 +56,14 @@
       "24장 증후.md",
       "25장 급증(손상).md",
       "26장 소아의료윤리.md"
-      // ...
     ];
+
 
   const $list = document.getElementById('list');
   CHAPTERS.forEach(name => {
-    const url = 'viewer.html?file=' + encodeURIComponent(BASE + name);
+    const url = HERE + 'viewer.html?file=' + encodeURIComponent(BASE + name);
     const li = document.createElement('li');
     li.innerHTML = `<a href="${url}">${name}</a>`;
     $list.appendChild(li);
   });
 </script>
-</body>
-</html>
