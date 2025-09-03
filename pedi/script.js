@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
   const BASE = './chapter/';
-  const CHAPTERS = [
-      "1장 서론.md",
+const CHAPTERS = [
+      "1장 서론.md",
       "2장 소아의 진단.md",
       "3장 성장과 발달.md",
       "4장 유전.md",
@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
       "25장 급증(손상).md",
       "26장 소아의료윤리.md"
     ];
+
 
  // 파싱 캐시
   const parsedCache = new Map();
