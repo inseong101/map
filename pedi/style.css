@@ -11,21 +11,6 @@ li.chapter { margin: 10px 0 14px; }
   flex: 1; text-align: left; border: 0; background: transparent;
   font-size: 16px; font-weight: 800; color: #111; cursor: pointer;
 }
-.expand-btn {
-  width: 28px; height: 28px; border-radius: 8px;
-  border: 1px solid rgba(0,0,0,.15);
-  background: #f0f0f0; color: #111; font-weight: 900; cursor: pointer;
-}
-.expand-btn:hover { background: #e6e6e6; }
-
-.sections { margin-left: 16px; margin-top: 8px; }
-
-.section { margin: 8px 0; }
-.section-line {
-  display: flex; align-items: center;
-  background: #f7f9ff; border: 1px solid rgba(10,102,194,.18);
-  border-radius: 10px; padding: 6px 10px;
-}
 .section-btn {
   border: 0; background: transparent; cursor: pointer;
   font-size: 15px; font-weight: 700; color: #0a66c2; text-align: left;
@@ -61,3 +46,27 @@ li.chapter { margin: 10px 0 14px; }
 }
 .empty { background: #fafafa; border:1px solid rgba(0,0,0,.08); color:#555; }
 .error { background: #fff4f4; border:1px solid rgba(255,0,0,.2); color:#b00; }
+
+
+
+/* 카드 자체를 토글: + / − 아이콘 표시 */
+.chapter-line::after,
+.section-line::after {
+  content: "+";
+  margin-left: auto;            /* 오른쪽 끝으로 */
+  font-weight: 900;
+  color: rgba(0,0,0,.55);
+}
+.chapter-line[aria-expanded="true"]::after,
+.section-line[aria-expanded="true"]::after {
+  content: "−";
+}
+
+/* 펼침/접힘 표시 */
+.sections,
+.items { display: none; }
+.sections.visible,
+.items.visible { display: block; }
+
+/* 하위가 비어도 ‘펼쳐졌다’는 느낌만 주는 얇은 여백 */
+.empty-space { height: 8px; }
