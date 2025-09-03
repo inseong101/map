@@ -507,48 +507,54 @@ async function subscribePlacesAndRender() {
 async function loadUniversities() {
   try {
     const res = await fetch(UNIVERSITY_JSON, { cache: "no-store" });
-    if (!res.ok) {
-      console.warn("[univ] fetch failed:", res.status, res.statusText);
-      return;
-    }
-    const data = await res.json();
+    if (!res.ok) throw new Error(`fetch fail ${res.status} ${res.statusText}`);
+    const raw = await res.json();
 
-    // 기존 레이어 있으면 제거
-    if (universityLayer) {
-      universityLayer.removeFrom(map);
-      universityLayer = null;
+    // 키 이름 표준화: lat/lon 없으면 latitude/longitude, lng/long 도 인식
+    const data = raw.map(u => ({
+      name: u.name ?? u.title ?? "",
+      address: u.address ?? u.addr ?? "",
+      lat: Number(u.lat ?? u.latitude),
+      lon: Number(u.lon ?? u.lng ?? u.long ?? u.longitude),
+    }));
+
+    // 유효/무효 분리해서 디버깅 로그
+    const bad = data.filter(u => !Number.isFinite(u.lat) || !Number.isFinite(u.lon));
+    const ok  = data.filter(u =>  Number.isFinite(u.lat) &&  Number.isFinite(u.lon));
+    if (bad.length) console.warn("[univ] skipped invalid coords:", bad);
+
+    // 기존 레이어 제거
+    if (window.universityLayer) {
+      window.universityLayer.removeFrom(map);
+      window.universityLayer = null;
     }
 
-    // 대학교 깃발은 라벨/선보다 위에 보이도록 별도 pane 사용
+    // pane 준비 (markers(700)보다 위)
     if (!map.getPane("pane-univ")) {
       const paneUniv = map.createPane("pane-univ");
-      paneUniv.style.zIndex = 720; // markers(700)보다 위
+      paneUniv.style.zIndex = 720;
     }
-    universityLayer = L.layerGroup([], { pane: "pane-univ" }).addTo(map);
 
-    data.forEach(u => {
-      const lat = Number(u.lat), lon = Number(u.lon);
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+    window.universityLayer = L.layerGroup().addTo(map);
 
-      // 🚩 깃발 이모지 마커 (심플)
+    ok.forEach(u => {
       const icon = L.divIcon({
         className: "",
         html: `<div style="
-          font-size:20px;
-          line-height:20px;
+          font-size:22px; line-height:22px;
           transform: translate(-50%, -100%);
           text-shadow: 0 1px 2px rgba(0,0,0,.35);
         ">🚩</div>`,
-        iconSize: [20, 20],
-        iconAnchor: [10, 20] // 좌표 기준점(아래끝)
+        iconSize: [22, 22],
+        iconAnchor: [11, 22],
       });
 
-      L.marker([lat, lon], { icon, pane: "pane-univ", title: u.name })
-        .bindPopup(`<b>${u.name}</b><br>${u.address ?? ""}`)
-        .addTo(universityLayer);
+      L.marker([u.lat, u.lon], { icon, pane: "pane-univ", title: u.name })
+        .bindPopup(`<b>${u.name}</b>${u.address ? `<br>${u.address}` : ""}`)
+        .addTo(window.universityLayer);
     });
 
-    console.log(`[univ] loaded ${data.length} universities`);
+    console.log(`[univ] loaded: total=${raw.length}, ok=${ok.length}, skipped=${bad.length}`);
   } catch (e) {
     console.error("[univ] load error:", e);
   }
