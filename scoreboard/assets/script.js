@@ -1,73 +1,73 @@
 /* =========================================================
    전졸협 성적 SPA 스크립트 (오프라인)
    - 학수번호 입력 → window.SCORE_DATA에서 검색 → 결과 뷰 렌더링
+   - 요구사항 반영:
+     1) 과목별 고정 문항수(총 340) 강제 적용
+     2) 그룹별(그룹 총점 기준) 40% 과락 판정
+     3) 그룹 박스: 과락 빨강 / 통과 초록
+     4) 그룹1 과목 줄 나눔(간심비폐신 / 상한 사상)
+     5) 새 스키마(group_results) 및 기존(by_class) 모두 호환
    ========================================================= */
 
-// === SCORE_DATA 전제 ===
-// window.SCORE_DATA = { "015001": { rounds: { "1차": {...}, "2차": {...} } }, ... }
-
-// === 데이터 로드 확인 (없으면 빈 객체) ===
-window.SCORE_DATA = window.SCORE_DATA || {};
-
-// ▼▼▼ 학수번호(0패딩) 인덱스 맵 생성 ▼▼▼
-(function buildIndex(){
-  const idx = {};
-  for (const rawKey of Object.keys(window.SCORE_DATA)) {
-    const norm = String(rawKey).replace(/\D/g,'');   // 숫자만
-    const six  = norm.padStart(6, '0');              // 6자리 0 패딩
-    idx[six] = window.SCORE_DATA[rawKey];
-  }
-  window.__SCORE_INDEX__ = idx;
-})();
-
-// 학수번호로 안전하게 조회
-function getStudentById(id6){
-  if (window.__SCORE_INDEX__ && window.__SCORE_INDEX__[id6]) return window.__SCORE_INDEX__[id6];
-  if (window.SCORE_DATA && window.SCORE_DATA[id6]) return window.SCORE_DATA[id6];
-  return null;
-}
-
-// === 전시 정책: 그룹/순서/최대점수(총합 340) ===
-const GROUPS = {
-  "그룹1": ["간","심","비","폐","신","상한","사상"],
-  "그룹3": ["침구"],
-  "그룹2": ["보건"],
-  "그룹4": ["외과","신경","안이비"],
-  "그룹5": ["부인과","소아"],
-  "그룹6": ["예방","생리","본초"],
-};
-const GROUP_ORDER = ["그룹1","그룹3","그룹2","그룹4","그룹5","그룹6"];
-const GROUP_LABEL = {
-  "그룹1": "그룹1 (간/심/비/폐/신/상한/사상)",
-  "그룹3": "그룹3 (침구)",
-  "그룹2": "그룹2 (보건)",
-  "그룹4": "그룹4 (외과/신경/안이비)",
-  "그룹5": "그룹5 (부인과/소아)",
-  "그룹6": "그룹6 (예방/생리/본초)",
-};
-// 과목별 최대점수 (합계 340)
+/* --------------------------
+   0) 과목별 문항 수(고정) / 그룹 정의
+   총점 = 340
+--------------------------- */
 const SUBJECT_MAX = {
-  "간":16, "심":16, "비":16, "폐":16, "신":16, "상한":16, "사상":16,
+  "간":16, "심":16, "비":16, "폐":16, "신":16,
+  "상한":16, "사상":16,
   "침구":48,
   "보건":20,
   "외과":16, "신경":16, "안이비":16,
   "부인과":32, "소아":24,
-  "예방":24, "생리":16, "본초":16,
+  "예방":24, "생리":16, "본초":16
 };
 
-// 유틸
-const $ = (sel, root=document) => root.querySelector(sel);
+// 표시 순서: 1 → 3 → 2 → 4 → 5 → 6
+const GROUPS = [
+  { id: "그룹1", label: "그룹 1", subjects: ["간","심","비","폐","신","상한","사상"], layoutChunks: [5,2], span: 12 },
+  { id: "그룹3", label: "그룹 3", subjects: ["침구"], span: 6 },
+  { id: "그룹2", label: "그룹 2", subjects: ["보건"], span: 6 },
+  { id: "그룹4", label: "그룹 4", subjects: ["외과","신경","안이비"], span: 12 },
+  { id: "그룹5", label: "그룹 5", subjects: ["부인과","소아"], span: 6 },
+  { id: "그룹6", label: "그룹 6", subjects: ["예방","생리","본초"], span: 6 },
+];
+
+// 모든 과목 목록(렌더/합계에 사용)
+const ALL_SUBJECTS = GROUPS.flatMap(g => g.subjects);
+
+/* --------------------------
+   1) 데이터 로드/인덱스
+--------------------------- */
+window.SCORE_DATA = window.SCORE_DATA || {};
+(function buildIndex(){
+  const idx = {};
+  for (const k of Object.keys(window.SCORE_DATA)) {
+    const six = String(k).replace(/\D/g,'').padStart(6,'0');
+    idx[six] = window.SCORE_DATA[k];
+  }
+  window.__SCORE_INDEX__ = idx;
+})();
+function getStudentById(id6){
+  return (window.__SCORE_INDEX__ && window.__SCORE_INDEX__[id6]) || window.SCORE_DATA[id6] || null;
+}
+
+/* --------------------------
+   2) DOM/유틸
+--------------------------- */
+const $  = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
 
 const RECENT_KEY = "jjh_recent_ids";
 
 function fmt(n, digits=0){
-  if (n === undefined || n === null || isNaN(n)) return "-";
+  if (n === undefined || n === null || n === "" || isNaN(Number(n))) return "-";
   return Number(n).toLocaleString("ko-KR", {maximumFractionDigits:digits});
 }
 function pct(score, max){
-  if(!max) return 0;
-  return Math.round((Number(score) / Number(max)) * 100);
+  const s = Number(score)||0, m = Number(max)||0;
+  if (m <= 0) return 0;
+  return Math.round((s / m) * 100);
 }
 function pill(text, type){
   const cls = type === 'ok' ? 'pill green' : (type === 'warn' ? 'pill warn' : 'pill red');
@@ -85,8 +85,6 @@ function hideError(){
   err.textContent = "";
   err.classList.add("hidden");
 }
-
-// 최근 조회
 function saveRecent(id){
   try{
     const prev = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
@@ -119,22 +117,14 @@ function scanHistory(){
   box.classList.remove("hidden");
 }
 
-// 홈/결과 뷰 전환
-function goHome(){
-  $("#view-result")?.classList.add("hidden");
-  $("#view-home")?.classList.remove("hidden");
-  $("#sid")?.focus();
-}
-
-// -------- 키 호환/정규화 레이어 --------
-
-// 후보 키 중 존재하는 실제 키를 찾아 반환
+/* --------------------------
+   3) 키 호환/정규화
+--------------------------- */
 function pickKey(obj, candidates){
-  if (!obj) return null;
+  if (!obj || typeof obj !== "object") return null;
   for (const key of candidates){
     if (key in obj) return key;
   }
-  // 대소문자/공백/언더바 느슨 매칭 (round1 == round_1 == ROUND1)
   const map = Object.keys(obj).reduce((acc,k)=>{
     const norm = String(k).toLowerCase().replace(/[\s_]/g,'');
     acc[norm] = k;
@@ -147,113 +137,72 @@ function pickKey(obj, candidates){
   return null;
 }
 
-// 라운드 객체를 표준 형태로 정규화
+// 새 스키마(group_results) 또는 기존(by_class) → 표준형으로
 function normalizeRound(raw){
   if (!raw || typeof raw !== 'object') return null;
 
-  // (A) 새 스키마: total_questions/total_correct + group_results
-  if ('total_questions' in raw && 'total_correct' in raw && Array.isArray(raw.group_results)) {
-    // 과목 → 정답수
-    const correctBySubject = {};
-    raw.group_results.forEach(g => {
-      const name = String(g.name || '').trim();
-      if (!name) return;
-      correctBySubject[name] = Number(g.correct) || 0;
-    });
-
-    // 고정 그룹/최대점수로 by_class 구성
-    const by_class = {};
-    let totalScore = 0, totalMax = 0;
-    const failList = [];
-
-    GROUP_ORDER.forEach(grpName => {
-      const subjects = GROUPS[grpName] || [];
-      const groupsObj = {};
-      let secScore = 0, secMax = 0;
-
-      subjects.forEach(subj => {
-        const mx = SUBJECT_MAX[subj] ?? 0;
-        const sc = correctBySubject[subj] ?? 0;
-        const minReq = mx * 0.4;
-        const failed = sc < minReq;
-
-        groupsObj[subj] = { score: sc, max: mx };
-        secScore += sc; secMax += mx;
-        totalScore += sc; totalMax += mx;
-
-        if (mx > 0 && failed) {
-          failList.push({
-            class: grpName,
-            group: subj,
-            score: sc,
-            max: mx,
-            min: Math.round(minReq * 1000) / 1000
-          });
-        }
-      });
-
-      by_class[grpName] = {
-        total: { score: secScore, max: secMax },
-        groups: groupsObj
+  // 새 스키마: total_questions/total_correct + group_results
+  if ('total_questions' in raw && 'total_correct' in raw) {
+    const groups = {};
+    (raw.group_results || []).forEach(g=>{
+      groups[g.name] = {
+        score: Number(g.correct)||0,
+        // max는 고정표를 우선 적용
+        max: SUBJECT_MAX[g.name] ?? (Number(g.total)||0)
       };
     });
-
-    // 합격 여부: 원본 값 우선, 없으면 과락 없을 때 합격
-    let pass = !!(raw.overall_pass ?? raw.round_pass ?? raw.pass);
-    if (typeof (raw.overall_pass ?? raw.round_pass ?? raw.pass) === 'undefined') {
-      pass = failList.length === 0;
-    }
-
+    // 종합 섹션 하나로 묶음
     return {
-      total: { score: totalScore, max: totalMax },
-      pass,
-      fails: failList,
-      by_class
+      total: { score: 0, max: 0 }, // 나중에 과목 합으로 재계산
+      pass:  !!(raw.overall_pass ?? raw.round_pass ?? raw.pass),
+      fails: [],
+      by_class: { "종합": { total: {score:0, max:0}, groups } }
     };
   }
 
-  // (B) 기존(by_class 등) 스키마도 호환
+  // 기존 스키마 호환
   const byClassKey = pickKey(raw, ["by_class","byClass","classes","sections"]);
-  const byClassRaw = (byClassKey && typeof raw[byClassKey] === 'object') ? raw[byClassKey] : {};
+  const byClassRaw = (byClassKey && typeof raw[byClassKey]==='object') ? raw[byClassKey] : {};
 
   const normByClass = {};
   Object.keys(byClassRaw).forEach(cls=>{
     const sec = byClassRaw[cls] || {};
     const groupsKey = pickKey(sec, ["groups","by_group","byGroup","sections","parts"]);
-    const groupsRaw = (groupsKey && typeof sec[groupsKey] === 'object') ? sec[groupsKey] : {};
+    const groupsRaw = (groupsKey && typeof sec[groupsKey]==='object') ? sec[groupsKey] : {};
+    const groups = {};
+    Object.keys(groupsRaw).forEach(name=>{
+      const gi = groupsRaw[name] || {};
+      groups[name] = {
+        score: Number(gi.score)||0,
+        max:   SUBJECT_MAX[name] ?? (Number(gi.max)||0)
+      };
+    });
     const total = sec.total || sec.sum || { score: sec.score ?? 0, max: sec.max ?? 0 };
-    normByClass[cls] = { total, groups: groupsRaw };
+    normByClass[cls] = { total, groups };
   });
 
   const total = raw.total || raw.sum || { score: raw.score ?? 0, max: raw.max ?? 0 };
   const passKey = pickKey(raw, ["pass","passed","is_pass","합격"]);
   const pass = !!(passKey ? raw[passKey] : raw.pass);
-
   const failsKey = pickKey(raw, ["fails","fail","fails_list","과락","과락목록"]);
   const fails = Array.isArray(raw[failsKey]) ? raw[failsKey] : [];
 
   return { total, pass, fails, by_class: normByClass };
 }
 
-// 데이터 내부에서 1차/2차 라운드를 찾아 정규화
 function extractRounds(student){
   if (!student) return { r1:null, r2:null, _dbgKeys:[] };
 
-  // 1) 최상위에서 직접 키 찾기
   const r1KeyTop = pickKey(student, ["1차","1차시험","round1","r1","first","회차1","1"]);
   const r2KeyTop = pickKey(student, ["2차","2차시험","round2","r2","second","회차2","2"]);
   let r1 = r1KeyTop ? student[r1KeyTop] : null;
   let r2 = r2KeyTop ? student[r2KeyTop] : null;
 
-  // 2) rounds 컨테이너 찾기 (배열/객체 모두 호환)
   if (!r1 || !r2){
     const roundsKey = pickKey(student, ["rounds","회차","round_list"]);
     const rounds = roundsKey ? student[roundsKey] : undefined;
-
-    if (Array.isArray(rounds)){
-      r1 = r1 || rounds[0];
-      r2 = r2 || rounds[1];
-    } else if (rounds && typeof rounds === "object"){
+    if (Array.isArray(rounds)){ r1 = r1 || rounds[0]; r2 = r2 || rounds[1]; }
+    else if (rounds && typeof rounds === "object"){
       const r1KeyIn = pickKey(rounds, ["1차","1차시험","round1","r1","first","회차1","1"]);
       const r2KeyIn = pickKey(rounds, ["2차","2차시험","round2","r2","second","회차2","2"]);
       r1 = r1 || (r1KeyIn ? rounds[r1KeyIn] : undefined);
@@ -264,10 +213,18 @@ function extractRounds(student){
   return {
     r1: normalizeRound(r1),
     r2: normalizeRound(r2),
-    _dbgKeys: Object.keys(student || {})
+    _dbgKeys: Object.keys(student||{})
   };
 }
-// ---------------------------------------
+
+/* --------------------------
+   4) 폼/라우팅
+--------------------------- */
+function goHome(){
+  $("#view-result")?.classList.add("hidden");
+  $("#view-home")?.classList.remove("hidden");
+  $("#sid")?.focus();
+}
 
 async function lookupStudent(e){
   e.preventDefault();
@@ -275,29 +232,22 @@ async function lookupStudent(e){
   const id = (input?.value || "").trim();
   hideError();
 
-  // 숫자 6자리만 허용
   if(!/^\d{6}$/.test(id)){
     showError("학수번호는 숫자 6자리여야 합니다.");
-    input?.focus();
-    return false;
+    input?.focus(); return false;
   }
 
-  // ID 존재 여부
   const data = getStudentById(id);
   if(!data){
     showError("해당 학수번호의 성적 데이터를 찾을 수 없습니다. SCORE_DATA를 확인하세요.");
     return false;
   }
 
-  // 라운드 추출/정규화
   const { r1, r2, _dbgKeys } = extractRounds(data);
-
-  // 디버그 모드(?debug=1)
   const q = new URLSearchParams(location.search);
-  if (q.get("debug") === "1"){
+  if (q.get("debug")==="1"){
     console.log("[DEBUG] keys in SCORE_DATA[%s]:", id, _dbgKeys);
-    console.log("[DEBUG] R1:", r1);
-    console.log("[DEBUG] R2:", r2);
+    console.log("[DEBUG] R1:", r1); console.log("[DEBUG] R2:", r2);
   }
 
   renderResult(id, r1, r2);
@@ -307,31 +257,63 @@ async function lookupStudent(e){
   return false;
 }
 
-// 결과 렌더링
+/* --------------------------
+   5) 렌더링(그룹 묶음/과락)
+--------------------------- */
+// 주입 스타일(그룹 박스 색/그리드/칩 등)
+(function injectStyles(){
+  const css = `
+  .group-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
+  .group-box{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--surface-2)}
+  .group-box.ok{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.55)}
+  .group-box.fail{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.55)}
+  .span-12{grid-column:span 12}.span-6{grid-column:span 12}
+  @media(min-width:860px){.span-6{grid-column:span 6}}
+  .group-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .subj-row{display:flex;flex-wrap:wrap;gap:6px 10px;margin-top:6px}
+  .subj-chip{padding:4px 8px;border:1px solid var(--line);border-radius:999px;font-weight:800}
+  .subj-chip .muted{opacity:.7;font-weight:600}
+  `;
+  const el = document.createElement('style');
+  el.textContent = css;
+  document.head.appendChild(el);
+})();
+
 function renderResult(id, round1, round2){
-  const sidEl = $("#res-sid");
-  if (sidEl) sidEl.textContent = id;
-
+  $("#res-sid").textContent = id;
   const badges = $("#res-badges");
-  if (badges) {
-    badges.innerHTML = "";
-    if (round1){
-      const span = document.createElement("span");
-      span.className = "badge " + (round1.pass ? "pass":"fail");
-      span.textContent = `1차 ${round1.pass? "합격":"불합격"}`;
-      badges.appendChild(span);
-    }
-    if (round2){
-      const span = document.createElement("span");
-      span.className = "badge " + (round2.pass ? "pass":"fail");
-      span.textContent = `2차 ${round2.pass? "합격":"불합격"}`;
-      badges.appendChild(span);
-    }
-  }
+  badges.innerHTML = "";
+  if (round1){ badges.innerHTML += `<span class="badge ${round1.pass?"pass":"fail"}">1차 ${round1.pass?"합격":"불합격"}</span>`; }
+  if (round2){ badges.innerHTML += `<span class="badge ${round2.pass?"pass":"fail"}">2차 ${round2.pass?"합격":"불합격"}</span>`; }
 
-  // 회차별 카드 생성
   renderRound("#round-1", "1차", round1);
   renderRound("#round-2", "2차", round2);
+}
+
+// 과목 점수 맵을 뽑는다(없으면 0점), max는 SUBJECT_MAX 강제
+function getSubjectScores(round){
+  const byClass = round?.by_class || {};
+  const subjMap = (byClass["종합"] && byClass["종합"].groups) ? byClass["종합"].groups : {};
+  const result = {};
+  ALL_SUBJECTS.forEach(name=>{
+    const row = subjMap[name] || {};
+    result[name] = {
+      score: Number(row.score)||0,
+      max:   SUBJECT_MAX[name] // 고정표를 우선
+    };
+  });
+  return result;
+}
+
+function chunk(arr, sizes){
+  const out = [];
+  let i=0;
+  for (const s of sizes){
+    out.push(arr.slice(i, i+s));
+    i += s;
+  }
+  if (i < arr.length) out.push(arr.slice(i));
+  return out;
 }
 
 function renderRound(sel, title, round){
@@ -343,81 +325,70 @@ function renderRound(sel, title, round){
     return;
   }
 
-  const total = round.total || {score:0, max:0};
-  const rate = pct(total.score, total.max);
-  const pass = !!round.pass;
-  const fails = Array.isArray(round.fails) ? round.fails : [];
+  // 과목별 점수/최대 강제 적용
+  const subjects = getSubjectScores(round);
 
-  // 교시/그룹 섹션 순서: 우리가 정의한 GROUP_ORDER 우선
-  const byClass = round.by_class || {};
-  const dynamicOrder = GROUP_ORDER.filter(k => k in byClass);
-  const fallbackOrder = Object.keys(byClass).filter(k => !dynamicOrder.includes(k));
-  const sectionOrder = [...dynamicOrder, ...fallbackOrder];
+  // 전체(모든 과목) 합계 재계산 → 총점 340 기준
+  const totalScore = ALL_SUBJECTS.reduce((a,n)=>a+(subjects[n]?.score||0), 0);
+  const totalMax   = ALL_SUBJECTS.reduce((a,n)=>a+(subjects[n]?.max||0),   0); // = 340
+  const overallRate = pct(totalScore, totalMax);
+  const overallPass = totalScore >= totalMax * 0.4; // 40% 기준
 
   let html = `
     <div class="round">
       <div class="flex" style="justify-content:space-between;">
         <h2 style="margin:0">${title} 총점</h2>
-        <div class="kpi"><div class="num">${fmt(total.score)}</div><div class="sub">/ ${fmt(total.max)}</div></div>
+        <div class="kpi"><div class="num">${fmt(totalScore)}</div><div class="sub">/ ${fmt(totalMax)}</div></div>
       </div>
-      <div class="progress" style="margin:8px 0 2px 0"><div style="width:${rate}%"></div></div>
-      <div class="small">정답률 ${rate}% ${pass? pill("합격","ok"):pill("불합격","red")}</div>
+      <div class="progress" style="margin:8px 0 2px 0"><div style="width:${overallRate}%"></div></div>
+      <div class="small">정답률 ${overallRate}% ${overallPass? pill("합격","ok"):pill("불합격","red")}</div>
     </div>
+    <div class="group-grid" style="margin-top:12px">
   `;
 
-  // 과락 안내
-  if(fails.length){
-    html += `<div class="group" style="margin-top:8px">
-      <div class="name">과락</div>
-      <div class="small">${fails.map(f=>{
-        const clz = f.class || f.cls || f.period || "-";
-        const grp = f.group || f.grp || "-";
-        return `${clz}·${grp} (${fmt(f.score)}/${fmt(f.max)} / 최소 ${fmt(f.min)})`;
-      }).join(" · ")}</div>
-    </div>`;
-  }
+  // 그룹 박스들
+  GROUPS.forEach(g=>{
+    // 그룹 합계
+    const gScore = g.subjects.reduce((a,n)=>a+(subjects[n]?.score||0), 0);
+    const gMax   = g.subjects.reduce((a,n)=>a+(subjects[n]?.max||0),   0);
+    const gRate  = pct(gScore, gMax);
+    const gPass  = gScore >= gMax * 0.4;  // ★ 그룹 과락 판단(총점 40%)
 
-  // 섹션(그룹)별 표
-  sectionOrder.forEach(cls=>{
-    const s = byClass[cls] || {};
-    const groups = s.groups || {};
-    const keys = Object.keys(groups);
-
-    const subtotal = s.total || {score:0, max:0};
-    const rr = pct(subtotal.score, subtotal.max);
+    // 과목 칩 행 구성 (그룹1은 줄나눔: 5개 / 2개)
+    let chipsHtml = "";
+    if (g.layoutChunks && g.layoutChunks.length){
+      const rows = chunk(g.subjects, g.layoutChunks);
+      rows.forEach(row=>{
+        chipsHtml += `<div class="subj-row">` + row.map(n=>{
+          const s = subjects[n]||{score:0,max:SUBJECT_MAX[n]||0};
+          return `<span class="subj-chip">${n} <span class="muted">${fmt(s.score)}/${fmt(s.max)}</span></span>`;
+        }).join("") + `</div>`;
+      });
+    } else {
+      chipsHtml = `<div class="subj-row">` + g.subjects.map(n=>{
+        const s = subjects[n]||{score:0,max:SUBJECT_MAX[n]||0};
+        return `<span class="subj-chip">${n} <span class="muted">${fmt(s.score)}/${fmt(s.max)}</span></span>`;
+      }).join("") + `</div>`;
+    }
 
     html += `
-      <div class="card" style="margin-top:12px">
-        <div class="flex" style="justify-content:space-between;">
-          <div class="name" style="font-weight:800">${GROUP_LABEL[cls] || cls}</div>
-          <div class="small">소계 ${fmt(subtotal.score)}/${fmt(subtotal.max)} · 정답률 ${rr}%</div>
+      <div class="group-box ${gPass? "ok":"fail"} span-${g.span||12}">
+        <div class="group-head">
+          <div class="name" style="font-weight:800">${g.label}</div>
+          <div class="small">소계 ${fmt(gScore)}/${fmt(gMax)} · 정답률 ${gRate}% ${gPass? pill("통과","ok"):pill("과락","red")}</div>
         </div>
-        <div class="group-list" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px,1fr)); gap:8px; margin-top:8px;">
+        ${chipsHtml}
+      </div>
     `;
-
-    keys.forEach(k=>{
-      const gi = groups[k] || {};
-      const pr = pct(gi.score || 0, gi.max || 0);
-      const minReq = Math.round(((gi.max || 0) * 0.4) * 1000) / 1000;
-      const failed = (Number(gi.score) || 0) < (minReq || 0);
-      html += `
-        <div class="group" style="border-top:none; padding:10px; background:#1a2240; border-radius:10px; border:1px solid #2a355d">
-          <div class="name">${k}</div>
-          <div class="flex" style="gap:12px">
-            <span class="small">${fmt(gi.score)}/${fmt(gi.max)} (${pr}%)</span>
-            ${failed ? pill("과락","red") : pill("통과","ok")}
-          </div>
-        </div>
-      `;
-    });
-
-    html += `</div></div>`;
   });
 
+  html += `</div>`; // .group-grid 끝
   host.innerHTML = html;
 }
 
-// 초기화: 입력 필터링/폼 이벤트/최근조회/쿼리파라미터 적용
+/* --------------------------
+   6) 초기화
+--------------------------- */
 function initApp(){
   // 입력시 숫자만, 6자리 제한
   const $sid = $("#sid");
@@ -427,24 +398,22 @@ function initApp(){
     });
     $sid.setAttribute('enterkeyhint', 'done');
   }
-  console.log("[SCORE] loaded?", typeof window.SCORE_DATA, "size:", window.SCORE_DATA && Object.keys(window.SCORE_DATA).length);
-  console.log("[SCORE] sample(015001):", getStudentById("015001"));
 
-  // 폼 submit 핸들러
+  // 폼 핸들러
   const form = $("#lookup-form");
   if (form) form.addEventListener('submit', lookupStudent);
 
-  // 최근 보기 표시
+  // 최근 보기
   scanHistory();
 
-  // ?sid=015001 있으면 자동 렌더 (인덱스/정규화 모두 적용)
+  // ?sid=015001 자동 표시
   const p = new URLSearchParams(location.search);
   const sid = p.get("sid") || p.get("id");
   if (sid && /^\d{6}$/.test(sid)) {
     const data = getStudentById(sid);
     if (data) {
-      const { r1, r2 } = extractRounds(data);
       if ($sid) $sid.value = sid;
+      const { r1, r2 } = extractRounds(data);
       renderResult(sid, r1, r2);
       $("#view-home")?.classList.add("hidden");
       $("#view-result")?.classList.remove("hidden");
@@ -452,12 +421,15 @@ function initApp(){
       showError("해당 학수번호의 성적 데이터를 찾을 수 없습니다. SCORE_DATA를 확인하세요.");
     }
   }
+
+  // 로드 확인 로그(선택)
+  // console.log("[SCORE] loaded?", typeof window.SCORE_DATA, "size:", window.SCORE_DATA && Object.keys(window.SCORE_DATA).length);
+  // console.log("[SCORE] sample(015001):", getStudentById("015001"));
 }
 
-// DOM 준비 후 초기화
 document.addEventListener('DOMContentLoaded', initApp);
 
-// 전역 노출 (HTML에서 호출 가능하도록)
+// 전역 노출
 window.goHome = goHome;
 window.scanHistory = scanHistory;
 window.initApp = initApp;
