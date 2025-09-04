@@ -11,26 +11,30 @@
                inputmode="numeric" placeholder="예) 015001"
                maxlength="6" required />
 
-        <!-- 전화번호 -->
+        <!-- 전화번호 + 인증번호 받기 버튼 -->
         <label for="phone" class="small">전화번호</label>
-        <input id="phone" class="input" type="tel" placeholder="+821012345678" />
+        <div class="row">
+          <input id="phone" class="input" type="tel" placeholder="+821012345678" />
+          <button class="btn" type="button" onclick="requestSmsCode()">인증번호 받기</button>
+        </div>
 
-        <!-- 인증번호 -->
+        <!-- 인증번호 + 인증 확인 버튼 -->
         <label for="smsCode" class="small">인증번호</label>
-        <input id="smsCode" class="input" type="text" inputmode="numeric" maxlength="6" placeholder="6자리" />
+        <div class="row">
+          <input id="smsCode" class="input" type="text" inputmode="numeric" maxlength="6" placeholder="6자리" />
+          <button class="btn" type="button" onclick="verifySmsCodeAndProceed()">인증 확인</button>
+        </div>
 
-        <!-- 버튼들 -->
-        <button class="btn" type="button" onclick="requestSmsCode()">인증번호 받기</button>
-        <button class="btn" type="button" onclick="verifySmsCodeAndProceed()">인증 확인</button>
+        <!-- 성적 확인 버튼 -->
         <button class="btn" type="submit" formnovalidate>성적 확인</button>
       </form>
 
-      <!-- (원하면) 힌트는 폼 아래로 -->
+      <!-- 힌트 -->
       <div id="hint" class="small" style="margin-top:10px">
         • 숫자 6자리만 입력 가능합니다. 예: <code>015001</code>
       </div>
 
-      <!-- reCAPTCHA는 폼 아래 아무 곳이나 -->
+      <!-- reCAPTCHA -->
       <div id="recaptcha-container" style="margin:12px 0;"></div>
 
       <div id="error" class="alert hidden" role="alert" aria-live="assertive"></div>
