@@ -80,18 +80,18 @@
   <div class="footer small">© 전졸협 • 성적 통지 사이트</div>
 </div>
 
-<!-- 1) Firebase SDK (Compat) -->
+<!-- (1) Firebase SDK - Compat -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
-<!-- 2) 프로젝트 초기화 (경로 정확히) -->
+<!-- (2) 프로젝트 초기화 -->
 <script src="assets/firebase-init.js"></script>
 
-<!-- 3) Firestore에서 읽어와서 점수 계산하는 로더 -->
-<script src="assets/firestore-loader.js?v=1"></script>
+<!-- (3) 점수 렌더/상수: script.js (여기에 상수만 둠) -->
+<script src="assets/script.js?v=2"></script>
 
-<!-- 4) 화면 렌더/UI 스크립트 -->
-<script src="assets/script.js?v=1"></script>
+<!-- (4) Firestore에서 wrongQuestions 불러오는 로더 -->
+<script src="assets/firestore-loader.js?v=2"></script>
 
 <!-- (선택) 입력 즉시 숫자만/6자리 제한 -->
 <script>
