@@ -348,16 +348,22 @@ console.log("[SCORE] sample(015001):", getStudentById("015001"));
   // 최근 보기 표시
   scanHistory();
 
-  // ?sid=015001 있으면 자동 렌더
-  const p = new URLSearchParams(location.search);
-  const sid = p.get("sid") || p.get("id");
-  if (sid && /^\d{6}$/.test(sid) && window.SCORE_DATA && window.SCORE_DATA[sid]){
+// ?sid=015001 있으면 자동 렌더 (인덱스/정규화 모두 적용)
+const p = new URLSearchParams(location.search);
+const sid = p.get("sid") || p.get("id");
+if (sid && /^\d{6}$/.test(sid)) {
+  const data = getStudentById(sid);
+  if (data) {
+    const { r1, r2 } = extractRounds(data);
     if ($sid) $sid.value = sid;
-    renderResult(sid, ...Object.values(extractRounds(window.SCORE_DATA[sid])).slice(0,2));
+    renderResult(sid, r1, r2);
     $("#view-home")?.classList.add("hidden");
     $("#view-result")?.classList.remove("hidden");
+  } else {
+    showError("해당 학수번호의 성적 데이터를 찾을 수 없습니다. SCORE_DATA를 확인하세요.");
   }
 }
+
 
 // DOM 준비 후 초기화
 document.addEventListener('DOMContentLoaded', initApp);
