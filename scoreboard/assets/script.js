@@ -255,7 +255,6 @@ async function lookupStudent(e){
     const norm2 = (window.normalizeRound?.(r2)) || r2;
 
     renderResult(id, norm1, norm2);
-    saveRecent(id);
     $("#view-home")?.classList.add("hidden");
     $("#view-result")?.classList.remove("hidden");
   } catch (err){
