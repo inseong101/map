@@ -1,6 +1,6 @@
 /* =========================================================
    전졸협 성적 SPA 스크립트 (오프라인 + Firestore 호환)
-   - 학수번호 입력 → SCORE_DATA(오프라인) 또는 Firestore 계산 결과 → 렌더
+   - 학수번호 입력 → Firestore 계산 결과(우선) 또는 SCORE_DATA(오프라인) → 렌더
    - 요구사항:
      1) 과목별 고정 문항수(총 340) 강제
      2) 그룹별(그룹 총점 기준) 40% 과락
@@ -11,7 +11,6 @@
 
 /* --------------------------
    0) 과목별 문항 수(고정) / 그룹 정의
-   총점 = 340 (변경 시 SUBJECT_MAX만 수정)
 --------------------------- */
 const SUBJECT_MAX = {
   "간":16, "심":16, "비":16, "폐":16, "신":16,
@@ -37,7 +36,7 @@ const GROUPS = [
 const ALL_SUBJECTS = GROUPS.flatMap(g => g.subjects);
 
 /* --------------------------
-   1) 데이터 로드/인덱스 (오프라인 데이터 대비)
+   1) 데이터 로드/인덱스 (오프라인 대비)
 --------------------------- */
 window.SCORE_DATA = window.SCORE_DATA || {};
 (function buildIndex(){
@@ -110,6 +109,7 @@ function scanHistory(){
       const sid = $("#sid");
       if (sid) sid.value = id;
       const form = $("#lookup-form");
+      if (form) form.dispatchEvent(new Event("submit", {cancelable:true}));
     };
     box.appendChild(btn);
   });
@@ -140,12 +140,11 @@ function pickKey(obj, candidates){
 function normalizeRound(raw){
   if (!raw || typeof raw !== 'object') return null;
 
-  // ★ 새 스키마: total_questions/total_correct + subject_results(우선) 또는 group_results
+  // ★ 새 스키마: total_questions/total_correct + subject_results(우선)
   if ('total_questions' in raw && 'total_correct' in raw) {
     const groups = {};
 
     if (Array.isArray(raw.subject_results) && raw.subject_results.length){
-      // 과목별 스냅샷 그대로 사용
       raw.subject_results.forEach(s=>{
         const nm = s.name;
         groups[nm] = {
@@ -154,8 +153,16 @@ function normalizeRound(raw){
         };
       });
     } else if (Array.isArray(raw.group_results)) {
-      // (참고) group_results만으로는 과목 칩에 바로 매핑하기 어려움 → 과락 배지 정도만 가능
-      // 필요 시 그룹→과목 분해 로직 추가 가능
+      // 폴백: group_results 항목의 name이 과목명일 때만 사용
+      raw.group_results.forEach(g=>{
+        const nm = String(g.name);
+        if (nm in SUBJECT_MAX) {
+          groups[nm] = {
+            score: Number(g.correct)||0,
+            max:   SUBJECT_MAX[nm] ?? (Number(g.total)||0)
+          };
+        }
+      });
     }
 
     return {
@@ -232,8 +239,7 @@ function goHome(){
   $("#sid")?.focus();
 }
 
-// script.js
-// 기존 lookupStudent(e) 전체를 이걸로 교체
+// Firestore 우선 조회 (window.fetchRoundFromFirestore 는 firestore-loader.js가 주입)
 async function lookupStudent(e){
   e.preventDefault();
   hideError();
@@ -248,8 +254,18 @@ async function lookupStudent(e){
   }
 
   try {
-    const r1 = await window.fetchRoundFromFirestore?.(id, "1차");
-    const r2 = await window.fetchRoundFromFirestore?.(id, "2차");
+    let r1 = null, r2 = null;
+
+    if (typeof window.fetchRoundFromFirestore === "function") {
+      r1 = await window.fetchRoundFromFirestore(id, "1차");
+      r2 = await window.fetchRoundFromFirestore(id, "2차");
+    } else {
+      // 모듈 로더가 준비 전이면 오프라인 데이터로라도 표시
+      const data = getStudentById(id);
+      if (!data) throw new Error("no offline data");
+      const { r1:rr1, r2:rr2 } = extractRounds(data);
+      r1 = rr1; r2 = rr2;
+    }
 
     const norm1 = (window.normalizeRound?.(r1)) || r1;
     const norm2 = (window.normalizeRound?.(r2)) || r2;
@@ -263,7 +279,6 @@ async function lookupStudent(e){
     showError("Firestore에서 점수를 불러오지 못했습니다.");
   }
   return false;
-}
 }
 
 /* --------------------------
@@ -334,14 +349,12 @@ function renderRound(sel, title, round){
   }
 
   const subjects = getSubjectScores(round);
-
   const totalScore = ALL_SUBJECTS.reduce((a,n)=>a+(subjects[n]?.score||0), 0);
   const totalMax   = ALL_SUBJECTS.reduce((a,n)=>a+(subjects[n]?.max||0),   0); // = 340
- const overallRate = pct(totalScore, totalMax);
- // 집계 결과에 pass가 이미 들어있으면 그걸 신뢰 (60%+그룹과락 없음 기준)
- const overallPass = (round && typeof round.pass === "boolean")
-   ? round.pass
-   : (totalScore >= totalMax * 0.6); // 백업 계산도 60%로
+  const overallRate = pct(totalScore, totalMax);
+  const overallPass = (round && typeof round.pass === "boolean")
+    ? round.pass
+    : (totalScore >= totalMax * 0.6); // 백업 계산 60%
 
   let html = `
     <div class="round">
@@ -350,10 +363,7 @@ function renderRound(sel, title, round){
         <div class="kpi"><div class="num">${fmt(totalScore)}</div><div class="sub">/ ${fmt(totalMax)}</div></div>
       </div>
       <div class="progress" style="margin:8px 0 2px 0"><div style="width:${overallRate}%"></div></div>
-           <div class="small">
-       정답률 ${overallRate}% (컷 60%)
-       ${overallPass? pill("합격","ok"):pill("불합격","red")}
-     </div>
+      <div class="small">정답률 ${overallRate}% (컷 60%) ${overallPass? pill("합격","ok"):pill("불합격","red")}</div>
     </div>
     <div class="group-grid" style="margin-top:12px">
   `;
@@ -412,19 +422,12 @@ function initApp(){
 
   scanHistory();
 
+  // ?sid=015001 자동 표시 (Firestore 로더가 준비돼 있어도 정상 동작)
   const p = new URLSearchParams(location.search);
   const sid = p.get("sid") || p.get("id");
   if (sid && /^\d{6}$/.test(sid)) {
-    const data = getStudentById(sid);
-    if (data) {
-      if ($sid) $sid.value = sid;
-      const { r1, r2 } = extractRounds(data);
-      renderResult(sid, r1, r2);
-      $("#view-home")?.classList.add("hidden");
-      $("#view-result")?.classList.remove("hidden");
-    } else {
-      showError("해당 학수번호의 성적 데이터를 찾을 수 없습니다. SCORE_DATA를 확인하세요.");
-    }
+    if ($sid) $sid.value = sid;
+    form?.dispatchEvent(new Event("submit", {cancelable:true}));
   }
 }
 
