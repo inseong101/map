@@ -11,34 +11,52 @@
   <div class="header">
     <div>
       <h1>전졸협 모의고사 성적 사이트</h1>
-      <div class="small">오프라인에서도 동작합니다. 본인 학수번호 6자리를 입력하세요.</div>
+      <div class="small">오프라인에서도 동작합니다. 학수번호 6자리를 입력해 본인 성적을 확인하세요.</div>
     </div>
   </div>
 
-  <!-- 검색 카드 -->
-  <div class="grid">
+  <!-- 홈 뷰 -->
+  <div id="view-home" class="grid">
     <div class="col-12">
       <div class="card">
         <h2 style="margin-top:0">본인 점수 보기</h2>
         <form id="lookup-form" class="flex" onsubmit="return lookupStudent(event)">
           <label for="sid" class="small" style="min-width:80px">학수번호</label>
           <input id="sid" name="sid" class="input" inputmode="numeric" autocomplete="off"
-                 placeholder="예) 015001" pattern="\\d{6}" maxlength="6" required />
+            placeholder="예) 015001" pattern="\\d{6}" maxlength="6" required />
           <button class="btn" type="submit">성적 확인</button>
           <button class="btn ghost" type="button" onclick="scanHistory()">최근 기록</button>
         </form>
-
         <div id="hint" class="small" style="margin-top:10px">
-          • 숫자 6자리만 입력 가능합니다. <br/>
-          • 예: <code>015001</code>, <code>125010</code>
+          • 숫자 6자리만 입력 가능합니다. 예: <code>015001</code>
         </div>
-
         <div id="error" class="alert hidden" role="alert" aria-live="assertive"></div>
+        <div id="recent" class="chips hidden" aria-label="최근 조회"></div>
+      </div>
+    </div>
+  </div>
 
-        <!-- 최근 본 학수번호(로컬 저장) -->
-        <div id="recent" class="chips hidden" aria-label="최근 조회">
-          <!-- JS가 채움 -->
+  <!-- 결과 뷰 -->
+  <div id="view-result" class="hidden">
+    <div class="card">
+      <div class="flex" style="justify-content:space-between;">
+        <div>
+          <div class="small">학수번호</div>
+          <div class="kpi"><div id="res-sid" class="num">-</div></div>
         </div>
+        <div class="flex" id="res-badges">
+          <!-- 1차/2차 합불 뱃지 -->
+        </div>
+      </div>
+      <hr class="sep" />
+
+      <div id="round-1"></div>
+      <div id="round-2" style="margin-top:16px"></div>
+
+      <hr class="sep" />
+      <div class="flex">
+        <button class="btn" type="button" onclick="goHome()">다른 학생 조회</button>
+        <button class="btn ghost" type="button" onclick="window.print()">인쇄하기</button>
       </div>
     </div>
   </div>
