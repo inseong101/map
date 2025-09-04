@@ -281,4 +281,4 @@ return {
   // 9) script.js에서 호출할 수 있도록 전역으로 노출 (← 반드시 IIFE 내부!)
   window.fetchRoundFromFirestore = fetchRoundFromFirestore;
 
-})(); // ← 여기서 IIFE를 닫습니다.
+})();
