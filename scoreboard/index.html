@@ -70,13 +70,13 @@
   <div class="footer small">© 전졸협 • 성적 통지 사이트</div>
 </div>
 
-<!-- 1) Firebase 초기화: 단 1번만 (모듈) -->
+<!-- 1) Firebase 초기화 -->
 <script type="module" src="assets/firebase-init.js"></script>
 
-<!-- 2) UI/렌더 로직 -->
+<!-- 2) UI/렌더(lookupStudent가 있는 곳) -->
 <script src="assets/script.js"></script>
 
-<!-- 3) Firestore에서 wrongQuestions 불러와 계산 -->
+<!-- 3) Firestore 계산 로더 (여기서 window.fetchRoundFromFirestore 노출) -->
 <script src="assets/firestore-loader.js"></script>
 
 <!-- (선택) 입력 즉시 숫자만/6자리 제한 -->
