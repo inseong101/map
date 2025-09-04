@@ -354,44 +354,35 @@ function renderRound(sel, title, round){
   // 전체 합계(총점 340 기준)
   const totalScore = ALL_SUBJECTS.reduce((a,n)=>a+(subjects[n]?.score||0), 0);
   const totalMax   = ALL_SUBJECTS.reduce((a,n)=>a+(subjects[n]?.max||0),   0); // = 340
-  const overallRate = pct(totalScore, totalMax);
+const overallRate = pct(totalScore, totalMax);
+const overallPass = (round && typeof round.pass === "boolean")
+  ? round.pass
+  : (totalScore >= totalMax * 0.6);
 
-  // ① 평락(총점 60%) 여부
-  const overallScorePass = totalScore >= Math.ceil(totalMax * 0.6);
+// ✅ 라운드 박스에 상태 클래스(불합격이면 .fail) 추가
+const roundCls = `round ${overallPass ? "" : "fail"}`;
 
-  // ② 그룹 과락 여부(참고: 그룹 카드 색은 기존 로직 유지)
-  const groupPassAll = GROUPS.every(g=>{
-    const gScore = g.subjects.reduce((a,n)=>a+(subjects[n]?.score||0), 0);
-    const gMax   = g.subjects.reduce((a,n)=>a+(subjects[n]?.max||0),   0);
-    return gScore >= Math.ceil(gMax * 0.4);
-  });
-
-  // ③ 최종 합불 (이미 round.pass가 있으면 그 값을 우선 믿고, 없으면 계산)
-  const finalPass = (typeof round.pass === "boolean") ? round.pass : (overallScorePass && groupPassAll);
-
-  // 라운드 상단 박스: 평락이면 전체 빨강
-  const roundBoxClass = overallScorePass ? "round-box" : "round-box fail";
-  const barClass = overallScorePass ? "bar" : "bar fail";
-
-  let html = `
-    <div class="${roundBoxClass}">
-      <div class="flex" style="justify-content:space-between;align-items:center;">
-        <h2 style="margin:0">${title} 총점</h2>
-        <div class="kpi"><div class="num">${fmt(totalScore)}</div><div class="sub">/ ${fmt(totalMax)}</div></div>
-      </div>
-      <div class="progress" style="margin:8px 0 2px 0">
-        <div class="${barClass}" style="width:${overallRate}%"></div>
-        <div class="cutoff"></div> <!-- 60% 기준선 -->
-      </div>
-      <div class="small">
-        정답률 ${overallRate}% (컷 60%)
-        ${finalPass? pill("합격","ok"):pill("불합격","red")}
-        ${!overallScorePass ? pill("평락","red") : ""}
-      </div>
+let html = `
+  <div class="${roundCls}">
+    <div class="flex" style="justify-content:space-between;">
+      <h2 style="margin:0">${title} 총점</h2>
+      <div class="kpi"><div class="num">${fmt(totalScore)}</div><div class="sub">/ ${fmt(totalMax)}</div></div>
     </div>
-    <div class="group-grid" style="margin-top:12px">
-  `;
 
+    <!-- ✅ 진행도 바: 막대(.bar) + 60% 컷라인(.cutline) -->
+    <div class="progress" style="margin:8px 0 2px 0">
+      <div class="bar" style="width:${overallRate}%"></div>
+      <div class="cutline"></div>
+    </div>
+
+    <!-- ✅ 캡션에 여백 클래스 추가 -->
+    <div class="small progress-caption">
+      정답률 ${overallRate}% (컷 60%)
+      ${overallPass ? pill("합격","ok") : pill("불합격","red")}
+    </div>
+  </div>
+  <div class="group-grid" style="margin-top:12px">
+`;
   // 그룹 박스들 (기존 로직 동일: 그룹별 40% 과락은 각 카드에서 빨강/초록)
   GROUPS.forEach(g=>{
     const gScore = g.subjects.reduce((a,n)=>a+(subjects[n]?.score||0), 0);
