@@ -121,7 +121,6 @@ function pickKey(obj, candidates){
 }
 
 // 라운드 객체를 표준 형태로 정규화
-// 라운드 객체를 표준 형태로 정규화
 function normalizeRound(raw){
   if (!raw || typeof raw !== 'object') return null;
 
@@ -189,7 +188,7 @@ function normalizeRound(raw){
   const fails = Array.isArray(raw[failsKey]) ? raw[failsKey] : [];
 
   return { total, pass, fails, by_class: normByClass };
-}
+
 // 데이터 내부에서 1차/2차 라운드를 찾아 정규화
 function extractRounds(student){
   if (!student) return { r1:null, r2:null, _dbgKeys:[] };
