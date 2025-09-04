@@ -435,3 +435,8 @@ window.scanHistory = scanHistory;
 window.initApp = initApp;
 window.normalizeRound = normalizeRound;
 window.renderResult   = renderResult;
+
+
+// script.js 맨 아래에 추가 (중복 선언 없게!)
+window.__SUBJECT_TOTALS = SUBJECT_MAX; // 너의 SUBJECT_MAX를 총문항으로 사용
+window.__GROUPS_DEF = GROUPS;          // 그룹 정의
