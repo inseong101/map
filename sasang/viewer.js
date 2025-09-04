@@ -1,6 +1,7 @@
 (() => {
+  const DEFAULT_FILE = 'sasang.md'; // 같은 폴더에 있으니까 그대로 파일명만!
   const params = new URLSearchParams(location.search);
-  let file = params.get('file'); // 예: 'md/sasang.md' 또는 'sasang.md'
+  let file = params.get('file') || DEFAULT_FILE;
 
   const $title = document.getElementById('title');
   const $mm = document.getElementById('mm');
@@ -8,12 +9,12 @@
   const $btnRefit = document.getElementById('btnRefit');
   const $container = document.getElementById('container');
 
-  // 파일 경로 보정: 경로 없으면 sasang/md/ 아래로 본다
   function normalizeFilePath(f) {
     if (!f) return null;
-    if (f.includes('/')) return f;
-    return 'md/' + f;
+    return f; // 같은 폴더라서 따로 'md/' 붙이지 않음
   }
+  // 나머지는 그대로 유지
+})();
 
   // 페이지 스크롤 방지(휠은 SVG 줌에만 쓰이게)
   $container.addEventListener('wheel', (e) => {
