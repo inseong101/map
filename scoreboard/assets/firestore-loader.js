@@ -17,6 +17,7 @@
       {range:[1,16],  subject:"상한"},
       {range:[17,32], subject:"사상"},
       {range:[33,80], subject:"침구"},
+      {range:[81,100], subject:"보건"},
     ],
     "3교시": [
       {range:[1,16],  subject:"외과"},
