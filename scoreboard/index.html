@@ -21,7 +21,7 @@
       <div class="card">
         <h2 style="margin-top:0">본인 점수 보기</h2>
 
-        <!-- novalidate: 브라우저 기본 경고(“요청한 형식…”) 비활성화 -->
+        <!-- novalidate: 브라우저 기본 검증 OFF -->
         <form id="lookup-form" class="flex" novalidate onsubmit="return lookupStudent(event)">
           <label for="sid" class="small" style="min-width:80px">학수번호</label>
           <input
@@ -32,12 +32,12 @@
             inputmode="numeric"         <!-- 모바일 숫자 키패드 -->
             autocomplete="one-time-code"
             placeholder="예) 015001"
-            pattern="[0-9]{6}"          <!-- (참고) 브라우저 패턴, novalidate라 실제 검증은 JS가 수행 -->
             maxlength="6"
             required
             autofocus
           />
-          <button class="btn" type="submit">성적 확인</button>
+          <!-- formnovalidate: 이 버튼 누를 때도 네이티브 검증 OFF -->
+          <button class="btn" type="submit" formnovalidate>성적 확인</button>
           <button class="btn ghost" type="button" onclick="scanHistory()">최근 기록</button>
         </form>
 
@@ -59,9 +59,7 @@
           <div class="small">학수번호</div>
           <div class="kpi"><div id="res-sid" class="num">-</div></div>
         </div>
-        <div class="flex" id="res-badges">
-          <!-- 1차/2차 합불 뱃지 -->
-        </div>
+        <div class="flex" id="res-badges"></div>
       </div>
 
       <hr class="sep" />
@@ -84,8 +82,16 @@
 <script src="assets/SCORE_DATA.js"></script>
 <script src="assets/script.js"></script>
 <script>
-  // script.js에 window.initApp가 있다면 초기화 호출
-  if (window.initApp) initApp();
+  // (선택) JS로 입력값을 숫자만/6자리로 제한
+  document.addEventListener('DOMContentLoaded', () => {
+    const $sid = document.getElementById('sid');
+    if ($sid) {
+      $sid.addEventListener('input', () => {
+        $sid.value = ($sid.value || '').replace(/\D/g, '').slice(0, 6);
+      });
+    }
+    if (window.initApp) initApp();
+  });
 </script>
 </body>
 </html>
