@@ -50,3 +50,14 @@ svg {
 /* 상태/메시지 */
 .msg { padding: 16px; color: #333; }
 .muted { color: #666; font-size: 13px; }
+
+
+/* Markmap 노드 안 보조설명 */
+.markmap .mm-sub {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.25;
+  color: #666;
+  font-weight: 500;
+}
