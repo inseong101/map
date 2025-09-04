@@ -4,45 +4,31 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>사상의학 마인드맵</title>
-  <style>
-    html, body { height: 100%; margin: 0; }
-    body { font-family: -apple-system, system-ui, "Noto Sans KR", Arial, sans-serif; }
-    .topbar {
-      position: fixed; top: 0; left: 0; right: 0; z-index: 10;
-      display:flex; gap:12px; align-items:center; justify-content:space-between;
-      padding:10px 14px; border-bottom:1px solid rgba(0,0,0,.08); background:#fff;
-      height: 48px;
-    }
-    .topbar a { text-decoration:none; color:#0a66c2; font-weight:700; }
-    .btn {
-      appearance:none; border:1px solid rgba(0,0,0,.15); background:#fff; color:#111;
-      border-radius:8px; padding:6px 10px; cursor:pointer; font-weight:700;
-    }
-    /* ✅ 컨테이너를 뷰포트에 고정된 실제 px 크기로 */
-    #container {
-      position: fixed; top: 48px; left: 0; right: 0; bottom: 0;
-      overflow: hidden;
-    }
-    /* ⚠️ 여기서는 width/height 100%를 강제하지 않음. px로 JS에서 세팅 */
-    svg { display:block; }
-    .msg { padding:16px; color:#333; }
-    .muted { color:#666; font-size:13px; }
-  </style>
 
-  <!-- autoloader 하나면 충분 -->
+  <!-- 스타일 분리 -->
+  <link rel="stylesheet" href="viewer.css" />
+
+  <!-- markmap autoloader: Transformer 등 신경 안 써도 됨 -->
   <script src="https://cdn.jsdelivr.net/npm/markmap-autoloader@0.16.0"></script>
 </head>
 <body>
   <div class="topbar">
-    <a href="/">← 포털로 돌아가기</a>
-    <button id="btnRefit" class="btn">다시 맞춤</button>
+    <div class="topbar-left">
+      <a href="/">← 포털로 돌아가기</a>
+      <div id="title"></div>
+    </div>
+    <div class="topbar-right">
+      <button id="btnRefit" class="btn">다시 맞춤</button>
+    </div>
   </div>
 
   <div id="container">
+    <!-- autoloader가 이 <pre>의 텍스트를 마인드맵으로 바꿔줌 -->
     <pre id="mm" class="markmap"></pre>
     <div id="placeholder" class="msg"></div>
   </div>
 
+  <!-- 스크립트 분리 (네가 이미 넣어둔 viewer.js 그대로 사용) -->
   <script src="viewer.js"></script>
 </body>
 </html>
