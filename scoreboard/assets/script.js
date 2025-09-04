@@ -64,7 +64,25 @@ function goHome(){
   $("#view-home").classList.remove("hidden");
   $("#sid").focus();
 }
+// SCORE_DATA를 "6자리 패딩된 학수번호"로 인덱싱해서 찾기 쉽게
+function getByStudentId(id) {
+  const raw = window.SCORE_DATA || {};
+  // 1) 바로 매칭
+  if (raw[id]) return raw[id];
 
+  // 2) 앞자리 0 제거한 키가 있을 수도 있음 (엑셀→JSON에서 015001 -> 15001)
+  const noZ = id.replace(/^0+/, ''); // "015001" -> "15001"
+  if (raw[noZ]) return raw[noZ];
+
+  // 3) 반대로, 데이터 쪽 키를 6자리로 패딩해서 매칭
+  //    (빌더가 15001 같은 키를 만들었다면 여기서 015001로 맞춰봄)
+  for (const k of Object.keys(raw)) {
+    const pad6 = k.padStart(6, '0');
+    if (pad6 === id) return raw[k];
+  }
+
+  return null;
+}
 async function lookupStudent(e){
   e.preventDefault();
   const input = $("#sid");
