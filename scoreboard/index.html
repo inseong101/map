@@ -80,9 +80,17 @@
   <div class="footer small">© 전졸협 • 성적 통지 사이트</div>
 </div>
 
-<!-- 데이터 먼저 로드 -->
-<script src="assets/SCORE_DATA.js"></script>
-<!-- 앱 로직 -->
+<!-- Firebase SDK (CDN) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"></script>
+
+<!-- 네 프로젝트 키(이미 만들었으면 그대로 사용) -->
+<script src="assets/firebase-init.js"></script>
+
+<!-- Firestore에서 wrongQuestions/scores 읽고 계산하는 로더 -->
+<script src="assets/firestore-loader.js"></script>
+
+<!-- 렌더/유틸(= 너의 script.js) -->
 <script src="assets/script.js"></script>
 
 <!-- (선택) 입력 즉시 숫자만/6자리 제한 -->
