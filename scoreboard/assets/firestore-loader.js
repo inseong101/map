@@ -286,30 +286,4 @@
   }
 
   // 9) 폼 submit → 렌더
-  document.addEventListener("DOMContentLoaded", () => {
-    const form = document.querySelector("#lookup-form");
-    if (!form) return;
-
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const $sid = document.querySelector("#sid");
-      const sid = ($sid?.value || "").replace(/\D/g,"").slice(0,6);
-      if (sid.length !== 6) return;
-
-      try {
-        const r1 = await fetchRoundFromFirestore(sid, "1차");
-        const r2 = await fetchRoundFromFirestore(sid, "2차");
-
-        const norm1 = (window.normalizeRound?.(r1)) || r1;
-        const norm2 = (window.normalizeRound?.(r2)) || r2;
-
-        window.renderResult?.(sid, norm1, norm2);
-        document.querySelector("#view-home")?.classList.add("hidden");
-        document.querySelector("#view-result")?.classList.remove("hidden");
-      } catch (err) {
-        console.error(err);
-        alert("Firestore에서 점수를 불러오지 못했습니다.");
-      }
-    }, { capture: true });
-  });
-})();
+window.fetchRoundFromFirestore = fetchRoundFromFirestore;
