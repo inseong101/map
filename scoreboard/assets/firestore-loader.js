@@ -40,39 +40,34 @@
   const sum = (arr)=>arr.reduce((a,b)=>a+b,0);
 
   // ===== 4) wrongQuestions → 과목 득점 복원 =====
-  function buildSubjectScoresFromWrong(wrongByClass){
-    const subjectCorrect = {};
-    const subjectMax = {};
+function buildSubjectScoresFromWrong(wrongByClass){
+  const subjectCorrect = {};
+  const subjectMax = {};
+  Object.keys(SUBJECT_TOTALS).forEach(s=>{
+    subjectCorrect[s] = 0;
+    subjectMax[s] = SUBJECT_TOTALS[s];
+  });
 
-    // 총문항 고정(340표)
-    Object.keys(SUBJECT_TOTALS).forEach(s=>{
-      subjectCorrect[s] = 0;
-      subjectMax[s] = SUBJECT_TOTALS[s];
+  Object.entries(wrongByClass).forEach(([klass, data])=>{
+    const wrongList = (Array.isArray(data?.wrong) ? data.wrong : [])
+      .map(v => Number(v))
+      .filter(v => Number.isFinite(v));
+    const map = CLASS_MAP[klass] || [];
+
+    map.forEach(({range:[st,en], subject})=>{
+      const blockMax = en - st + 1;
+      const wrongInBlock = wrongList.filter(q => q >= st && q <= en).length;
+      const got = Math.max(0, blockMax - wrongInBlock);
+      subjectCorrect[subject] = (subjectCorrect[subject] || 0) + got;
     });
+  });
 
-    Object.entries(wrongByClass).forEach(([klass, data])=>{
-       const wrongList = (Array.isArray(data.wrong) ? d.wrong : [])
-   .map(v => Number(v))
-   .filter(v => Number.isFinite(v));
-      const map = CLASS_MAP[klass] || [];
+  Object.keys(subjectMax).forEach(s=>{
+    if (subjectCorrect[s] > subjectMax[s]) subjectCorrect[s] = subjectMax[s];
+  });
 
-      map.forEach(({range:[st,en], subject})=>{
-        const blockMax = en - st + 1;
-        const wrongInBlock = wrongList.filter(q => q >= st && q <= en).length;
-        const got = Math.max(0, blockMax - wrongInBlock);
-
-        if (!(subject in subjectCorrect)) subjectCorrect[subject] = 0;
-        subjectCorrect[subject] += got;
-      });
-    });
-
-    // 방어
-    Object.keys(subjectMax).forEach(s=>{
-      if (subjectCorrect[s] > subjectMax[s]) subjectCorrect[s] = subjectMax[s];
-    });
-
-    return { subjectCorrect, subjectMax };
-  }
+  return { subjectCorrect, subjectMax };
+}
 
   // ===== 5) 과목 → 그룹 집계 (※ GROUPS_DEF = 배열 사용) =====
   function aggregateToGroupResults(subjectCorrect, subjectMax){
