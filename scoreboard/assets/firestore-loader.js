@@ -1,10 +1,11 @@
-// assets/firestore-loader.js
+// firestore-loader.js
 (() => {
-  // ===== 1) script.js 에서 export 한 전역 상수 사용 =====
-window.__SUBJECT_TOTALS = SUBJECT_MAX;
-window.__GROUPS_DEF = GROUPS;           // 배열 형태의 GROUPS
-window.normalizeRound = normalizeRound;
-window.renderResult = renderResult;
+  // script.js 가 window에 올려둔 값들을 읽어온다
+  const SUBJECT_TOTALS = window.__SUBJECT_TOTALS;
+  const GROUPS_DEF     = window.__GROUPS_DEF;
+  // 화면 그리기/정규화 함수도 window에서 사용
+  const normalizeRound = window.normalizeRound;
+  const renderResult   = window.renderResult;
   // ===== 2) 교시별 문항번호 → 과목 매핑 (4교시는 네가 준 규칙 반영) =====
   // TODO: 1~3교시는 실제 규칙으로 수정해
   const CLASS_MAP = {
