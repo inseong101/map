@@ -418,8 +418,6 @@ function initApp(){
   const form = $("#lookup-form");
   if (form) form.addEventListener('submit', lookupStudent);
 
-  scanHistory();
-
   // ?sid=015001 자동 표시 (Firestore 로더가 준비돼 있어도 정상 동작)
   const p = new URLSearchParams(location.search);
   const sid = p.get("sid") || p.get("id");
