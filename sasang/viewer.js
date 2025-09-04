@@ -1,78 +1,139 @@
-// viewer.js
 (() => {
-  // 기본 파일명: 같은 폴더에 sasang.md가 있을 때 자동 로드
   const DEFAULT_FILE = 'sasang.md';
-
   const params = new URLSearchParams(location.search);
-  let file = params.get('file') || DEFAULT_FILE;
+  const file = params.get('file') || DEFAULT_FILE;
 
-  const $title = document.getElementById('title');
   const $mm = document.getElementById('mm');
   const $placeholder = document.getElementById('placeholder');
   const $btnRefit = document.getElementById('btnRefit');
   const $container = document.getElementById('container');
 
-  // 같은 폴더라 별도 변환 없음
-  const normalizeFilePath = f => (f ? f : null);
+  // 컨테이너 실측 px → svg width/height로 꽂기
+  function sizeSvg(svg) {
+    const rect = $container.getBoundingClientRect();
+    svg.setAttribute('width', Math.max(1, Math.floor(rect.width)));
+    svg.setAttribute('height', Math.max(1, Math.floor(rect.height)));
+  }
 
-  // 휠로 페이지 스크롤되는 것만 방지(마인드맵 내부 줌/이동은 정상 동작)
-  $container?.addEventListener('wheel', e => {
-    // 페이지 전체 스크롤만 막고 이벤트는 계속 흐르게 둠
-    e.preventDefault();
-  }, { passive: false });
+  // autoloader가 만든 svg 기다리기
+  function waitForSvg(timeout = 5000) {
+    return new Promise((resolve, reject) => {
+      const start = performance.now();
+      (function tick() {
+        const svg = document.querySelector('svg.markmap');
+        if (svg) return resolve(svg);
+        if (performance.now() - start > timeout) return reject(new Error('svg not created'));
+        requestAnimationFrame(tick);
+      })();
+    });
+  }
+
+  // 'translate(a,b) scale(k)' 문자열을 d3.zoomIdentity로 파싱
+  function parseTransform(tr) {
+    // 예: "translate(123.4,56.7) scale(0.8)"
+    const t = { x: 0, y: 0, k: 1 };
+    if (!tr) return t;
+    const m1 = tr.match(/translate\(([-\d.]+),\s*([-\d.]+)\)/);
+    if (m1) { t.x = +m1[1]; t.y = +m1[2]; }
+    const m2 = tr.match(/scale\(([-\d.]+)\)/);
+    if (m2) { t.k = +m2[1]; }
+    return t;
+  }
+
+  // svg에 d3.zoom 붙이고, 기존 transform과 동기화
+  function enableZoom(svg, g, initialTransform) {
+    const d3 = window.d3;
+    if (!d3) return; // (autoloader가 d3를 로드해줌)
+
+    const selSvg = d3.select(svg);
+    const selG = d3.select(g);
+
+    const zoom = d3.zoom()
+      .scaleExtent([0.1, 8])       // 확대 한계
+      .on('zoom', (ev) => {
+        selG.attr('transform', ev.transform);
+      });
+
+    // 더블클릭 줌은 끄고(원하면 주석 해제), 휠 줌/드래그 팬만 사용
+    selSvg.call(zoom).on('dblclick.zoom', null);
+
+    // fit()이 세팅한 transform을 줌 상태와 동기화
+    const { x, y, k } = initialTransform;
+    selSvg.call(zoom.transform, d3.zoomIdentity.translate(x, y).scale(k));
+
+    // 리사이즈 시 svg 크기 반영 + 재fit
+    let timer = null;
+    window.addEventListener('resize', () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        sizeSvg(svg);
+        // 현재 중심 유지 (현 상태를 그대로 다시 적용)
+        const cur = parseTransform(g.getAttribute('transform'));
+        selSvg.call(zoom.transform, d3.zoomIdentity.translate(cur.x, cur.y).scale(cur.k));
+      }, 80);
+    });
+  }
 
   async function loadAndRender() {
-    file = normalizeFilePath(file);
-
     if (!file) {
-      $placeholder.innerHTML =
-        '<div><b>파일이 지정되지 않았습니다.</b></div>' +
-        '<div class="muted">예: ?file=sasang.md</div>';
+      $placeholder.innerHTML = `
+        <div><b>파일이 지정되지 않았습니다.</b></div>
+        <div class="muted">예: ?file=sasang.md</div>`;
       return;
     }
 
     try {
       $placeholder.textContent = '불러오는 중…';
-      const res = await fetch(file, { cache: 'no-store' });
+      const res = await fetch(decodeURI(file), { cache: 'no-store' });
       if (!res.ok) throw new Error('fetch failed ' + res.status);
-
       const md = await res.text();
 
-      // 제목 표시
-      const base = decodeURIComponent(file.split('/').pop());
-      $title.textContent = base;
-
-      // Markdown 주입
+      // 마크다운 주입 → autoloader가 감지하여 렌더
       $mm.textContent = md;
       $placeholder.textContent = '';
 
-      // 🔑 처음엔 2단계까지만 펼치기
-      // autoloader가 <pre.markmap>을 찾아 렌더하며, 옵션을 아래처럼 넘길 수 있음
-      window.markmap?.autoLoader?.renderAll({
-        initialExpandLevel: 2 // #, ## 단계까지 펼침. ###부터 접힘
-      });
+      // 렌더 트리거
+      window.markmap?.autoLoader?.renderAll?.();
 
-      // 렌더 직후 화면 맞추기
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          const svg = document.querySelector('svg.markmap');
-          const mm = svg && (svg.__markmap__ || svg.markmap);
-          mm?.fit?.();
-        }, 0);
-      });
+      // svg 생성 기다린 뒤 크기 지정 + fit
+      const svg = await waitForSvg();
+      sizeSvg(svg);
+
+      // markmap 인스턴스
+      const mm = svg.__markmap__ || svg.markmap;
+      // 먼저 fit으로 화면 꽉 채우기
+      mm?.fit?.();
+
+      // g 선택 (내용 그룹)
+      const g = svg.querySelector('g');
+      if (!g) throw new Error('g not found');
+
+      // fit이 적용한 현재 transform 읽어서 줌과 동기화
+      const initial = parseTransform(g.getAttribute('transform'));
+      enableZoom(svg, g, initial);
+
+      // 다시 맞춤 버튼: 컨테이너 크기 반영 후 fit → 현재 transform 재동기화
+      $btnRefit.onclick = () => {
+        sizeSvg(svg);
+        mm?.fit?.();
+        const cur = parseTransform(g.getAttribute('transform'));
+        const d3 = window.d3;
+        if (d3) {
+          const selSvg = d3.select(svg);
+          selSvg.call(
+            d3.zoom().transform,
+            d3.zoomIdentity.translate(cur.x, cur.y).scale(cur.k)
+          );
+        }
+      };
     } catch (e) {
       console.error(e);
-      $placeholder.innerHTML =
-        `<div><b>불러오기 실패</b></div><div class="muted">경로: ${file} / 에러: ${e.message}</div>`;
+      $placeholder.innerHTML = `
+        <div><b>불러오기 실패</b></div>
+        <div class="muted">경로: ${file} / 에러: ${e.message}</div>`;
     }
   }
 
-  // "다시 맞춤" 버튼
-  $btnRefit?.addEventListener('click', () => {
-    const svg = document.querySelector('svg.markmap');
-    const mm = svg && (svg.__markmap__ || svg.markmap);
-    mm?.fit?.();
-  });
-
+  // 휠 기본 스크롤을 막지 마세요. (줌/팬에 필요)
   loadAndRender();
 })();
