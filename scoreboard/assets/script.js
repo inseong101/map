@@ -1,17 +1,17 @@
 /* =========================================================
-   전졸협 성적 SPA 스크립트 (오프라인)
-   - 학수번호 입력 → window.SCORE_DATA에서 검색 → 결과 뷰 렌더링
-   - 요구사항 반영:
-     1) 과목별 고정 문항수(총 340) 강제 적용
-     2) 그룹별(그룹 총점 기준) 40% 과락 판정
+   전졸협 성적 SPA 스크립트 (오프라인 + Firestore 호환)
+   - 학수번호 입력 → SCORE_DATA(오프라인) 또는 Firestore 계산 결과 → 렌더
+   - 요구사항:
+     1) 과목별 고정 문항수(총 340) 강제
+     2) 그룹별(그룹 총점 기준) 40% 과락
      3) 그룹 박스: 과락 빨강 / 통과 초록
      4) 그룹1 과목 줄 나눔(간심비폐신 / 상한 사상)
-     5) 새 스키마(group_results) 및 기존(by_class) 모두 호환
+     5) 새 스키마(subject_results, group_results) 및 기존(by_class) 호환
    ========================================================= */
 
 /* --------------------------
    0) 과목별 문항 수(고정) / 그룹 정의
-   총점 = 340
+   총점 = 340 (변경 시 SUBJECT_MAX만 수정)
 --------------------------- */
 const SUBJECT_MAX = {
   "간":16, "심":16, "비":16, "폐":16, "신":16,
@@ -37,7 +37,7 @@ const GROUPS = [
 const ALL_SUBJECTS = GROUPS.flatMap(g => g.subjects);
 
 /* --------------------------
-   1) 데이터 로드/인덱스
+   1) 데이터 로드/인덱스 (오프라인 데이터 대비)
 --------------------------- */
 window.SCORE_DATA = window.SCORE_DATA || {};
 (function buildIndex(){
@@ -137,23 +137,30 @@ function pickKey(obj, candidates){
   return null;
 }
 
-// 새 스키마(group_results) 또는 기존(by_class) → 표준형으로
+// 새 스키마(subject_results | group_results) 또는 기존(by_class) → 표준형으로
 function normalizeRound(raw){
   if (!raw || typeof raw !== 'object') return null;
 
-  // 새 스키마: total_questions/total_correct + group_results
+  // ★ 새 스키마: total_questions/total_correct + subject_results(우선) 또는 group_results
   if ('total_questions' in raw && 'total_correct' in raw) {
     const groups = {};
-    (raw.group_results || []).forEach(g=>{
-      groups[g.name] = {
-        score: Number(g.correct)||0,
-        // max는 고정표를 우선 적용
-        max: SUBJECT_MAX[g.name] ?? (Number(g.total)||0)
-      };
-    });
-    // 종합 섹션 하나로 묶음
+
+    if (Array.isArray(raw.subject_results) && raw.subject_results.length){
+      // 과목별 스냅샷 그대로 사용
+      raw.subject_results.forEach(s=>{
+        const nm = s.name;
+        groups[nm] = {
+          score: Number(s.correct)||0,
+          max:   SUBJECT_MAX[nm] ?? (Number(s.total)||0)
+        };
+      });
+    } else if (Array.isArray(raw.group_results)) {
+      // (참고) group_results만으로는 과목 칩에 바로 매핑하기 어려움 → 과락 배지 정도만 가능
+      // 필요 시 그룹→과목 분해 로직 추가 가능
+    }
+
     return {
-      total: { score: 0, max: 0 }, // 나중에 과목 합으로 재계산
+      total: { score: 0, max: 0 }, // 과목 합으로 재계산
       pass:  !!(raw.overall_pass ?? raw.round_pass ?? raw.pass),
       fails: [],
       by_class: { "종합": { total: {score:0, max:0}, groups } }
@@ -260,7 +267,6 @@ async function lookupStudent(e){
 /* --------------------------
    5) 렌더링(그룹 묶음/과락)
 --------------------------- */
-// 주입 스타일(그룹 박스 색/그리드/칩 등)
 (function injectStyles(){
   const css = `
   .group-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
@@ -283,160 +289,4 @@ function renderResult(id, round1, round2){
   $("#res-sid").textContent = id;
   const badges = $("#res-badges");
   badges.innerHTML = "";
-  if (round1){ badges.innerHTML += `<span class="badge ${round1.pass?"pass":"fail"}">1차 ${round1.pass?"합격":"불합격"}</span>`; }
-  if (round2){ badges.innerHTML += `<span class="badge ${round2.pass?"pass":"fail"}">2차 ${round2.pass?"합격":"불합격"}</span>`; }
-
-  renderRound("#round-1", "1차", round1);
-  renderRound("#round-2", "2차", round2);
-}
-
-// 과목 점수 맵을 뽑는다(없으면 0점), max는 SUBJECT_MAX 강제
-function getSubjectScores(round){
-  const byClass = round?.by_class || {};
-  const subjMap = (byClass["종합"] && byClass["종합"].groups) ? byClass["종합"].groups : {};
-  const result = {};
-  ALL_SUBJECTS.forEach(name=>{
-    const row = subjMap[name] || {};
-    result[name] = {
-      score: Number(row.score)||0,
-      max:   SUBJECT_MAX[name] // 고정표를 우선
-    };
-  });
-  return result;
-}
-
-function chunk(arr, sizes){
-  const out = [];
-  let i=0;
-  for (const s of sizes){
-    out.push(arr.slice(i, i+s));
-    i += s;
-  }
-  if (i < arr.length) out.push(arr.slice(i));
-  return out;
-}
-
-function renderRound(sel, title, round){
-  const host = $(sel);
-  if(!host) return;
-
-  if(!round){
-    host.innerHTML = `<div class="small" style="opacity:.7">${title} 데이터가 없습니다.</div>`;
-    return;
-  }
-
-  // 과목별 점수/최대 강제 적용
-  const subjects = getSubjectScores(round);
-
-  // 전체(모든 과목) 합계 재계산 → 총점 340 기준
-  const totalScore = ALL_SUBJECTS.reduce((a,n)=>a+(subjects[n]?.score||0), 0);
-  const totalMax   = ALL_SUBJECTS.reduce((a,n)=>a+(subjects[n]?.max||0),   0); // = 340
-  const overallRate = pct(totalScore, totalMax);
-  const overallPass = totalScore >= totalMax * 0.4; // 40% 기준
-
-  let html = `
-    <div class="round">
-      <div class="flex" style="justify-content:space-between;">
-        <h2 style="margin:0">${title} 총점</h2>
-        <div class="kpi"><div class="num">${fmt(totalScore)}</div><div class="sub">/ ${fmt(totalMax)}</div></div>
-      </div>
-      <div class="progress" style="margin:8px 0 2px 0"><div style="width:${overallRate}%"></div></div>
-      <div class="small">정답률 ${overallRate}% ${overallPass? pill("합격","ok"):pill("불합격","red")}</div>
-    </div>
-    <div class="group-grid" style="margin-top:12px">
-  `;
-
-  // 그룹 박스들
-  GROUPS.forEach(g=>{
-    // 그룹 합계
-    const gScore = g.subjects.reduce((a,n)=>a+(subjects[n]?.score||0), 0);
-    const gMax   = g.subjects.reduce((a,n)=>a+(subjects[n]?.max||0),   0);
-    const gRate  = pct(gScore, gMax);
-    const gPass  = gScore >= gMax * 0.4;  // ★ 그룹 과락 판단(총점 40%)
-
-    // 과목 칩 행 구성 (그룹1은 줄나눔: 5개 / 2개)
-    let chipsHtml = "";
-    if (g.layoutChunks && g.layoutChunks.length){
-      const rows = chunk(g.subjects, g.layoutChunks);
-      rows.forEach(row=>{
-        chipsHtml += `<div class="subj-row">` + row.map(n=>{
-          const s = subjects[n]||{score:0,max:SUBJECT_MAX[n]||0};
-          return `<span class="subj-chip">${n} <span class="muted">${fmt(s.score)}/${fmt(s.max)}</span></span>`;
-        }).join("") + `</div>`;
-      });
-    } else {
-      chipsHtml = `<div class="subj-row">` + g.subjects.map(n=>{
-        const s = subjects[n]||{score:0,max:SUBJECT_MAX[n]||0};
-        return `<span class="subj-chip">${n} <span class="muted">${fmt(s.score)}/${fmt(s.max)}</span></span>`;
-      }).join("") + `</div>`;
-    }
-
-    html += `
-      <div class="group-box ${gPass? "ok":"fail"} span-${g.span||12}">
-        <div class="group-head">
-          <div class="name" style="font-weight:800">${g.label}</div>
-          <div class="small">소계 ${fmt(gScore)}/${fmt(gMax)} · 정답률 ${gRate}% ${gPass? pill("통과","ok"):pill("과락","red")}</div>
-        </div>
-        ${chipsHtml}
-      </div>
-    `;
-  });
-
-  html += `</div>`; // .group-grid 끝
-  host.innerHTML = html;
-}
-
-/* --------------------------
-   6) 초기화
---------------------------- */
-function initApp(){
-  // 입력시 숫자만, 6자리 제한
-  const $sid = $("#sid");
-  if ($sid) {
-    $sid.addEventListener('input', () => {
-      $sid.value = ($sid.value || '').replace(/\D/g, '').slice(0, 6);
-    });
-    $sid.setAttribute('enterkeyhint', 'done');
-  }
-
-  // 폼 핸들러
-  const form = $("#lookup-form");
-  if (form) form.addEventListener('submit', lookupStudent);
-
-  // 최근 보기
-  scanHistory();
-
-  // ?sid=015001 자동 표시
-  const p = new URLSearchParams(location.search);
-  const sid = p.get("sid") || p.get("id");
-  if (sid && /^\d{6}$/.test(sid)) {
-    const data = getStudentById(sid);
-    if (data) {
-      if ($sid) $sid.value = sid;
-      const { r1, r2 } = extractRounds(data);
-      renderResult(sid, r1, r2);
-      $("#view-home")?.classList.add("hidden");
-      $("#view-result")?.classList.remove("hidden");
-    } else {
-      showError("해당 학수번호의 성적 데이터를 찾을 수 없습니다. SCORE_DATA를 확인하세요.");
-    }
-  }
-
-  // 로드 확인 로그(선택)
-  // console.log("[SCORE] loaded?", typeof window.SCORE_DATA, "size:", window.SCORE_DATA && Object.keys(window.SCORE_DATA).length);
-  // console.log("[SCORE] sample(015001):", getStudentById("015001"));
-}
-
-document.addEventListener('DOMContentLoaded', initApp);
-
-// 전역 노출
-window.goHome = goHome;
-window.scanHistory = scanHistory;
-window.initApp = initApp;
-window.normalizeRound = normalizeRound;
-window.renderResult   = renderResult;
-
-
-// script.js 맨 아래에 추가 (중복 선언 없게!)
-window.__SUBJECT_TOTALS = SUBJECT_MAX; // 너의 SUBJECT_MAX를 총문항으로 사용
-window.__GROUPS_DEF = GROUPS;          // 그룹 정의
+  if (round1){ badges.innerHTML += `<span
