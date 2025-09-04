@@ -1,8 +1,8 @@
 // assets/firestore-loader.js
 (() => {
   // 0) script.js 가 미리 노출한 전역 사용
-  const SUBJECT_TOTALS = window.__SUBJECT_TOTALS; // 예: {간:16, 심:16, ...}
-  const GROUPS_DEF     = window.__GROUPS_DEF;     // 예: [{id:"그룹1", subjects:[...]}, ...]
+  const SUBJECT_TOTALS = window.__SUBJECT_TOTALS; // {간:16, ...}
+  const GROUPS_DEF     = window.__GROUPS_DEF;     // [{id:"그룹1", subjects:[...]}, ...]
 
   // 1) 교시별 문항→과목 매핑 (★ 1~3교시는 실제 규칙으로 꼭 바꾸세요)
   const CLASS_MAP = {
@@ -17,7 +17,7 @@
       {range:[1,16],  subject:"상한"},
       {range:[17,32], subject:"사상"},
       {range:[33,80], subject:"침구"},
-      // {range:[81,100], subject:"법규"}, // 필요 없으면 주석 유지
+      // {range:[81,100], subject:"법규"}, // 없으면 주석 그대로
     ],
     "3교시": [
       {range:[1,16],  subject:"외과"},
@@ -35,6 +35,28 @@
 
   // 2) 유틸
   const sum = (arr)=>arr.reduce((a,b)=>a+b,0);
+
+  // wrong 필드가 배열/문자열/객체 등 다양한 케이스 방어 파서
+  function parseWrongList(d){
+    let raw =
+      d?.wrong ??
+      d?.wrongs ??
+      d?.wrongQuestions ??
+      d?.wrong_list ??
+      null;
+
+    if (Array.isArray(raw)) return raw.map(Number).filter(Number.isFinite);
+
+    if (typeof raw === "string") {
+      return raw.split(/[^0-9]+/).map(Number).filter(Number.isFinite);
+    }
+
+    if (raw && typeof raw === "object") {
+      return Object.keys(raw).map(Number).filter(Number.isFinite);
+    }
+
+    return [];
+  }
 
   // 3) wrongQuestions → 과목 득점 복원
   function buildSubjectScoresFromWrong(wrongByClass){
@@ -83,7 +105,7 @@
     return results;
   }
 
-  // 5) wrongQuestions → round 스냅샷
+  // 5) wrongQuestions → round 스냅샷 (★ subject_results 포함해 반환)
   async function buildRoundFromWrong(sid, roundLabel){
     const { collection, getDocs } =
       await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
@@ -99,18 +121,25 @@
       const m = rawId.match(/(\d)/);
       const klassId = m ? `${m[1]}교시` : rawId;
 
-      const wrong = (Array.isArray(d.wrong) ? d.wrong : [])
-        .map(v => Number(v))
-        .filter(v => Number.isFinite(v));
+      const wrong = parseWrongList(d);
       const total = Number(d.total) || Number(d.totalQuestions) || 0;
 
       wrongByClass[klassId] = { wrong, total };
     });
 
     const { subjectCorrect, subjectMax } = buildSubjectScoresFromWrong(wrongByClass);
+
     const total_questions = sum(Object.values(SUBJECT_TOTALS));
     const total_correct   = sum(Object.keys(SUBJECT_TOTALS).map(s => subjectCorrect[s] ?? 0));
+
     const group_results   = aggregateToGroupResults(subjectCorrect, subjectMax);
+
+    // ★ 과목별 스냅샷 추가 (렌더러가 바로 소비)
+    const subject_results = Object.keys(SUBJECT_TOTALS).map(name => ({
+      name,
+      correct: Number(subjectCorrect[name] || 0),
+      total:   Number(SUBJECT_TOTALS[name] || 0),
+    }));
 
     const overall_cutoff = Math.ceil(total_questions * 0.6);
     const overall_pass   = total_correct >= overall_cutoff && !group_results.some(g=>g.is_fail);
@@ -121,6 +150,7 @@
       overall_cutoff,
       overall_pass,
       group_results,
+      subject_results,     // ★ 추가됨
       round_pass: overall_pass
     };
   }
@@ -150,12 +180,15 @@
       if (sid.length !== 6) return;
 
       try {
+        // Firestore에서 1·2차 가져오기 (scores 우선)
         const r1 = await fetchRoundFromFirestore(sid, "1차");
         const r2 = await fetchRoundFromFirestore(sid, "2차");
 
+        // script.js의 normalizeRound 사용 (subject_results 지원)
         const norm1 = (window.normalizeRound?.(r1)) || r1;
         const norm2 = (window.normalizeRound?.(r2)) || r2;
 
+        // 렌더
         window.renderResult?.(sid, norm1, norm2);
         document.querySelector("#view-home")?.classList.add("hidden");
         document.querySelector("#view-result")?.classList.remove("hidden");
