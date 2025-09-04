@@ -1,8 +1,13 @@
-// firestore-loader.js
+// assets/firestore-loader.js
 (() => {
-  // script.js 가 window에 올려둔 값들을 읽어온다
-  const SUBJECT_TOTALS = window.__SUBJECT_TOTALS;
-  const GROUPS_DEF     = window.__GROUPS_DEF;
+  // script.js 에서 이미 노출한 전역 사용
+  const SUBJECT_TOTALS = window.__SUBJECT_TOTALS; // = SUBJECT_MAX
+  const GROUPS_DEF     = window.__GROUPS_DEF;     // = GROUPS (배열)
+  if (!SUBJECT_TOTALS || !GROUPS_DEF) {
+    console.error("SUBJECT_TOTALS / GROUPS_DEF 누락");
+    return;
+  }
+  
   // 화면 그리기/정규화 함수도 window에서 사용
   const normalizeRound = window.normalizeRound;
   const renderResult   = window.renderResult;
