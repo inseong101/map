@@ -1,5 +1,4 @@
 
-function fmtPct(n){ return (n*100).toFixed(1) + "%"; }
 function toggleAcc(el){
   const ic = el.querySelector(".rotate");
   const panel = el.parentElement.querySelector(".panel");
