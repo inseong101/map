@@ -98,5 +98,22 @@
     if (window.initApp) initApp();
   });
 </script>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  // TODO: 네 프로젝트 값으로 교체
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "jeonjolhyup.firebaseapp.com",
+    projectId: "jeonjolhyup",
+  };
+  window.__app = initializeApp(firebaseConfig);
+  window.__db  = getFirestore(window.__app);
+</script>
+<script src="assets/firestore-loader.js"></script>
+
+  
 </body>
 </html>
