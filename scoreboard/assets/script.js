@@ -433,3 +433,5 @@ document.addEventListener('DOMContentLoaded', initApp);
 window.goHome = goHome;
 window.scanHistory = scanHistory;
 window.initApp = initApp;
+window.normalizeRound = normalizeRound;
+window.renderResult   = renderResult;
