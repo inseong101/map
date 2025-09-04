@@ -1,70 +1,54 @@
 (() => {
-  const DEFAULT_FILE = 'sasang.md'; // 같은 폴더에 있으니 파일명만
+  const DEFAULT_FILE = 'sasang.md'; // 같은 폴더에 있음
   const params = new URLSearchParams(location.search);
-  const file = params.get('file') || DEFAULT_FILE;
+  let file = params.get('file') || DEFAULT_FILE;
 
   const $title = document.getElementById('title');
-  const $container = document.getElementById('container');
+  const $svg = document.getElementById('mm');
   const $placeholder = document.getElementById('placeholder');
-  const $md = document.getElementById('md');
   const $btnRefit = document.getElementById('btnRefit');
 
-  // markmap view 객체
-  let mm = null;
-  let svgEl = null;
-
-  // 컨테이너 크기에 맞춰 svg 크기를 '픽셀'로 강제 세팅
-  function sizeSvgToContainer() {
-    if (!svgEl) return;
-    const w = Math.max(1, $container.clientWidth);
-    const h = Math.max(1, $container.clientHeight);
-    svgEl.setAttribute('width', String(w));
-    svgEl.setAttribute('height', String(h));
-    // style로 퍼센트가 들어가 있더라도 픽셀 속성이 우선 적용됨
+  // markmap 스크립트 로드가 끝났는지 확인
+  function readyMarkmap() {
+    return !!(window.markmap && window.markmap.Markmap && window.markmap.Transformer);
   }
-
-  function fitLater() {
-    // 렌더 직후 레이아웃 잡힌 다음 여러 번 보정
-    setTimeout(() => mm?.fit?.(), 0);
-    setTimeout(() => mm?.fit?.(), 120);
-    setTimeout(() => mm?.fit?.(), 360);
+  function waitForMarkmap() {
+    return new Promise((resolve, reject) => {
+      const start = Date.now();
+      (function tick() {
+        if (readyMarkmap()) return resolve();
+        if (Date.now() - start > 5000) return reject(new Error('markmap not loaded'));
+        requestAnimationFrame(tick);
+      })();
+    });
   }
 
   async function loadAndRender() {
     try {
-      $placeholder.textContent = '불러오는 중…';
+      await waitForMarkmap(); // ✅ 라이브러리 준비될 때까지 대기
+      const { Markmap, Transformer } = window.markmap;
+
+      // 파일 fetch
       const res = await fetch(file, { cache: 'no-store' });
       if (!res.ok) throw new Error('fetch failed ' + res.status);
       const md = await res.text();
 
+      // 제목 표시
       const base = decodeURIComponent(file.split('/').pop());
       $title.textContent = base;
 
-      // 마크다운 → markmap 데이터 변환
-      const { Transformer, Markmap } = window.markmap;
+      // 변환
       const transformer = new Transformer();
-      const { root /* , features */ } = transformer.transform(md);
+      const { root } = transformer.transform(md);
 
-      // 이전 svg 제거
-      if (svgEl && svgEl.parentNode) svgEl.parentNode.removeChild(svgEl);
-
-      // 새 svg 생성 후 픽셀 크기 고정
-      svgEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svgEl.classList.add('markmap');
-      $container.appendChild(svgEl);
-      sizeSvgToContainer();
-
-      // markmap 인스턴스 생성 (휠 줌/드래그는 기본 활성화)
-      mm = Markmap.create(svgEl, {
-        fitRatio: 0.9,        // 가장자리 여백 조금
-        duration: 300,        // 애니메이션 길이
-        zoom: true,           // 휠 줌
-        pan: true             // 드래그 이동
-      }, root);
+      // 렌더
+      const mm = Markmap.create($svg, {}, root);
+      // 화면에 꽉 차게
+      requestAnimationFrame(() => mm.fit());
 
       $placeholder.textContent = '';
-
-      fitLater();
+      // 버튼
+      $btnRefit.onclick = () => mm.fit();
     } catch (e) {
       console.error(e);
       $placeholder.innerHTML = `
@@ -73,18 +57,9 @@
     }
   }
 
-  // 리사이즈 시 svg 픽셀 재설정 + fit
-  const ro = new ResizeObserver(() => {
-    sizeSvgToContainer();
-    mm?.fit?.();
-  });
-  ro.observe($container);
+  // 휠 스크롤로 확대/축소가 되도록, 페이지 스크롤은 막지 않음
+  // (markmap이 d3-zoom으로 자체 처리)
 
-  // 다시 맞춤
-  $btnRefit.addEventListener('click', () => mm?.fit?.());
-
-  // 중요한 점: wheel 이벤트를 막지 말 것!
-  // (markmap의 d3-zoom이 휠 이벤트를 사용합니다)
-
+  // 파일 경로는 같은 폴더라 그대로 사용
   loadAndRender();
 })();
