@@ -106,67 +106,92 @@
   }
 
   // 5) wrongQuestions → round 스냅샷 (★ subject_results 포함해 반환)
-  async function buildRoundFromWrong(sid, roundLabel){
-    const { collection, getDocs } =
-      await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+ // 🔁 여러 라벨 후보를 시도
+const ROUND_ALIASES = {
+  "1차": ["1차","회차1","1","round1","first","1차시험"],
+  "2차": ["2차","회차2","2","round2","second","2차시험"],
+};
 
-    const klassCol = collection(window.__db, "wrongQuestions", sid, roundLabel);
-    const klassSnaps = await getDocs(klassCol);
+async function buildRoundFromWrong(sid, roundLabel){
+  const { collection, getDocs } =
+    await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
 
-    const wrongByClass = {};
-    klassSnaps.forEach(docSnap=>{
-      const d = docSnap.data() || {};
-      const rawId = String(docSnap.id || "");
-      // "1", "1 교시", "교시1", "1교시 " → "1교시" 로 통일
-      const m = rawId.match(/(\d)/);
-      const klassId = m ? `${m[1]}교시` : rawId;
+  const debug = new URLSearchParams(location.search).get("debug") === "1";
+  const wrongByClass = {};
+  let pickedLabel = null;
 
-      const wrong = parseWrongList(d);
-      const total = Number(d.total) || Number(d.totalQuestions) || 0;
+  // ◀ 라벨 후보를 순서대로 시도
+  const candidates = ROUND_ALIASES[roundLabel] || [roundLabel];
+  for (const label of candidates){
+    const colRef = collection(window.__db, "wrongQuestions", sid, label);
+    const snaps  = await getDocs(colRef);
 
-      wrongByClass[klassId] = { wrong, total };
-    });
+    if (debug) console.log(`[WRONG] try round='${label}' -> docs:`, snaps.size);
+    if (!snaps.empty){
+      pickedLabel = label;
+      snaps.forEach(docSnap=>{
+        const d = docSnap.data() || {};
+        const rawId = String(docSnap.id || "");
+        const m = rawId.match(/(\d)/);               // "1", "1 교시", "교시1" → "1교시"
+        const klassId = m ? `${m[1]}교시` : rawId;
 
-    const { subjectCorrect, subjectMax } = buildSubjectScoresFromWrong(wrongByClass);
+        const wrong = (Array.isArray(d.wrong) ? d.wrong : [])
+          .map(v => Number(v)).filter(v => Number.isFinite(v));
+        const total = Number(d.total) || Number(d.totalQuestions) || 0;
 
-    const total_questions = sum(Object.values(SUBJECT_TOTALS));
-    const total_correct   = sum(Object.keys(SUBJECT_TOTALS).map(s => subjectCorrect[s] ?? 0));
-
-    const group_results   = aggregateToGroupResults(subjectCorrect, subjectMax);
-
-    // ★ 과목별 스냅샷 추가 (렌더러가 바로 소비)
-    const subject_results = Object.keys(SUBJECT_TOTALS).map(name => ({
-      name,
-      correct: Number(subjectCorrect[name] || 0),
-      total:   Number(SUBJECT_TOTALS[name] || 0),
-    }));
-
-    const overall_cutoff = Math.ceil(total_questions * 0.6);
-    const overall_pass   = total_correct >= overall_cutoff && !group_results.some(g=>g.is_fail);
-
-    return {
-      total_questions,
-      total_correct,
-      overall_cutoff,
-      overall_pass,
-      group_results,
-      subject_results,     // ★ 추가됨
-      round_pass: overall_pass
-    };
-  }
-
-  // 6) scores 우선, 없으면 wrongQuestions 계산
-  async function fetchRoundFromFirestore(sid, roundLabel){
-    const { getDoc, doc } =
-      await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
-
-    const sref = doc(window.__db, "scores", sid);
-    const snap = await getDoc(sref);
-    if (snap.exists() && snap.data()?.rounds?.[roundLabel]) {
-      return snap.data().rounds[roundLabel];
+        wrongByClass[klassId] = { wrong, total };
+        if (debug) console.log(`  · ${klassId} wrong=${wrong.length}, total=${total}`);
+      });
+      break; // 첫 성공 지점에서 종료
     }
-    return await buildRoundFromWrong(sid, roundLabel);
   }
+
+  if (debug && !pickedLabel){
+    console.warn(`[WRONG] round '${roundLabel}' 의 어떤 후보에서도 문서가 없음:`, candidates);
+  }
+
+  // 과목 집계
+  const { subjectCorrect, subjectMax } = buildSubjectScoresFromWrong(wrongByClass);
+
+  const total_questions = Object.values(window.__SUBJECT_TOTALS).reduce((a,b)=>a+b,0);
+  const total_correct   = Object.keys(window.__SUBJECT_TOTALS)
+                              .reduce((a,s)=>a+(subjectCorrect[s]||0),0);
+
+  const group_results = aggregateToGroupResults(subjectCorrect, subjectMax);
+  const overall_cutoff = Math.ceil(total_questions * 0.6);
+  const overall_pass = total_correct >= overall_cutoff && !group_results.some(g=>g.is_fail);
+
+  if (debug){
+    console.log(`[WRONG] pickedLabel='${pickedLabel}' total_correct=${total_correct}/${total_questions}`);
+    console.log(`[WRONG] group_results=`, group_results);
+  }
+
+  return {
+    total_questions,
+    total_correct,
+    overall_cutoff,
+    overall_pass,
+    group_results,
+    round_pass: overall_pass
+  };
+}
+  // 6) scores 우선, 없으면 wrongQuestions 계산
+ async function fetchRoundFromFirestore(sid, roundLabel){
+  const { getDoc, doc } =
+    await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+
+  const debug = new URLSearchParams(location.search).get("debug") === "1";
+  const sref = doc(window.__db, "scores", sid);
+  const snap = await getDoc(sref);
+
+  if (snap.exists() && snap.data()?.rounds?.[roundLabel]) {
+    if (debug) console.log(`[SCORES] use scores/${sid}.rounds['${roundLabel}']`);
+    return snap.data().rounds[roundLabel];
+  }
+
+  if (debug) console.log(`[SCORES] fallback to wrongQuestions/${sid}/… for '${roundLabel}'`);
+  return await buildRoundFromWrong(sid, roundLabel);
+}
 
   // 7) 폼 submit → 렌더
   document.addEventListener("DOMContentLoaded", () => {
