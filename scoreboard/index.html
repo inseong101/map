@@ -22,36 +22,37 @@
         <h2 style="margin-top:0">본인 점수 보기</h2>
 
         <!-- form 태그 닫힘 > 빠져있어서 추가 -->
-        <form id="lookup-form" class="flex" novalidate>
+        <form id="lookup-form" class="flex-col" novalidate>
   <!-- 학수번호 -->
-  <label for="sid" class="small" style="min-width:80px">학수번호</label>
-  <input
-    id="sid" name="sid" class="input" type="text"
-    inputmode="numeric" autocomplete="one-time-code"
-    placeholder="예) 015001" maxlength="6" required autofocus
-  />
+  <div class="form-row">
+    <label for="sid" class="small">학수번호</label>
+    <input id="sid" name="sid" class="input" type="text"
+           inputmode="numeric" placeholder="예) 015001"
+           maxlength="6" required />
+  </div>
 
   <!-- 전화번호 -->
-  <label for="phone" class="small" style="min-width:80px">전화번호</label>
-  <input
-    id="phone" name="phone" class="input" type="tel"
-    inputmode="tel" placeholder="010-1234-5678" required
-  />
-
-  <!-- 인증번호 전송 버튼 -->
-  <button class="btn" type="button" id="btn-send">인증번호 받기</button>
+  <div class="form-row">
+    <label for="phone" class="small">전화번호</label>
+    <input id="phone" class="input" type="tel" placeholder="+821012345678" />
+    <button class="btn" type="button" onclick="requestSmsCode()">인증번호 받기</button>
+  </div>
 
   <!-- 인증번호 -->
-  <label for="code" class="small" style="min-width:80px">인증번호</label>
-  <input
-    id="code" name="code" class="input" type="text"
-    inputmode="numeric" maxlength="6" placeholder="문자 6자리" required
-  />
+  <div class="form-row">
+    <label for="smsCode" class="small">인증번호</label>
+    <input id="smsCode" class="input" type="text" inputmode="numeric" maxlength="6" placeholder="6자리" />
+    <button class="btn" type="button" onclick="verifySmsCodeAndProceed()">인증 확인</button>
+  </div>
 
-  <!-- 성적 확인 버튼 -->
-  <button class="btn" type="submit">성적 확인</button>
+  <!-- reCAPTCHA 컨테이너 -->
+  <div id="recaptcha-container"></div>
+
+  <!-- 성적 확인 -->
+  <div class="form-row">
+    <button class="btn" type="submit" formnovalidate>성적 확인</button>
+  </div>
 </form>
-
 <!-- Invisible reCAPTCHA 컨테이너 -->
 <div id="recaptcha-container"></div>
 
