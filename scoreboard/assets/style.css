@@ -307,3 +307,19 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
   font-weight: 700;
   color: var(--muted);
 }
+/* 카드 폭 좁게 */
+.card.narrow {
+  max-width: 420px;  /* 원하는 폭: 360~480px 추천 */
+  margin: 0 auto;
+}
+
+/* 입력 줄 정리 */
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.form-row label {
+  font-weight: 600;
+}
