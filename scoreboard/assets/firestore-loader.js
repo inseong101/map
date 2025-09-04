@@ -267,7 +267,7 @@
     };
   }
 
-  // 8) scores 우선, 없으면 wrongQuestions 계산
+   // 8) scores 우선, 없으면 wrongQuestions 계산
   async function fetchRoundFromFirestore(sid, roundLabel){
     const { getDoc, doc } =
       await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
@@ -285,5 +285,7 @@
     return await buildRoundFromWrong(sid, roundLabel);
   }
 
-  // 9) 폼 submit → 렌더
-window.fetchRoundFromFirestore = fetchRoundFromFirestore;
+  // 9) script.js에서 호출할 수 있도록 전역으로 노출 (← 반드시 IIFE 내부!)
+  window.fetchRoundFromFirestore = fetchRoundFromFirestore;
+
+})(); // ← 여기서 IIFE를 닫습니다.
