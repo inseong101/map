@@ -4,13 +4,12 @@
    ========================================================= */
 
 // === SCORE_DATA 전제 ===
-// window.SCORE_DATA = { "015001": { "1차": {...}, "2차": {...} }, ... }
-// ※ 실제 데이터에서 키 이름이 다를 수 있어 아래에서 호환 처리함.
+// window.SCORE_DATA = { "015001": { rounds: { "1차": {...}, "2차": {...} } }, ... }
 
 // === 데이터 로드 확인 (없으면 빈 객체) ===
 window.SCORE_DATA = window.SCORE_DATA || {};
 
-// ▼▼▼ 추가: 학수번호(0패딩) 인덱스 맵 생성 ▼▼▼
+// ▼▼▼ 학수번호(0패딩) 인덱스 맵 생성 ▼▼▼
 (function buildIndex(){
   const idx = {};
   for (const rawKey of Object.keys(window.SCORE_DATA)) {
@@ -27,6 +26,34 @@ function getStudentById(id6){
   if (window.SCORE_DATA && window.SCORE_DATA[id6]) return window.SCORE_DATA[id6];
   return null;
 }
+
+// === 전시 정책: 그룹/순서/최대점수(총합 340) ===
+const GROUPS = {
+  "그룹1": ["간","심","비","폐","신","상한","사상"],
+  "그룹3": ["침구"],
+  "그룹2": ["보건"],
+  "그룹4": ["외과","신경","안이비"],
+  "그룹5": ["부인과","소아"],
+  "그룹6": ["예방","생리","본초"],
+};
+const GROUP_ORDER = ["그룹1","그룹3","그룹2","그룹4","그룹5","그룹6"];
+const GROUP_LABEL = {
+  "그룹1": "그룹1 (간/심/비/폐/신/상한/사상)",
+  "그룹3": "그룹3 (침구)",
+  "그룹2": "그룹2 (보건)",
+  "그룹4": "그룹4 (외과/신경/안이비)",
+  "그룹5": "그룹5 (부인과/소아)",
+  "그룹6": "그룹6 (예방/생리/본초)",
+};
+// 과목별 최대점수 (합계 340)
+const SUBJECT_MAX = {
+  "간":16, "심":16, "비":16, "폐":16, "신":16, "상한":16, "사상":16,
+  "침구":48,
+  "보건":20,
+  "외과":16, "신경":16, "안이비":16,
+  "부인과":32, "소아":24,
+  "예방":24, "생리":16, "본초":16,
+};
 
 // 유틸
 const $ = (sel, root=document) => root.querySelector(sel);
@@ -58,33 +85,7 @@ function hideError(){
   err.textContent = "";
   err.classList.add("hidden");
 }
-// === 전시 정책: 그룹/순서/최대점수(총합 340) ===
-const GROUPS = {
-  "그룹1": ["간","심","비","폐","신","상한","사상"],
-  "그룹3": ["침구"],
-  "그룹2": ["보건"],
-  "그룹4": ["외과","신경","안이비"],
-  "그룹5": ["부인과","소아"],
-  "그룹6": ["예방","생리","본초"],
-};
-const GROUP_ORDER = ["그룹1","그룹3","그룹2","그룹4","그룹5","그룹6"];
-const GROUP_LABEL = {
-  "그룹1": "그룹1 (간/심/비/폐/신/상한/사상)",
-  "그룹3": "그룹3 (침구)",
-  "그룹2": "그룹2 (보건)",
-  "그룹4": "그룹4 (외과/신경/안이비)",
-  "그룹5": "그룹5 (부인과/소아)",
-  "그룹6": "그룹6 (예방/생리/본초)",
-};
-// 과목별 최대점수(사용자 요구: 16,16,16,16,16,16,16,48,20,16,16,16,32,24,24,16,16 → 총 340)
-const SUBJECT_MAX = {
-  "간":16, "심":16, "비":16, "폐":16, "신":16, "상한":16, "사상":16,
-  "침구":48,
-  "보건":20,
-  "외과":16, "신경":16, "안이비":16,
-  "부인과":32, "소아":24,
-  "예방":24, "생리":16, "본초":16,
-};
+
 // 최근 조회
 function saveRecent(id){
   try{
@@ -147,13 +148,12 @@ function pickKey(obj, candidates){
 }
 
 // 라운드 객체를 표준 형태로 정규화
-// 라운드 객체를 표준 형태로 정규화
 function normalizeRound(raw){
   if (!raw || typeof raw !== 'object') return null;
 
   // (A) 새 스키마: total_questions/total_correct + group_results
   if ('total_questions' in raw && 'total_correct' in raw && Array.isArray(raw.group_results)) {
-    // 과목 → 정답수 맵
+    // 과목 → 정답수
     const correctBySubject = {};
     raw.group_results.forEach(g => {
       const name = String(g.name || '').trim();
@@ -161,7 +161,7 @@ function normalizeRound(raw){
       correctBySubject[name] = Number(g.correct) || 0;
     });
 
-    // 고정 그룹/최대점수를 사용해 by_class 구성
+    // 고정 그룹/최대점수로 by_class 구성
     const by_class = {};
     let totalScore = 0, totalMax = 0;
     const failList = [];
@@ -198,7 +198,7 @@ function normalizeRound(raw){
       };
     });
 
-    // 합격 여부: 원본 값 있으면 그대로, 없으면 과락 없을 때 합격으로 간주
+    // 합격 여부: 원본 값 우선, 없으면 과락 없을 때 합격
     let pass = !!(raw.overall_pass ?? raw.round_pass ?? raw.pass);
     if (typeof (raw.overall_pass ?? raw.round_pass ?? raw.pass) === 'undefined') {
       pass = failList.length === 0;
@@ -235,28 +235,6 @@ function normalizeRound(raw){
   return { total, pass, fails, by_class: normByClass };
 }
 
-  // ★★★ 기존(by_class/byGroup 등) 스키마도 호환 유지 ★★★
-  const byClassKey = pickKey(raw, ["by_class","byClass","classes","sections"]);
-  const byClassRaw = (byClassKey && typeof raw[byClassKey] === 'object') ? raw[byClassKey] : {};
-
-  const normByClass = {};
-  Object.keys(byClassRaw).forEach(cls=>{
-    const sec = byClassRaw[cls] || {};
-    const groupsKey = pickKey(sec, ["groups","by_group","byGroup","sections","parts"]);
-    const groupsRaw = (groupsKey && typeof sec[groupsKey] === 'object') ? sec[groupsKey] : {};
-    const total = sec.total || sec.sum || { score: sec.score ?? 0, max: sec.max ?? 0 };
-    normByClass[cls] = { total, groups: groupsRaw };
-  });
-
-  const total = raw.total || raw.sum || { score: raw.score ?? 0, max: raw.max ?? 0 };
-  const passKey = pickKey(raw, ["pass","passed","is_pass","합격"]);
-  const pass = !!(passKey ? raw[passKey] : raw.pass);
-
-  const failsKey = pickKey(raw, ["fails","fail","fails_list","과락","과락목록"]);
-  const fails = Array.isArray(raw[failsKey]) ? raw[failsKey] : [];
-
-  return { total, pass, fails, by_class: normByClass };
-
 // 데이터 내부에서 1차/2차 라운드를 찾아 정규화
 function extractRounds(student){
   if (!student) return { r1:null, r2:null, _dbgKeys:[] };
@@ -273,11 +251,9 @@ function extractRounds(student){
     const rounds = roundsKey ? student[roundsKey] : undefined;
 
     if (Array.isArray(rounds)){
-      // 배열이면 0,1 순서 사용
       r1 = r1 || rounds[0];
       r2 = r2 || rounds[1];
     } else if (rounds && typeof rounds === "object"){
-      // 객체이면 안쪽에서 1차/2차 키 다시 탐색
       const r1KeyIn = pickKey(rounds, ["1차","1차시험","round1","r1","first","회차1","1"]);
       const r2KeyIn = pickKey(rounds, ["2차","2차시험","round2","r2","second","회차2","2"]);
       r1 = r1 || (r1KeyIn ? rounds[r1KeyIn] : undefined);
@@ -316,7 +292,7 @@ async function lookupStudent(e){
   // 라운드 추출/정규화
   const { r1, r2, _dbgKeys } = extractRounds(data);
 
-  // 디버그 모드(?debug=1)에서 실제 키 보여주기
+  // 디버그 모드(?debug=1)
   const q = new URLSearchParams(location.search);
   if (q.get("debug") === "1"){
     console.log("[DEBUG] keys in SCORE_DATA[%s]:", id, _dbgKeys);
@@ -372,10 +348,11 @@ function renderRound(sel, title, round){
   const pass = !!round.pass;
   const fails = Array.isArray(round.fails) ? round.fails : [];
 
-  // 교시 정렬: 1교시~4교시 (데이터에 있는 것만)
+  // 교시/그룹 섹션 순서: 우리가 정의한 GROUP_ORDER 우선
   const byClass = round.by_class || {};
-  const classOrder = ["1교시","2교시","3교시","4교시"].filter(k=>k in byClass);
-  const dynamicOrder = classOrder.length ? classOrder : Object.keys(byClass);
+  const dynamicOrder = GROUP_ORDER.filter(k => k in byClass);
+  const fallbackOrder = Object.keys(byClass).filter(k => !dynamicOrder.includes(k));
+  const sectionOrder = [...dynamicOrder, ...fallbackOrder];
 
   let html = `
     <div class="round">
@@ -400,8 +377,8 @@ function renderRound(sel, title, round){
     </div>`;
   }
 
-  // 교시별 표
-  (dynamicOrder || []).forEach(cls=>{
+  // 섹션(그룹)별 표
+  sectionOrder.forEach(cls=>{
     const s = byClass[cls] || {};
     const groups = s.groups || {};
     const keys = Object.keys(groups);
@@ -412,10 +389,10 @@ function renderRound(sel, title, round){
     html += `
       <div class="card" style="margin-top:12px">
         <div class="flex" style="justify-content:space-between;">
-          <div class="name" style="font-weight:800">${cls}</div>
+          <div class="name" style="font-weight:800">${GROUP_LABEL[cls] || cls}</div>
           <div class="small">소계 ${fmt(subtotal.score)}/${fmt(subtotal.max)} · 정답률 ${rr}%</div>
         </div>
-        <div class="group-list">
+        <div class="group-list" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px,1fr)); gap:8px; margin-top:8px;">
     `;
 
     keys.forEach(k=>{
@@ -424,7 +401,7 @@ function renderRound(sel, title, round){
       const minReq = Math.round(((gi.max || 0) * 0.4) * 1000) / 1000;
       const failed = (Number(gi.score) || 0) < (minReq || 0);
       html += `
-        <div class="group">
+        <div class="group" style="border-top:none; padding:10px; background:#1a2240; border-radius:10px; border:1px solid #2a355d">
           <div class="name">${k}</div>
           <div class="flex" style="gap:12px">
             <span class="small">${fmt(gi.score)}/${fmt(gi.max)} (${pr}%)</span>
@@ -450,8 +427,8 @@ function initApp(){
     });
     $sid.setAttribute('enterkeyhint', 'done');
   }
-   console.log("[SCORE] loaded?", typeof window.SCORE_DATA, "size:", window.SCORE_DATA && Object.keys(window.SCORE_DATA).length);
-console.log("[SCORE] sample(015001):", getStudentById("015001"));
+  console.log("[SCORE] loaded?", typeof window.SCORE_DATA, "size:", window.SCORE_DATA && Object.keys(window.SCORE_DATA).length);
+  console.log("[SCORE] sample(015001):", getStudentById("015001"));
 
   // 폼 submit 핸들러
   const form = $("#lookup-form");
@@ -460,21 +437,21 @@ console.log("[SCORE] sample(015001):", getStudentById("015001"));
   // 최근 보기 표시
   scanHistory();
 
-// ?sid=015001 있으면 자동 렌더 (인덱스/정규화 모두 적용)
-const p = new URLSearchParams(location.search);
-const sid = p.get("sid") || p.get("id");
-if (sid && /^\d{6}$/.test(sid)) {
-  const data = getStudentById(sid);
-  if (data) {
-    const { r1, r2 } = extractRounds(data);
-    if ($sid) $sid.value = sid;
-    renderResult(sid, r1, r2);
-    $("#view-home")?.classList.add("hidden");
-    $("#view-result")?.classList.remove("hidden");
-  } else {
-    showError("해당 학수번호의 성적 데이터를 찾을 수 없습니다. SCORE_DATA를 확인하세요.");
+  // ?sid=015001 있으면 자동 렌더 (인덱스/정규화 모두 적용)
+  const p = new URLSearchParams(location.search);
+  const sid = p.get("sid") || p.get("id");
+  if (sid && /^\d{6}$/.test(sid)) {
+    const data = getStudentById(sid);
+    if (data) {
+      const { r1, r2 } = extractRounds(data);
+      if ($sid) $sid.value = sid;
+      renderResult(sid, r1, r2);
+      $("#view-home")?.classList.add("hidden");
+      $("#view-result")?.classList.remove("hidden");
+    } else {
+      showError("해당 학수번호의 성적 데이터를 찾을 수 없습니다. SCORE_DATA를 확인하세요.");
+    }
   }
-}
 }
 
 // DOM 준비 후 초기화
