@@ -337,8 +337,11 @@ function renderRound(sel, title, round){
 
   const totalScore = ALL_SUBJECTS.reduce((a,n)=>a+(subjects[n]?.score||0), 0);
   const totalMax   = ALL_SUBJECTS.reduce((a,n)=>a+(subjects[n]?.max||0),   0); // = 340
-  const overallRate = pct(totalScore, totalMax);
-  const overallPass = totalScore >= totalMax * 0.4; // 40%
+ const overallRate = pct(totalScore, totalMax);
+ // 집계 결과에 pass가 이미 들어있으면 그걸 신뢰 (60%+그룹과락 없음 기준)
+ const overallPass = (round && typeof round.pass === "boolean")
+   ? round.pass
+   : (totalScore >= totalMax * 0.6); // 백업 계산도 60%로
 
   let html = `
     <div class="round">
@@ -347,7 +350,10 @@ function renderRound(sel, title, round){
         <div class="kpi"><div class="num">${fmt(totalScore)}</div><div class="sub">/ ${fmt(totalMax)}</div></div>
       </div>
       <div class="progress" style="margin:8px 0 2px 0"><div style="width:${overallRate}%"></div></div>
-      <div class="small">정답률 ${overallRate}% ${overallPass? pill("합격","ok"):pill("불합격","red")}</div>
+           <div class="small">
+       정답률 ${overallRate}% (컷 60%)
+       ${overallPass? pill("합격","ok"):pill("불합격","red")}
+     </div>
     </div>
     <div class="group-grid" style="margin-top:12px">
   `;
