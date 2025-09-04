@@ -121,24 +121,66 @@ function pickKey(obj, candidates){
 }
 
 // 라운드 객체를 표준 형태로 정규화
+// 라운드 객체를 표준 형태로 정규화
 function normalizeRound(raw){
   if (!raw || typeof raw !== 'object') return null;
 
-  // by_class / byClass / sections / classes 같은 변형키까지 폭넓게 감지
-  const byClassKey = pickKey(raw, ["by_class", "byClass", "classes", "sections"]);
+  // ★★★ 새 스키마(total_questions/total_correct/group_results) 지원 ★★★
+  if ('total_questions' in raw && 'total_correct' in raw) {
+    const total = {
+      score: Number(raw.total_correct) || 0,
+      max:   Number(raw.total_questions) || 0
+    };
+    // overall_pass / round_pass / pass 중 있는 값 사용
+    const pass = !!(raw.overall_pass ?? raw.round_pass ?? raw.pass);
+
+    // group_results 배열 → 과목별 점수/과락 변환
+    const groups = {};
+    (raw.group_results || []).forEach(g => {
+      groups[g.name] = {
+        score: Number(g.correct) || 0,
+        max:   Number(g.total) || 0
+      };
+    });
+
+    // 과락 목록
+    const fails = (raw.group_results || [])
+      .filter(g => g.is_fail)
+      .map(g => ({
+        class: "종합",
+        group: g.name,
+        score: Number(g.correct) || 0,
+        max:   Number(g.total) || 0,
+        min:   Number(g.cutoff) || 0
+      }));
+
+    // by_class가 없으므로 "종합" 섹션 하나로 묶어 렌더
+    return {
+      total,
+      pass,
+      fails,
+      by_class: {
+        "종합": {
+          total,
+          groups
+        }
+      }
+    };
+  }
+
+  // ★★★ 기존(by_class/byGroup 등) 스키마도 호환 유지 ★★★
+  const byClassKey = pickKey(raw, ["by_class","byClass","classes","sections"]);
   const byClassRaw = (byClassKey && typeof raw[byClassKey] === 'object') ? raw[byClassKey] : {};
 
-  // 교시 섹션 표준화
   const normByClass = {};
   Object.keys(byClassRaw).forEach(cls=>{
     const sec = byClassRaw[cls] || {};
     const groupsKey = pickKey(sec, ["groups","by_group","byGroup","sections","parts"]);
-    const groups = (groupsKey && typeof sec[groupsKey] === 'object') ? sec[groupsKey] : {};
+    const groupsRaw = (groupsKey && typeof sec[groupsKey] === 'object') ? sec[groupsKey] : {};
     const total = sec.total || sec.sum || { score: sec.score ?? 0, max: sec.max ?? 0 };
-    normByClass[cls] = { total, groups };
+    normByClass[cls] = { total, groups: groupsRaw };
   });
 
-  // total / pass / fails 폭넓게 감지
   const total = raw.total || raw.sum || { score: raw.score ?? 0, max: raw.max ?? 0 };
   const passKey = pickKey(raw, ["pass","passed","is_pass","합격"]);
   const pass = !!(passKey ? raw[passKey] : raw.pass);
@@ -148,7 +190,6 @@ function normalizeRound(raw){
 
   return { total, pass, fails, by_class: normByClass };
 }
-
 // 데이터 내부에서 1차/2차 라운드를 찾아 정규화
 function extractRounds(student){
   if (!student) return { r1:null, r2:null, _dbgKeys:[] };
