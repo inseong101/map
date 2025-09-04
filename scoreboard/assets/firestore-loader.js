@@ -51,7 +51,7 @@
     });
 
     Object.entries(wrongByClass).forEach(([klass, data])=>{
-      + const wrongList = (Array.isArray(data.wrong) ? d.wrong : [])
+       const wrongList = (Array.isArray(data.wrong) ? d.wrong : [])
    .map(v => Number(v))
    .filter(v => Number.isFinite(v));
       const map = CLASS_MAP[klass] || [];
