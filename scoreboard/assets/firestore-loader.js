@@ -1,7 +1,6 @@
 // assets/firestore-loader.js
 (() => {
   // 0) script.js 가 미리 노출한 전역 사용
-  const SUBJECT_TOTALS = window.__SUBJECT_TOTALS; // {간:16, ...}
   const GROUPS_DEF     = window.__GROUPS_DEF;     // [{id:"그룹1", subjects:[...]}, ...]
 
   // 1) 교시별 문항→과목 매핑 (★ 1~3교시는 실제 규칙으로 꼭 바꾸세요)
@@ -57,36 +56,36 @@
 
   // 3) wrongQuestions → 과목 득점 복원
   function buildSubjectScoresFromWrong(wrongByClass){
-    const subjectCorrect = {};
-    const subjectMax = {};
+  const SUBJECT_TOTALS = window.__SUBJECT_TOTALS || {};  // ★ 실시간
+  const subjectCorrect = {};
+  const subjectMax = {};
 
-    Object.keys(SUBJECT_TOTALS).forEach(s=>{
-      subjectCorrect[s] = 0;
-      subjectMax[s] = SUBJECT_TOTALS[s];
+  Object.keys(SUBJECT_TOTALS).forEach(s=>{
+    subjectCorrect[s] = 0;
+    subjectMax[s] = SUBJECT_TOTALS[s];
+  });
+
+  Object.entries(wrongByClass || {}).forEach(([klass, data])=>{
+    const wrongList = (Array.isArray(data?.wrong) ? data.wrong : [])
+      .map(v => Number(v))
+      .filter(v => Number.isFinite(v));
+
+    const map = CLASS_MAP[klass] || [];
+    map.forEach(({range:[st,en], subject})=>{
+      const blockMax = en - st + 1;
+      const wrongInBlock = wrongList.filter(q => q >= st && q <= en).length;
+      const got = Math.max(0, blockMax - wrongInBlock);
+      if (!(subject in subjectCorrect)) subjectCorrect[subject] = 0;
+      subjectCorrect[subject] += got;
     });
+  });
 
-    Object.entries(wrongByClass).forEach(([klass, data])=>{
-      const wrongList = (Array.isArray(data?.wrong) ? data.wrong : [])
-        .map(v => Number(v))
-        .filter(v => Number.isFinite(v));
+  Object.keys(subjectMax).forEach(s=>{
+    if (subjectCorrect[s] > subjectMax[s]) subjectCorrect[s] = subjectMax[s];
+  });
 
-      const map = CLASS_MAP[klass] || [];
-      map.forEach(({range:[st,en], subject})=>{
-        const blockMax = en - st + 1;
-        const wrongInBlock = wrongList.filter(q => q >= st && q <= en).length;
-        const got = Math.max(0, blockMax - wrongInBlock);
-        if (!(subject in subjectCorrect)) subjectCorrect[subject] = 0;
-        subjectCorrect[subject] += got;
-      });
-    });
-
-    // 방어
-    Object.keys(subjectMax).forEach(s=>{
-      if (subjectCorrect[s] > subjectMax[s]) subjectCorrect[s] = subjectMax[s];
-    });
-
-    return { subjectCorrect, subjectMax };
-  }
+  return { subjectCorrect, subjectMax };
+}
 
   // 4) 과목 → 그룹 집계
   function aggregateToGroupResults(subjectCorrect, subjectMax){
@@ -234,38 +233,32 @@
       }
     }
 
-    // === 집계 ===
-    const { subjectCorrect, subjectMax } = buildSubjectScoresFromWrong(wrongByClass);
-    const total_questions = Object.values(SUBJECT_TOTALS).reduce((a,b)=>a+b,0);
-    const total_correct   = Object.keys(SUBJECT_TOTALS).reduce((a,s)=>a+(subjectCorrect[s]||0),0);
-      const group_results   = aggregateToGroupResults(subjectCorrect, subjectMax);
+// === 집계 ===
+const SUBJECT_TOTALS = window.__SUBJECT_TOTALS || {};   // ★ 여기 추가
+const { subjectCorrect, subjectMax } = buildSubjectScoresFromWrong(wrongByClass || {});
+const total_questions = Object.values(SUBJECT_TOTALS).reduce((a,b)=>a+b,0);
+const total_correct   = Object.keys(SUBJECT_TOTALS).reduce((a,s)=>a+(subjectCorrect[s]||0),0);
+const group_results   = aggregateToGroupResults(subjectCorrect, subjectMax);
 
-  // ✅ 과목별 결과 배열 (UI가 과목 점수를 표시할 때 이것을 사용)
-  const subject_results = Object.keys(SUBJECT_TOTALS).map(name => ({
-    name,
-    correct: subjectCorrect[name] || 0,
-    total:   SUBJECT_TOTALS[name] || 0,
-  }));
+// ✅ 과목별 결과 배열
+const subject_results = Object.keys(SUBJECT_TOTALS).map(name => ({
+  name,
+  correct: subjectCorrect[name] || 0,
+  total:   SUBJECT_TOTALS[name] || 0,
+}));
 
+const overall_cutoff = Math.ceil(total_questions * 0.6);
+const overall_pass   = total_correct >= overall_cutoff && !group_results.some(g=>g.is_fail);
 
-    const overall_cutoff = Math.ceil(total_questions * 0.6);
-    const overall_pass   = total_correct >= overall_cutoff && !group_results.some(g=>g.is_fail);
-
-    if (debug){
-      console.log(`[WRONG] round='${roundLabel}' total_correct=${total_correct}/${total_questions}`);
-      console.log(`[WRONG] group_results=`, group_results);
-    }
-
-    return {
-      total_questions,
-      total_correct,
-      overall_cutoff,
-      overall_pass,
-      group_results,
-      subject_results,
-      round_pass: overall_pass
-    };
-  }
+return {
+  total_questions,
+  total_correct,
+  overall_cutoff,
+  overall_pass,
+  group_results,
+  subject_results,
+  round_pass: overall_pass
+};
 
    // 8) scores 우선, 없으면 wrongQuestions 계산
   async function fetchRoundFromFirestore(sid, roundLabel){
