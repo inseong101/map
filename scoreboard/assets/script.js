@@ -98,7 +98,7 @@ function hideError(){
     box.appendChild(btn);
   });
   box.classList.remove("hidden");
-}
+
 
 /* --------------------------
    3) 키 호환/정규화
