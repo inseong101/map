@@ -243,7 +243,7 @@ async function lookupStudent(e){
     $("#view-result")?.classList.remove("hidden");
   } catch (err){
     console.error(err);
-    showError("Firestore에서 점수를 불러오지 못했습니다.");
+    showError("존재하지 않는 학수번호거나 미응시자입니다.");
   }
   return false;
 }
