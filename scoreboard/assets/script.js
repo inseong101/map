@@ -149,18 +149,6 @@ function normalizeRound(raw){
   return { total, pass, fails, by_class: normByClass };
 }
 
-  // total/pass/fails 기본값
-  const total = raw.total || { score: 0, max: 0 };
-  const pass = !!raw.pass;
-  const failsKey = pickKey(raw, ["fails","fail","fails_list"]);
-  const fails = raw[failsKey] || [];
-
-  return {
-    total, pass, fails,
-    by_class: normByClass
-  };
-}
-
 function extractRounds(student){
   if (!student || typeof student !== 'object') {
     return { r1:null, r2:null, _dbgKeys:[] };
