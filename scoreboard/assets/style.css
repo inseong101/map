@@ -273,3 +273,20 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
   width:2px; background:rgba(255,255,255,.3);
   transform:translateX(-1px);            /* 중앙 정렬 보정 */
 }
+/* ==== 진행도 바: 60% 컷 라인 & 상태별 색 ==== */
+.progress{ position:relative }               /* 라인 겹치기 위해 포지셔닝 */
+.progress .bar{ height:100% }                /* 막대 엘리먼트 명시 */
+.progress .cutline{
+  position:absolute; top:0; bottom:0;
+  left:60%; width:2px;                       /* 60% 위치에 세로 라인 */
+  background:rgba(255,255,255,.55);
+  pointer-events:none;
+}
+
+/* 라운드가 평락(불합격)이면 막대 색을 빨간 계열로 */
+.round.fail .progress > .bar{
+  background:linear-gradient(90deg, var(--bad), #ff6b6b);
+}
+
+/* 바 아래 캡션 여백 늘리기 */
+.progress-caption{ margin-top:10px; }
