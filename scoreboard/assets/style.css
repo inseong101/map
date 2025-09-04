@@ -363,3 +363,19 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
   align-items: center;
   justify-content: center;
 }
+:root { --control-h: 40px; }   /* 필요하면 36~42px 사이로 조절 */
+
+.input {
+  height: var(--control-h) !important;
+  padding: 0 12px !important;    /* 세로 패딩 제거 */
+  line-height: normal !important;
+  box-sizing: border-box;
+}
+
+.btn {
+  height: var(--control-h) !important;
+  padding: 0 12px !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
