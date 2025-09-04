@@ -289,4 +289,146 @@ function renderResult(id, round1, round2){
   $("#res-sid").textContent = id;
   const badges = $("#res-badges");
   badges.innerHTML = "";
-  if (round1){ badges.innerHTML += `<span
+  if (round1){ badges.innerHTML += `<span class="badge ${round1.pass?"pass":"fail"}">1차 ${round1.pass?"합격":"불합격"}</span>`; }
+  if (round2){ badges.innerHTML += `<span class="badge ${round2.pass?"pass":"fail"}">2차 ${round2.pass?"합격":"불합격"}</span>`; }
+
+  renderRound("#round-1", "1차", round1);
+  renderRound("#round-2", "2차", round2);
+}
+
+// 과목 점수 맵을 뽑는다(없으면 0점), max는 SUBJECT_MAX 강제
+function getSubjectScores(round){
+  const byClass = round?.by_class || {};
+  const subjMap = (byClass["종합"] && byClass["종합"].groups) ? byClass["종합"].groups : {};
+  const result = {};
+  ALL_SUBJECTS.forEach(name=>{
+    const row = subjMap[name] || {};
+    result[name] = {
+      score: Number(row.score)||0,
+      max:   SUBJECT_MAX[name] // 고정표 우선
+    };
+  });
+  return result;
+}
+
+function chunk(arr, sizes){
+  const out = [];
+  let i=0;
+  for (const s of sizes){
+    out.push(arr.slice(i, i+s));
+    i += s;
+  }
+  if (i < arr.length) out.push(arr.slice(i));
+  return out;
+}
+
+function renderRound(sel, title, round){
+  const host = $(sel);
+  if(!host) return;
+
+  if(!round){
+    host.innerHTML = `<div class="small" style="opacity:.7">${title} 데이터가 없습니다.</div>`;
+    return;
+  }
+
+  const subjects = getSubjectScores(round);
+
+  const totalScore = ALL_SUBJECTS.reduce((a,n)=>a+(subjects[n]?.score||0), 0);
+  const totalMax   = ALL_SUBJECTS.reduce((a,n)=>a+(subjects[n]?.max||0),   0); // = 340
+  const overallRate = pct(totalScore, totalMax);
+  const overallPass = totalScore >= totalMax * 0.4; // 40%
+
+  let html = `
+    <div class="round">
+      <div class="flex" style="justify-content:space-between;">
+        <h2 style="margin:0">${title} 총점</h2>
+        <div class="kpi"><div class="num">${fmt(totalScore)}</div><div class="sub">/ ${fmt(totalMax)}</div></div>
+      </div>
+      <div class="progress" style="margin:8px 0 2px 0"><div style="width:${overallRate}%"></div></div>
+      <div class="small">정답률 ${overallRate}% ${overallPass? pill("합격","ok"):pill("불합격","red")}</div>
+    </div>
+    <div class="group-grid" style="margin-top:12px">
+  `;
+
+  GROUPS.forEach(g=>{
+    const gScore = g.subjects.reduce((a,n)=>a+(subjects[n]?.score||0), 0);
+    const gMax   = g.subjects.reduce((a,n)=>a+(subjects[n]?.max||0),   0);
+    const gRate  = pct(gScore, gMax);
+    const gPass  = gScore >= gMax * 0.4;  // 그룹 과락 (총점 40%)
+
+    let chipsHtml = "";
+    if (g.layoutChunks && g.layoutChunks.length){
+      const rows = chunk(g.subjects, g.layoutChunks);
+      rows.forEach(row=>{
+        chipsHtml += `<div class="subj-row">` + row.map(n=>{
+          const s = subjects[n]||{score:0,max:SUBJECT_MAX[n]||0};
+          return `<span class="subj-chip">${n} <span class="muted">${fmt(s.score)}/${fmt(s.max)}</span></span>`;
+        }).join("") + `</div>`;
+      });
+    } else {
+      chipsHtml = `<div class="subj-row">` + g.subjects.map(n=>{
+        const s = subjects[n]||{score:0,max:SUBJECT_MAX[n]||0};
+        return `<span class="subj-chip">${n} <span class="muted">${fmt(s.score)}/${fmt(s.max)}</span></span>`;
+      }).join("") + `</div>`;
+    }
+
+    html += `
+      <div class="group-box ${gPass? "ok":"fail"} span-${g.span||12}">
+        <div class="group-head">
+          <div class="name" style="font-weight:800">${g.label}</div>
+          <div class="small">소계 ${fmt(gScore)}/${fmt(gMax)} · 정답률 ${gRate}% ${gPass? pill("통과","ok"):pill("과락","red")}</div>
+        </div>
+        ${chipsHtml}
+      </div>
+    `;
+  });
+
+  html += `</div>`;
+  host.innerHTML = html;
+}
+
+/* --------------------------
+   6) 초기화
+--------------------------- */
+function initApp(){
+  const $sid = $("#sid");
+  if ($sid) {
+    $sid.addEventListener('input', () => {
+      $sid.value = ($sid.value || '').replace(/\D/g, '').slice(0, 6);
+    });
+    $sid.setAttribute('enterkeyhint', 'done');
+  }
+
+  const form = $("#lookup-form");
+  if (form) form.addEventListener('submit', lookupStudent);
+
+  scanHistory();
+
+  const p = new URLSearchParams(location.search);
+  const sid = p.get("sid") || p.get("id");
+  if (sid && /^\d{6}$/.test(sid)) {
+    const data = getStudentById(sid);
+    if (data) {
+      if ($sid) $sid.value = sid;
+      const { r1, r2 } = extractRounds(data);
+      renderResult(sid, r1, r2);
+      $("#view-home")?.classList.add("hidden");
+      $("#view-result")?.classList.remove("hidden");
+    } else {
+      showError("해당 학수번호의 성적 데이터를 찾을 수 없습니다. SCORE_DATA를 확인하세요.");
+    }
+  }
+}
+
+document.addEventListener('DOMContentLoaded', initApp);
+
+// 전역 노출
+window.goHome = goHome;
+window.scanHistory = scanHistory;
+window.initApp = initApp;
+window.normalizeRound = normalizeRound;
+window.renderResult   = renderResult;
+
+// Firestore 로더가 참조할 전역(중복 선언 금지)
+window.__SUBJECT_TOTALS = SUBJECT_MAX;
+window.__GROUPS_DEF     = GROUPS;
