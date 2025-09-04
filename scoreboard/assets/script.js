@@ -10,6 +10,24 @@
 // === 데이터 로드 확인 (없으면 빈 객체) ===
 window.SCORE_DATA = window.SCORE_DATA || {};
 
+// ▼▼▼ 추가: 학수번호(0패딩) 인덱스 맵 생성 ▼▼▼
+(function buildIndex(){
+  const idx = {};
+  for (const rawKey of Object.keys(window.SCORE_DATA)) {
+    const norm = String(rawKey).replace(/\D/g,'');   // 숫자만
+    const six  = norm.padStart(6, '0');              // 6자리 0 패딩
+    idx[six] = window.SCORE_DATA[rawKey];
+  }
+  window.__SCORE_INDEX__ = idx;
+})();
+
+// 학수번호로 안전하게 조회
+function getStudentById(id6){
+  if (window.__SCORE_INDEX__ && window.__SCORE_INDEX__[id6]) return window.__SCORE_INDEX__[id6];
+  if (window.SCORE_DATA && window.SCORE_DATA[id6]) return window.SCORE_DATA[id6];
+  return null;
+}
+
 // 유틸
 const $ = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
