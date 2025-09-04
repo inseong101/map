@@ -1,12 +1,18 @@
 // assets/firebase-init.js
-// Firebase SDK (Compat)를 index.html에서 먼저 로드해야 합니다.
+import { initializeApp, getApps, getApp }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+// ↓ 너의 Firebase 설정으로 교체
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  apiKey: "...",
+  authDomain: "...",
   projectId: "jeonjolhyup",
   storageBucket: "jeonjolhyup.firebasestorage.app",
-  // 필요하면 나머지 키도 그대로 추가
+  appId: "...",
 };
 
-firebase.initializeApp(firebaseConfig);
-window.__db = firebase.firestore(); // 전역 Firestore 핸들
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+window.__app = app;
+window.__db  = getFirestore(app);
