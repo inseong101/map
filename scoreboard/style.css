@@ -122,3 +122,53 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
   .card{box-shadow:none; border-color:#ddd; background:#fff}
   .badge{border-color:#999}
 }
+
+
+
+/* 폼 인풋 */
+.input{
+  flex:1 1 220px;
+  min-width:220px;
+  background:var(--surface-2);
+  color:var(--ink);
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:10px 12px;
+  font-weight:700;
+  letter-spacing:.2px;
+  outline:none;
+}
+.input:focus{border-color:var(--primary)}
+
+/* Ghost 버튼 */
+.btn.ghost{
+  background:transparent;
+  border-color:var(--line);
+  opacity:.9;
+}
+.btn.ghost:hover{background:#0f1526}
+
+/* 알림/에러 */
+.alert{
+  margin-top:10px;
+  padding:10px 12px;
+  border-radius:10px;
+  border:1px solid rgba(239,68,68,.55);
+  background:rgba(239,68,68,.14);
+  color:#ffd8d8;
+  font-weight:700;
+}
+.hidden{display:none}
+
+/* 최근 chips */
+.chips{display:flex; gap:8px; flex-wrap:wrap; margin-top:12px}
+.chip{
+  background:rgba(126,162,255,.12);
+  border:1px solid rgba(126,162,255,.4);
+  color:var(--ink);
+  padding:6px 10px;
+  border-radius:999px;
+  font-weight:800;
+  cursor:pointer;
+}
+.chip:hover{background:rgba(126,162,255,.2)}
