@@ -324,3 +324,35 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
   font-weight: 600;
 }
 
+/* === 폼 입력/버튼 높이 통일 === */
+.input {
+  height: 40px;           /* ← 고정 높이 */
+  padding: 0 12px;        /* ← 세로 패딩은 0 */
+  font-size: 15px;        /* iOS 확대 방지에 16px 이상 권장, 15~16px 중 택1 */
+  line-height: 40px;      /* 수직 중앙 정렬 느낌 */
+}
+
+/* 버튼도 같은 높이로 */
+.btn {
+  height: 40px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 폼 간격 살짝 줄이기 (세로로 너무 커 보이지 않게) */
+.flex-col { gap: 10px; }
+.form-row { gap: 6px; margin-bottom: 10px; }
+
+/* 좁은 카드 폭 유지 (이미 있으니 혹시 몰라 재확인) */
+.card.narrow { max-width: 420px; margin: 0 auto; }
+
+/* 수평 스택 유틸 (inline style 대신 class 사용용) */
+.hstack { display: flex; gap: 8px; align-items: center; }
+
+/* 진행도 캡션 여백 조금 더 */
+.progress-caption{ margin-top: 12px; }
+
+/* 컷라인 규칙은 .cutline만 사용하도록 (중복 제거용 가드) */
+.progress .cutoff { display:none !important; }
