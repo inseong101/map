@@ -232,34 +232,24 @@ function goHome(){
   $("#sid")?.focus();
 }
 
+// script.js
 async function lookupStudent(e){
   e.preventDefault();
+
   const input = $("#sid");
-  const id = (input?.value || "").trim();
+  const id = (input?.value || "").replace(/\D/g, "").slice(0, 6);
   hideError();
 
-  if(!/^\d{6}$/.test(id)){
+  // 형식만 체크 (숫자 6자리)
+  if (id.length !== 6){
     showError("학수번호는 숫자 6자리여야 합니다.");
-    input?.focus(); return false;
-  }
-
-  const data = getStudentById(id);
-  if(!data){
-    showError("해당 학수번호의 성적 데이터를 찾을 수 없습니다. SCORE_DATA를 확인하세요.");
+    input?.focus();
     return false;
   }
 
-  const { r1, r2, _dbgKeys } = extractRounds(data);
-  const q = new URLSearchParams(location.search);
-  if (q.get("debug")==="1"){
-    console.log("[DEBUG] keys in SCORE_DATA[%s]:", id, _dbgKeys);
-    console.log("[DEBUG] R1:", r1); console.log("[DEBUG] R2:", r2);
-  }
-
-  renderResult(id, r1, r2);
-  saveRecent(id);
-  $("#view-home")?.classList.add("hidden");
-  $("#view-result")?.classList.remove("hidden");
+  // 🔒 여기서부턴 아무 것도 하지 않음.
+  // Firestore 쪽 제출 핸들러(assets/firestore-loader.js)가
+  // 같은 폼 submit 이벤트를 받아서 실제 조회/계산/렌더를 진행합니다.
   return false;
 }
 
