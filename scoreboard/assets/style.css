@@ -346,3 +346,20 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 
 /* (선택) 힌트 문구는 별도 여백으로 처리 (줄 자체 높이에 영향 X) */
 .field-hint { margin-top: 6px; }
+/* === 모든 입력란 높이 강제 통일 === */
+.input {
+  height: 38px;          /* 원하는 높이 (전화번호 입력칸과 동일 값으로) */
+  padding: 0 10px;       /* 세로 패딩 제거 */
+  line-height: 38px;     /* 텍스트 수직 가운데 */
+  font-size: 15px;       /* 글씨 크기 유지 */
+  box-sizing: border-box;
+}
+
+/* 버튼도 똑같은 높이 */
+.btn {
+  height: 38px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
