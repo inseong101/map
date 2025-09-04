@@ -84,22 +84,6 @@ function hideError(){
 }
 
 
-  list.forEach(id=>{
-    const btn = document.createElement("button");
-    btn.className = "chip";
-    btn.type = "button";
-    btn.textContent = id;
-    btn.onclick = ()=>{
-      const sid = $("#sid");
-      if (sid) sid.value = id;
-      const form = $("#lookup-form");
-      if (form) form.dispatchEvent(new Event("submit", {cancelable:true}));
-    };
-    box.appendChild(btn);
-  });
-  box.classList.remove("hidden");
-
-
 /* --------------------------
    3) 키 호환/정규화
 --------------------------- */
