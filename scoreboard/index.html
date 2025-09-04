@@ -21,21 +21,24 @@
       <div class="card">
         <h2 style="margin-top:0">본인 점수 보기</h2>
 
-        <!-- 브라우저 기본 검증 끔 -->
+        <!-- 브라우저 기본 검증 끔 (자바스크립트에서 검증) -->
         <form id="lookup-form" class="flex" novalidate onsubmit="return lookupStudent(event)">
           <label for="sid" class="small" style="min-width:80px">학수번호</label>
+
+          <!-- 숫자 앞 0 보존 / 모바일 숫자 키패드 -->
           <input
-  id="sid"
-  name="sid"
-  class="input"
-  type="text"                 <!-- 숫자 앞 0 보존 -->
-  inputmode="numeric"         <!-- 모바일 숫자 키패드 -->
-  autocomplete="one-time-code"
-  placeholder="예) 015001"
-  maxlength="6"
-  required
-  autofocus
-/>
+            id="sid"
+            name="sid"
+            class="input"
+            type="text"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            placeholder="예) 015001"
+            maxlength="6"
+            required
+            autofocus
+          />
+
           <button class="btn" type="submit" formnovalidate>성적 확인</button>
           <button class="btn ghost" type="button" onclick="scanHistory()">최근 기록</button>
         </form>
