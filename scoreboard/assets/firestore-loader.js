@@ -49,7 +49,9 @@
     });
 
     Object.entries(wrongByClass).forEach(([klass, data])=>{
-      const wrongList = Array.isArray(data?.wrong) ? data.wrong : [];
+      + const wrongList = (Array.isArray(d.wrong) ? d.wrong : [])
++   .map(v => Number(v))
++   .filter(v => Number.isFinite(v));
       const map = CLASS_MAP[klass] || [];
 
       map.forEach(({range:[st,en], subject})=>{
@@ -93,13 +95,25 @@
     const klassSnaps = await getDocs(klassCol);
 
     const wrongByClass = {};
-    klassSnaps.forEach(docSnap=>{
-      const d = docSnap.data() || {};
-      wrongByClass[docSnap.id] = {
-        wrong: Array.isArray(d.wrong) ? d.wrong : [],
-        total: Number(d.total) || Number(d.totalQuestions) || 0
-      };
-    });
+    - klassSnaps.forEach(docSnap=>{
+-   const d = docSnap.data() || {};
+-   const wrong = Array.isArray(d.wrong) ? d.wrong : [];
+-   const total = Number(d.total) || Number(d.totalQuestions) || 0;
+-   wrongByClass[docSnap.id] = { wrong, total };
+- });
++ klassSnaps.forEach(docSnap=>{
++   const d = docSnap.data() || {};
++   const rawId = String(docSnap.id || "");
++   // 앞자리 숫자 뽑아서 “N교시”로 통일 (예: "1", "1 교시", "교시1", "1교시 " 모두 OK)
++   const m = rawId.match(/(\d)/);
++   const klassId = m ? `${m[1]}교시` : rawId; 
++
++   const wrong = (Array.isArray(d.wrong) ? d.wrong : [])
++     .map(v => Number(v))
++     .filter(v => Number.isFinite(v));
++   const total = Number(d.total) || Number(d.totalQuestions) || 0;
++   wrongByClass[klassId] = { wrong, total };
++ });
 
     const { subjectCorrect, subjectMax } = buildSubjectScoresFromWrong(wrongByClass);
 
