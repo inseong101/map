@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>사상의학 인터랙티브 마인드맵</title>
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: -apple-system, system-ui, "Noto Sans KR", Arial, sans-serif;
+      background: #fafafa;
+    }
+    .topbar {
+      position: sticky; top: 0; z-index: 10;
+      display:flex; gap:12px; align-items:center; justify-content:space-between;
+      padding:10px 14px; border-bottom:1px solid rgba(0,0,0,.08); background:#fff;
+    }
+    .topbar a { text-decoration:none; color:#0a66c2; font-weight:700; }
+    .title { font-weight:800; color:#111; }
+    #container { height: calc(100vh - 48px); }
+    /* markmap이 svg로 그려서 이거면 충분 */
+    svg { width: 100%; height: 100%; }
+  </style>
+
+  <!-- ✅ markmap 오토로더 -->
+  <script src="https://cdn.jsdelivr.net/npm/markmap-autoloader@0.16.0"></script>
+</head>
+<body>
+  <div class="topbar">
+    <a href="/">← 포털로 돌아가기</a>
+    <div class="title">사상의학 인터랙티브 마인드맵</div>
+    <div style="opacity:.6; font-size:13px">Obsidian .md → 마인드맵</div>
+  </div>
+
+  <div id="container">
+    <pre class="markmap" id="mm"></pre>
+  </div>
+
+  <script>
+    // ?file=sasang.md 같은 식으로도 쓸 수 있고,
+    // 없으면 기본값 'sasang.md' 를 읽어온다.
+    const params = new URLSearchParams(location.search);
+    const file = params.get('file') || 'sasang.md';
+
+    (async () => {
+      try {
+        const res = await fetch(file, { cache: 'no-store' });
+        if (!res.ok) throw new Error('fetch failed ' + res.status);
+        const md = await res.text();
+
+        // markmap은 #~##### 헤딩 레벨을 자동으로 노드로 바꿔준다
+        document.getElementById('mm').textContent = md;
+        window.markmap.autoLoader.renderAll();
+      } catch (e) {
+        const pre = document.getElementById('mm');
+        pre.textContent = '# 불러오기 실패\n- 경로: ' + file + '\n- 에러: ' + e.message;
+        window.markmap?.autoLoader?.renderAll();
+      }
+    })();
+  </script>
+</body>
+</html>
