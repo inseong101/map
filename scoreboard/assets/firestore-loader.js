@@ -237,7 +237,15 @@
     const { subjectCorrect, subjectMax } = buildSubjectScoresFromWrong(wrongByClass);
     const total_questions = Object.values(SUBJECT_TOTALS).reduce((a,b)=>a+b,0);
     const total_correct   = Object.keys(SUBJECT_TOTALS).reduce((a,s)=>a+(subjectCorrect[s]||0),0);
-    const group_results   = aggregateToGroupResults(subjectCorrect, subjectMax);
+      const group_results   = aggregateToGroupResults(subjectCorrect, subjectMax);
+
+  // ✅ 과목별 결과 배열 (UI가 과목 점수를 표시할 때 이것을 사용)
+  const subject_results = Object.keys(SUBJECT_TOTALS).map(name => ({
+    name,
+    correct: subjectCorrect[name] || 0,
+    total:   SUBJECT_TOTALS[name] || 0,
+  }));
+
 
     const overall_cutoff = Math.ceil(total_questions * 0.6);
     const overall_pass   = total_correct >= overall_cutoff && !group_results.some(g=>g.is_fail);
@@ -253,6 +261,7 @@
       overall_cutoff,
       overall_pass,
       group_results,
+      subject_results,
       round_pass: overall_pass
     };
   }
