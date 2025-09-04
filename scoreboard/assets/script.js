@@ -195,7 +195,7 @@ async function lookupStudent(e){
   }
 
   // ID 존재 여부
-  const data = window.SCORE_DATA && window.SCORE_DATA[id];
+  const data = getStudentById(id);
   if(!data){
     showError("해당 학수번호의 성적 데이터를 찾을 수 없습니다. SCORE_DATA를 확인하세요.");
     return false;
