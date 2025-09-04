@@ -21,24 +21,14 @@
       <div class="card">
         <h2 style="margin-top:0">본인 점수 보기</h2>
 
-        <!-- 브라우저 기본 검증 끔 (자바스크립트에서 검증) -->
-        <form id="lookup-form" class="flex" novalidate
+        <!-- form 태그 닫힘 > 빠져있어서 추가 -->
+        <form id="lookup-form" class="flex" novalidate>
           <label for="sid" class="small" style="min-width:80px">학수번호</label>
-
-          <!-- 숫자 앞 0 보존 / 모바일 숫자 키패드 -->
           <input
-            id="sid"
-            name="sid"
-            class="input"
-            type="text"
-            inputmode="numeric"
-            autocomplete="one-time-code"
-            placeholder="예) 015001"
-            maxlength="6"
-            required
-            autofocus
+            id="sid" name="sid" class="input" type="text"
+            inputmode="numeric" autocomplete="one-time-code"
+            placeholder="예) 015001" maxlength="6" required autofocus
           />
-
           <button class="btn" type="submit" formnovalidate>성적 확인</button>
           <button class="btn ghost" type="button" onclick="scanHistory()">최근 기록</button>
         </form>
@@ -61,7 +51,7 @@
           <div class="small">학수번호</div>
           <div class="kpi"><div id="res-sid" class="num">-</div></div>
         </div>
-        <div class="flex" id="res-badges"><!-- 1차/2차 합불 뱃지 --></div>
+        <div class="flex" id="res-badges"></div>
       </div>
 
       <hr class="sep" />
@@ -80,25 +70,13 @@
   <div class="footer small">© 전졸협 • 성적 통지 사이트</div>
 </div>
 
-<!-- script.js (UI/그룹/정규화 제공) -->
+<!-- 1) Firebase 초기화: 단 1번만 (모듈) -->
 <script type="module" src="assets/firebase-init.js"></script>
+
+<!-- 2) UI/렌더 로직 -->
 <script src="assets/script.js"></script>
 
-<!-- Firebase 초기화 (모듈) -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getFirestore }  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-  const app = initializeApp({
-    apiKey: "...",
-    authDomain: "...",
-    projectId: "jeonjolhyup",
-  });
-  window.__db = getFirestore(app);
-  console.log('[init] window.__db ready?', !!window.__db);
-</script>
-
-<!-- Firestore에서 불러와서 화면 그리는 스크립트 -->
+<!-- 3) Firestore에서 wrongQuestions 불러와 계산 -->
 <script src="assets/firestore-loader.js"></script>
 
 <!-- (선택) 입력 즉시 숫자만/6자리 제한 -->
@@ -114,22 +92,5 @@
     if (window.initApp) initApp();
   });
 </script>
-
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-  // TODO: 네 프로젝트 값으로 교체
-  const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "jeonjolhyup.firebaseapp.com",
-    projectId: "jeonjolhyup",
-  };
-  window.__app = initializeApp(firebaseConfig);
-  window.__db  = getFirestore(window.__app);
-</script>
-<script src="assets/firestore-loader.js"></script>
-
-  
 </body>
 </html>
