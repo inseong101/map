@@ -323,7 +323,4 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 .form-row label {
   font-weight: 600;
 }
-/* 짧은 입력창 (학수번호 전용) */
-.input.short {
-  max-width: 160px;   /* 카드 전체 폭보다 훨씬 짧게 */
-}
+
