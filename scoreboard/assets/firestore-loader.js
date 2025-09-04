@@ -32,11 +32,13 @@
     ],
   };
 
-  // 2) 유틸
+
+
+// 2) 유틸
   const sum = (arr)=>arr.reduce((a,b)=>a+b,0);
   function normalizeKlassId(rawId){
     const s = String(rawId || "");
-    const m = s.match(/(\d)/);  // "1", "1 교시", "교시1", "1교시 " → "1교시"
+    const m = s.match(/(\d)/);
     return m ? `${m[1]}교시` : s;
   }
   function toNumberArray(arr){
@@ -56,36 +58,36 @@
 
   // 3) wrongQuestions → 과목 득점 복원
   function buildSubjectScoresFromWrong(wrongByClass){
-  const SUBJECT_TOTALS = window.__SUBJECT_TOTALS || {};  // ★ 실시간
-  const subjectCorrect = {};
-  const subjectMax = {};
+    const SUBJECT_TOTALS = window.__SUBJECT_TOTALS || {};
+    const subjectCorrect = {};
+    const subjectMax = {};
 
-  Object.keys(SUBJECT_TOTALS).forEach(s=>{
-    subjectCorrect[s] = 0;
-    subjectMax[s] = SUBJECT_TOTALS[s];
-  });
-
-  Object.entries(wrongByClass || {}).forEach(([klass, data])=>{
-    const wrongList = (Array.isArray(data?.wrong) ? data.wrong : [])
-      .map(v => Number(v))
-      .filter(v => Number.isFinite(v));
-
-    const map = CLASS_MAP[klass] || [];
-    map.forEach(({range:[st,en], subject})=>{
-      const blockMax = en - st + 1;
-      const wrongInBlock = wrongList.filter(q => q >= st && q <= en).length;
-      const got = Math.max(0, blockMax - wrongInBlock);
-      if (!(subject in subjectCorrect)) subjectCorrect[subject] = 0;
-      subjectCorrect[subject] += got;
+    Object.keys(SUBJECT_TOTALS).forEach(s=>{
+      subjectCorrect[s] = 0;
+      subjectMax[s] = SUBJECT_TOTALS[s];
     });
-  });
 
-  Object.keys(subjectMax).forEach(s=>{
-    if (subjectCorrect[s] > subjectMax[s]) subjectCorrect[s] = subjectMax[s];
-  });
+    Object.entries(wrongByClass || {}).forEach(([klass, data])=>{
+      const wrongList = (Array.isArray(data?.wrong) ? data.wrong : [])
+        .map(v => Number(v))
+        .filter(v => Number.isFinite(v));
 
-  return { subjectCorrect, subjectMax };
-}
+      const map = CLASS_MAP[klass] || [];
+      map.forEach(({range:[st,en], subject})=>{
+        const blockMax = en - st + 1;
+        const wrongInBlock = wrongList.filter(q => q >= st && q <= en).length;
+        const got = Math.max(0, blockMax - wrongInBlock);
+        if (!(subject in subjectCorrect)) subjectCorrect[subject] = 0;
+        subjectCorrect[subject] += got;
+      });
+    });
+
+    Object.keys(subjectMax).forEach(s=>{
+      if (subjectCorrect[s] > subjectMax[s]) subjectCorrect[s] = subjectMax[s];
+    });
+
+    return { subjectCorrect, subjectMax };
+  }
 
   // 4) 과목 → 그룹 집계
   function aggregateToGroupResults(subjectCorrect, subjectMax){
@@ -132,12 +134,11 @@
 
   // 7) wrongQuestions → round 스냅샷
   async function buildRoundFromWrong(sid, roundLabel){
-    const {
-      collection, getDocs
-    } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const { collection, getDocs } =
+      await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
 
     const debug = new URLSearchParams(location.search).get("debug") === "1";
-    const wrongByClass = {};   // { "1교시": {wrong:[], total:n}, ... }
+    const wrongByClass = {};
 
     // (0) scores_raw 먼저
     let hit = await readFromScoresRaw(sid, roundLabel, wrongByClass, debug);
@@ -221,7 +222,7 @@
       ];
 
       let foundAny = 0;
-      for (const label of roundCandidates){
+      for (const label of (ROUND_ALIASES[roundLabel] || [roundLabel])){
         for (const tryShape of shapes){
           const found = await tryShape(label);
           if (found > 0) { foundAny += found; break; }
@@ -229,38 +230,39 @@
         if (foundAny > 0) break;
       }
       if (debug && foundAny === 0){
-        console.warn(`[WRONG] '${roundLabel}' 어떤 구조에서도 문서가 없음. candidates=`, roundCandidates);
+        console.warn(`[WRONG] '${roundLabel}' 어떤 구조에서도 문서가 없음. candidates=`, (ROUND_ALIASES[roundLabel] || [roundLabel]));
       }
     }
 
-// === 집계 ===
-const SUBJECT_TOTALS = window.__SUBJECT_TOTALS || {};   // ★ 여기 추가
-const { subjectCorrect, subjectMax } = buildSubjectScoresFromWrong(wrongByClass || {});
-const total_questions = Object.values(SUBJECT_TOTALS).reduce((a,b)=>a+b,0);
-const total_correct   = Object.keys(SUBJECT_TOTALS).reduce((a,s)=>a+(subjectCorrect[s]||0),0);
-const group_results   = aggregateToGroupResults(subjectCorrect, subjectMax);
+    // === 집계 ===
+    const SUBJECT_TOTALS = window.__SUBJECT_TOTALS || {};
+    const { subjectCorrect, subjectMax } = buildSubjectScoresFromWrong(wrongByClass || {});
+    const total_questions = Object.values(SUBJECT_TOTALS).reduce((a,b)=>a+b,0);
+    const total_correct   = Object.keys(SUBJECT_TOTALS).reduce((a,s)=>a+(subjectCorrect[s]||0),0);
+    const group_results   = aggregateToGroupResults(subjectCorrect, subjectMax);
 
-// ✅ 과목별 결과 배열
-const subject_results = Object.keys(SUBJECT_TOTALS).map(name => ({
-  name,
-  correct: subjectCorrect[name] || 0,
-  total:   SUBJECT_TOTALS[name] || 0,
-}));
+    // 과목별 결과 배열
+    const subject_results = Object.keys(SUBJECT_TOTALS).map(name => ({
+      name,
+      correct: subjectCorrect[name] || 0,
+      total:   SUBJECT_TOTALS[name] || 0,
+    }));
 
-const overall_cutoff = Math.ceil(total_questions * 0.6);
-const overall_pass   = total_correct >= overall_cutoff && !group_results.some(g=>g.is_fail);
+    const overall_cutoff = Math.ceil(total_questions * 0.6);
+    const overall_pass   = total_correct >= overall_cutoff && !group_results.some(g=>g.is_fail);
 
-return {
-  total_questions,
-  total_correct,
-  overall_cutoff,
-  overall_pass,
-  group_results,
-  subject_results,
-  round_pass: overall_pass
-};
+    return {
+      total_questions,
+      total_correct,
+      overall_cutoff,
+      overall_pass,
+      group_results,
+      subject_results,
+      round_pass: overall_pass
+    };
+  } // ←←← ★★★ 여기 닫는 중괄호가 꼭 필요합니다! (이게 없어서 Unexpected token)
 
-   // 8) scores 우선, 없으면 wrongQuestions 계산
+  // 8) scores 우선, 없으면 wrongQuestions 계산
   async function fetchRoundFromFirestore(sid, roundLabel){
     const { getDoc, doc } =
       await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
@@ -278,7 +280,6 @@ return {
     return await buildRoundFromWrong(sid, roundLabel);
   }
 
-  // 9) script.js에서 호출할 수 있도록 전역으로 노출 (← 반드시 IIFE 내부!)
+  // 9) script.js에서 호출할 수 있도록 전역으로 노출 (IIFE 내부에서!)
   window.fetchRoundFromFirestore = fetchRoundFromFirestore;
-
 })();
