@@ -3,130 +3,35 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>사상의학 마인드맵</title>
+  <title>전졸협 포털</title>
+  <!-- 절대 <base> 쓰지 마! -->
   <style>
-    html, body { height: 100%; margin: 0; }
-    /* 페이지 스크롤을 막아 휠이 줌으로만 동작하도록 */
-    body { overflow: hidden; font-family: -apple-system, system-ui, "Noto Sans KR", Arial, sans-serif; }
-
-    /* 전체 화면 캔버스 */
-    .topbar {
-      position: fixed; z-index: 10; top: 0; left: 0; right: 0;
-      display: flex; align-items: center; gap: 8px;
-      padding: 8px 12px; background: rgba(255,255,255,.9);
-      border-bottom: 1px solid rgba(0,0,0,.08);
-      backdrop-filter: saturate(1.2) blur(6px);
-    }
-    .topbar a { text-decoration: none; color: #0a66c2; font-weight: 700; }
-    .spacer { flex: 1; }
-    .btn {
-      border: 1px solid rgba(0,0,0,.15); background:#fff; color:#111;
-      border-radius: 8px; padding: 6px 10px; cursor: pointer; font-weight: 700;
-    }
-    .btn:hover { background:#f5f7ff; }
-
-    /* SVG가 완전 풀스크린으로 */
-    #stage {
-      position: fixed; z-index: 1;
-      top: 44px; /* topbar 높이만큼 아래부터 */
-      left: 0; right: 0; bottom: 0;
-      background: #fff;
-    }
-    svg { width: 100%; height: 100%; display: block; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Noto Sans KR', Arial, sans-serif; margin:0; }
+    .wrap { max-width: 900px; margin: 64px auto; padding: 0 20px; }
+    h1 { margin: 0 0 20px; font-size: 28px; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+    a.card { display:block; padding:16px; border-radius:12px; border:1px solid rgba(0,0,0,.1); text-decoration:none; color:#111; background:#fff; }
+    a.card:hover { background:#f7f9ff; }
+    small { color:#666; }
   </style>
-
-  <!-- markmap (프로그램 방식 제어용) -->
-  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.16.0"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.16.0/dist/transform.min.js"></script>
 </head>
 <body>
-  <div class="topbar">
-    <a href="/">← 포털</a>
-    <div id="title"></div>
-    <div class="spacer"></div>
-    <button id="btnFit" class="btn" type="button">화면맞춤</button>
-    <button id="btnFull" class="btn" type="button">전체화면</button>
+  <div class="wrap">
+    <h1>전졸협 포털</h1>
+    <div class="cards">
+      <a class="card" href="/map/">
+        <b>전국한의과대학 지도</b><br><small>합숙장소/대학교 위치</small>
+      </a>
+      <a class="card disabled" href="#">
+        <b>본초방제학 마인드맵</b><br><small>Bonchospine</small>
+      </a>
+      <a class="card" href="/pedi/">
+        <b>소아과학 목차</b><br><small>부산대학교 졸업준비위원회</small>
+      </a>
+        <a class="card" href="/sasang/viewer.html">
+    <b>사상의학 마인드맵</b><br><small>부산대학교 졸업준비위원회</small>
+  </a>
+    </div>
   </div>
-
-  <div id="stage">
-    <svg id="svg"></svg>
-  </div>
-
-  <script>
-    // ====== 유틸: 파일 경로 결정 (기본 sasang.md, ?file=/sasang/xxx.md도 지원) ======
-    const params = new URLSearchParams(location.search);
-    let file = params.get('file') || 'sasang.md';
-    if (!file.includes('/')) file = 'sasang.md'; // 상대 경로 안전장치
-
-    const titleEl = document.getElementById('title');
-    titleEl.textContent = decodeURIComponent(file.split('/').pop());
-
-    // ====== 마크맵 생성 ======
-    const { Transformer } = window.markmap;
-    const { Markmap } = window.markmap;
-
-    const svgEl = document.getElementById('svg');
-    const stageEl = document.getElementById('stage');
-    let mm = null; // Markmap 인스턴스
-
-    // 페이지 스크롤 대신 줌만 되도록: stage 영역에서 wheel 기본동작 막기
-    stageEl.addEventListener('wheel', (e) => {
-      e.preventDefault();
-    }, { passive: false });
-
-    async function loadAndRender() {
-      try {
-        const res = await fetch(file, { cache: 'no-store' });
-        if (!res.ok) throw new Error('fetch failed ' + res.status);
-        const md = await res.text();
-
-        const transformer = new Transformer();
-        const { root } = transformer.transform(md);
-
-        // mm 옵션: autoFit 켬, 줌 범위 적당히
-        mm = Markmap.create(svgEl, {
-          autoFit: true,
-          fitRatio: 1,          // 화면에 꽉 차도록
-          duration: 300,        // 애니메이션
-          zoom: true,           // 마우스 휠로 확대/축소 허용
-          maxScale: 4,
-          minScale: 0.2,
-        }, root);
-
-        // 초기 한 번 더 fit (상단바 높이 적용돼서 다시 맞춤)
-        requestAnimationFrame(() => mm.fit());
-      } catch (e) {
-        const err = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        err.setAttribute('x', '16');
-        err.setAttribute('y', '32');
-        err.setAttribute('fill', '#b00');
-        err.textContent = '불러오기 실패: ' + e.message;
-        svgEl.appendChild(err);
-      }
-    }
-
-    // 버튼들
-    document.getElementById('btnFit').addEventListener('click', () => {
-      if (mm) mm.fit();
-    });
-
-    document.getElementById('btnFull').addEventListener('click', async () => {
-      if (!document.fullscreenElement) {
-        await document.documentElement.requestFullscreen();
-        // 전체화면에선 topbar가 겹치지 않게 stage top 조정
-        stageEl.style.top = '0';
-      } else {
-        await document.exitFullscreen();
-        stageEl.style.top = '44px';
-        if (mm) mm.fit();
-      }
-    });
-
-    // 창 크기 바뀌면 자동 리핏
-    window.addEventListener('resize', () => { if (mm) mm.fit(); });
-
-    loadAndRender();
-  </script>
 </body>
 </html>
