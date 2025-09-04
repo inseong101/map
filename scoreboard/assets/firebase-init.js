@@ -20,3 +20,8 @@ window.__db  = db;
 
 // ✅ 준비 완료 Promise (script.js에서 await 가능)
 window.__dbReady = Promise.resolve(true);
+
+
+
+// assets/firebase-init.js (type="module")
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10
