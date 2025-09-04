@@ -149,64 +149,40 @@ function normalizeRound(raw){
   return { total, pass, fails, by_class: normByClass };
 }
 
+// 데이터 내부에서 1차/2차 라운드를 찾아 정규화
 function extractRounds(student){
-  if (!student || typeof student !== 'object') {
-    return { r1:null, r2:null, _dbgKeys:[] };
-  }
+  if (!student) return { r1:null, r2:null, _dbgKeys:[] };
 
-  const keys = Object.keys(student);
-  const _dbgKeys = [...keys];
+  // 1) 최상위에서 직접 키 찾기
+  const r1KeyTop = pickKey(student, ["1차","1차시험","round1","r1","first","회차1","1"]);
+  const r2KeyTop = pickKey(student, ["2차","2차시험","round2","r2","second","회차2","2"]);
+  let r1 = r1KeyTop ? student[r1KeyTop] : null;
+  let r2 = r2KeyTop ? student[r2KeyTop] : null;
 
-  // 1) 먼저 친숙한 키 이름으로 시도
-  const r1Key = pickKey(student, ["1차","1차시험","round1","r1","first","회차1","1"]);
-  const r2Key = pickKey(student, ["2차","2차시험","round2","r2","second","회차2","2"]);
-  let r1 = r1Key ? student[r1Key] : null;
-  let r2 = r2Key ? student[r2Key] : null;
+  // 2) rounds 컨테이너 찾기 (배열/객체 모두 호환)
+  if (!r1 || !r2){
+    const roundsKey = pickKey(student, ["rounds","회차","round_list"]);
+    const rounds = roundsKey ? student[roundsKey] : undefined;
 
-  // 2) rounds 배열 형태 호환
-  if ((!r1 || !r2)) {
-    const roundsKey = pickKey(student, ["rounds","회차","round_list","시험","results"]);
-    const rounds = roundsKey ? student[roundsKey] : null;
-    if (Array.isArray(rounds)) {
+    if (Array.isArray(rounds)){
+      // 배열이면 0,1 순서 사용
       r1 = r1 || rounds[0];
       r2 = r2 || rounds[1];
+    } else if (rounds && typeof rounds === "object"){
+      // 객체이면 안쪽에서 1차/2차 키 다시 탐색
+      const r1KeyIn = pickKey(rounds, ["1차","1차시험","round1","r1","first","회차1","1"]);
+      const r2KeyIn = pickKey(rounds, ["2차","2차시험","round2","r2","second","회차2","2"]);
+      r1 = r1 || (r1KeyIn ? rounds[r1KeyIn] : undefined);
+      r2 = r2 || (r2KeyIn ? rounds[r2KeyIn] : undefined);
     }
   }
 
-  // 3) 그래도 못 찾으면, "라운드처럼 생긴 객체"를 자동 탐지
-  if (!r1 || !r2) {
-    const candidates = [];
-    for (const k of keys) {
-      const v = student[k];
-      if (v && typeof v === 'object') {
-        const looksLikeRound =
-          pickKey(v, ["by_class","byClass","classes","sections"]) ||
-          pickKey(v, ["total","sum","score","max"]) ||
-          pickKey(v, ["pass","passed","is_pass","합격"]);
-        if (looksLikeRound) {
-          candidates.push({ key: k, val: v });
-        }
-      }
-    }
-
-    // 키 이름에 숫자/한글 회차 힌트가 있으면 1차→2차 순으로 정렬
-    const keyRank = (k) => {
-      const s = String(k);
-      if (/[1일일一첫첫번째]/.test(s)) return 1; // 1차/첫 회
-      if (/[2이두二두번째]/.test(s)) return 2; // 2차/두 번째
-      return 99;
-    };
-    candidates.sort((a,b)=> keyRank(a.key) - keyRank(b.key));
-
-    if (!r1 && candidates[0]) r1 = candidates[0].val;
-    if (!r2 && candidates[1]) r2 = candidates[1].val;
-
-    // 혹시 후보가 1개뿐이면 r1만 보여주고 r2는 null로 남김
-  }
-
-  return { r1: normalizeRound(r1), r2: normalizeRound(r2), _dbgKeys };
+  return {
+    r1: normalizeRound(r1),
+    r2: normalizeRound(r2),
+    _dbgKeys: Object.keys(student || {})
+  };
 }
-
 // ---------------------------------------
 
 async function lookupStudent(e){
