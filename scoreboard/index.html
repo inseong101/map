@@ -1,10 +1,10 @@
 <!doctype html>
 <html lang="ko">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>전졸협 모의고사 성적 사이트</title>
-<link rel="stylesheet" href="assets/style.css" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>전졸협 모의고사 성적 사이트</title>
+  <link rel="stylesheet" href="assets/style.css" />
 </head>
 <body>
 <div class="container">
@@ -20,16 +20,31 @@
     <div class="col-12">
       <div class="card">
         <h2 style="margin-top:0">본인 점수 보기</h2>
-        <form id="lookup-form" class="flex" onsubmit="return lookupStudent(event)">
+
+        <!-- novalidate: 브라우저 기본 경고(“요청한 형식…”) 비활성화 -->
+        <form id="lookup-form" class="flex" novalidate onsubmit="return lookupStudent(event)">
           <label for="sid" class="small" style="min-width:80px">학수번호</label>
-          <input id="sid" name="sid" class="input" inputmode="numeric" autocomplete="off"
-            placeholder="예) 015001" pattern="\\d{6}" maxlength="6" required />
+          <input
+            id="sid"
+            name="sid"
+            class="input"
+            type="text"                 <!-- 숫자 앞 0 보존 -->
+            inputmode="numeric"         <!-- 모바일 숫자 키패드 -->
+            autocomplete="one-time-code"
+            placeholder="예) 015001"
+            pattern="[0-9]{6}"          <!-- (참고) 브라우저 패턴, novalidate라 실제 검증은 JS가 수행 -->
+            maxlength="6"
+            required
+            autofocus
+          />
           <button class="btn" type="submit">성적 확인</button>
           <button class="btn ghost" type="button" onclick="scanHistory()">최근 기록</button>
         </form>
+
         <div id="hint" class="small" style="margin-top:10px">
           • 숫자 6자리만 입력 가능합니다. 예: <code>015001</code>
         </div>
+
         <div id="error" class="alert hidden" role="alert" aria-live="assertive"></div>
         <div id="recent" class="chips hidden" aria-label="최근 조회"></div>
       </div>
@@ -48,13 +63,14 @@
           <!-- 1차/2차 합불 뱃지 -->
         </div>
       </div>
+
       <hr class="sep" />
 
       <div id="round-1"></div>
       <div id="round-2" style="margin-top:16px"></div>
 
       <hr class="sep" />
-      <div class="flex">
+      <div class="flex" style="gap:8px; flex-wrap:wrap;">
         <button class="btn" type="button" onclick="goHome()">다른 학생 조회</button>
         <button class="btn ghost" type="button" onclick="window.print()">인쇄하기</button>
       </div>
@@ -63,9 +79,13 @@
 
   <div class="footer small">© 전졸협 • 성적 통지 사이트</div>
 </div>
-<script src="assets/SCORE_DATA.js"></script>
 
+<!-- 데이터 먼저, 로직 나중 -->
+<script src="assets/SCORE_DATA.js"></script>
 <script src="assets/script.js"></script>
-<script> if (window.initApp) initApp(); </script>
+<script>
+  // script.js에 window.initApp가 있다면 초기화 호출
+  if (window.initApp) initApp();
+</script>
 </body>
 </html>
