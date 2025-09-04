@@ -3,9 +3,12 @@
    - 학수번호 입력 → window.SCORE_DATA에서 검색 → 결과 뷰 렌더링
    ========================================================= */
 
-// === GENERATED DATA START ===
-window.SCORE_DATA = window.SCORE_DATA || {}; // 여기에 SCORE_DATA.js 내용 붙여넣기
-// === GENERATED DATA END ===
+// === SCORE_DATA 전제 ===
+// window.SCORE_DATA = { "015001": { "1차": {...}, "2차": {...} }, ... }
+// ※ 실제 데이터에서 키 이름이 다를 수 있어 아래에서 호환 처리함.
+
+// === 데이터 로드 확인 (없으면 빈 객체) ===
+window.SCORE_DATA = window.SCORE_DATA || {};
 
 // 유틸
 const $ = (sel, root=document) => root.querySelector(sel);
@@ -25,7 +28,14 @@ function pill(text, type){
   const cls = type === 'ok' ? 'pill green' : (type === 'warn' ? 'pill warn' : 'pill red');
   return `<span class="${cls}">${text}</span>`;
 }
+function showError(msg){
+  const err = $("#error");
+  if (!err) return;
+  err.textContent = msg;
+  err.classList.remove("hidden");
+}
 
+// 최근 조회
 function saveRecent(id){
   try{
     const prev = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
@@ -35,6 +45,7 @@ function saveRecent(id){
 }
 function scanHistory(){
   const box = $("#recent");
+  if (!box) return;
   const list = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
   box.innerHTML = "";
   if(list.length === 0){
@@ -52,87 +63,164 @@ function scanHistory(){
   box.classList.remove("hidden");
 }
 
-function showError(msg){
-  const err = $("#error");
-  err.textContent = msg;
-  err.classList.remove("hidden");
-}
-
 // 홈/결과 뷰 전환
 function goHome(){
-  $("#view-result").classList.add("hidden");
-  $("#view-home").classList.remove("hidden");
-  $("#sid").focus();
+  $("#view-result")?.classList.add("hidden");
+  $("#view-home")?.classList.remove("hidden");
+  $("#sid")?.focus();
 }
-// SCORE_DATA를 "6자리 패딩된 학수번호"로 인덱싱해서 찾기 쉽게
-function getByStudentId(id) {
-  const raw = window.SCORE_DATA || {};
-  // 1) 바로 매칭
-  if (raw[id]) return raw[id];
 
-  // 2) 앞자리 0 제거한 키가 있을 수도 있음 (엑셀→JSON에서 015001 -> 15001)
-  const noZ = id.replace(/^0+/, ''); // "015001" -> "15001"
-  if (raw[noZ]) return raw[noZ];
+// -------- 키 호환/정규화 레이어 --------
 
-  // 3) 반대로, 데이터 쪽 키를 6자리로 패딩해서 매칭
-  //    (빌더가 15001 같은 키를 만들었다면 여기서 015001로 맞춰봄)
-  for (const k of Object.keys(raw)) {
-    const pad6 = k.padStart(6, '0');
-    if (pad6 === id) return raw[k];
+// 후보 키 중 존재하는 실제 키를 찾아 반환
+function pickKey(obj, candidates){
+  if (!obj) return null;
+  for (const key of candidates){
+    if (key in obj) return key;
   }
-
+  // 대소문자/공백/언더바 느슨 매칭 (round1 == round_1 == ROUND1)
+  const map = Object.keys(obj).reduce((acc,k)=>{
+    const norm = String(k).toLowerCase().replace(/[\s_]/g,'');
+    acc[norm] = k;
+    return acc;
+  }, {});
+  for (const key of candidates){
+    const norm = String(key).toLowerCase().replace(/[\s_]/g,'');
+    if (norm in map) return map[norm];
+  }
   return null;
 }
+
+// 라운드 객체를 표준 형태로 정규화
+function normalizeRound(raw){
+  if (!raw) return null;
+
+  // by_class / byClass 호환
+  const byClassKey = pickKey(raw, ["by_class","byClass"]);
+  const byClass = raw[byClassKey] || {};
+
+  // groups/by_group 호환 및 각 교시 표준화
+  const normByClass = {};
+  Object.keys(byClass).forEach(cls=>{
+    const sec = byClass[cls] || {};
+    const groupsKey = pickKey(sec, ["groups","by_group","byGroup"]);
+    const groups = sec[groupsKey] || {};
+    normByClass[cls] = {
+      total: sec.total || { score: 0, max: 0 },
+      groups: groups
+    };
+  });
+
+  // total/pass/fails 기본값
+  const total = raw.total || { score: 0, max: 0 };
+  const pass = !!raw.pass;
+  const failsKey = pickKey(raw, ["fails","fail","fails_list"]);
+  const fails = raw[failsKey] || [];
+
+  return {
+    total, pass, fails,
+    by_class: normByClass
+  };
+}
+
+// 데이터 내부에서 1차/2차 라운드를 찾아 정규화
+function extractRounds(student){
+  if (!student) return { r1:null, r2:null, _dbgKeys:Object.keys(student||{}) };
+
+  const r1Key = pickKey(student, ["1차","1차시험","round1","r1","first","회차1","1"]);
+  const r2Key = pickKey(student, ["2차","2차시험","round2","r2","second","회차2","2"]);
+
+  // rounds 배열 형태 호환
+  let r1 = r1Key ? student[r1Key] : null;
+  let r2 = r2Key ? student[r2Key] : null;
+
+  if (!r1 || !r2){
+    const roundsKey = pickKey(student, ["rounds","회차","round_list"]);
+    const rounds = student[roundsKey];
+    if (Array.isArray(rounds)){
+      r1 = r1 || rounds[0];
+      r2 = r2 || rounds[1];
+    }
+  }
+
+  return {
+    r1: normalizeRound(r1),
+    r2: normalizeRound(r2),
+    _dbgKeys: Object.keys(student||{})
+  };
+}
+
+// ---------------------------------------
+
 async function lookupStudent(e){
   e.preventDefault();
   const input = $("#sid");
-  const id = (input.value || "").trim();
+  const id = (input?.value || "").trim();
   const err = $("#error");
-  err.classList.add("hidden");
-  err.textContent = "";
+  err?.classList.add("hidden");
+  if (err) err.textContent = "";
 
+  // 숫자 6자리만 허용
   if(!/^\d{6}$/.test(id)){
     showError("학수번호는 숫자 6자리여야 합니다.");
-    input.focus();
+    input?.focus();
     return false;
   }
 
-  // 데이터 검증
-  if(!window.SCORE_DATA || !window.SCORE_DATA[id]){
+  // ID 존재 여부
+  const data = window.SCORE_DATA && window.SCORE_DATA[id];
+  if(!data){
     showError("해당 학수번호의 성적 데이터를 찾을 수 없습니다. SCORE_DATA를 확인하세요.");
     return false;
   }
 
-  renderResult(id, window.SCORE_DATA[id]);
+  // 라운드 추출/정규화
+  const { r1, r2, _dbgKeys } = extractRounds(data);
+
+  // 디버그 모드(?debug=1)에서 실제 키 보여주기
+  const q = new URLSearchParams(location.search);
+  if (q.get("debug") === "1"){
+    console.log("[DEBUG] keys in SCORE_DATA[%s]:", id, _dbgKeys);
+    console.log("[DEBUG] R1:", r1);
+    console.log("[DEBUG] R2:", r2);
+  }
+
+  renderResult(id, r1, r2);
   saveRecent(id);
-  $("#view-home").classList.add("hidden");
-  $("#view-result").classList.remove("hidden");
+  $("#view-home")?.classList.add("hidden");
+  $("#view-result")?.classList.remove("hidden");
   return false;
 }
 
 // 결과 렌더링
-function renderResult(id, data){
+function renderResult(id, round1, round2){
   $("#res-sid").textContent = id;
   const badges = $("#res-badges");
   badges.innerHTML = "";
 
   // 1차/2차 배지
-  ["1차","2차"].forEach(r=>{
-    if(!data[r]) return;
-    const pass = !!data[r].pass;
+  if (round1){
     const span = document.createElement("span");
-    span.className = "badge " + (pass ? "pass":"fail");
-    span.textContent = `${r} ${pass? "합격":"불합격"}`;
+    span.className = "badge " + (round1.pass ? "pass":"fail");
+    span.textContent = `1차 ${round1.pass? "합격":"불합격"}`;
     badges.appendChild(span);
-  });
+  }
+  if (round2){
+    const span = document.createElement("span");
+    span.className = "badge " + (round2.pass ? "pass":"fail");
+    span.textContent = `2차 ${round2.pass? "합격":"불합격"}`;
+    badges.appendChild(span);
+  }
 
   // 회차별 카드 생성
-  renderRound("#round-1", "1차", data["1차"]);
-  renderRound("#round-2", "2차", data["2차"]);
+  renderRound("#round-1", "1차", round1);
+  renderRound("#round-2", "2차", round2);
 }
 
 function renderRound(sel, title, round){
   const host = $(sel);
+  if(!host) return;
+
   if(!round){
     host.innerHTML = `<div class="small" style="opacity:.7">${title} 데이터가 없습니다.</div>`;
     return;
@@ -141,11 +229,12 @@ function renderRound(sel, title, round){
   const total = round.total || {score:0, max:0};
   const rate = pct(total.score, total.max);
   const pass = !!round.pass;
-  const fails = round.fails || [];
+  const fails = Array.isArray(round.fails) ? round.fails : [];
 
-  // 교시 정렬: 1교시~4교시
+  // 교시 정렬: 1교시~4교시 (데이터에 있는 것만)
   const byClass = round.by_class || {};
   const classOrder = ["1교시","2교시","3교시","4교시"].filter(k=>k in byClass);
+  const dynamicOrder = classOrder.length ? classOrder : Object.keys(byClass);
 
   let html = `
     <div class="round">
@@ -162,15 +251,19 @@ function renderRound(sel, title, round){
   if(fails.length){
     html += `<div class="group" style="margin-top:8px">
       <div class="name">과락</div>
-      <div class="small">${fails.map(f=>`${f.class}·${f.group} (${fmt(f.score)}/${fmt(f.max)} / 최소 ${fmt(f.min)})`).join(" · ")}</div>
+      <div class="small">${fails.map(f=>{
+        const clz = f.class || f.cls || f.period || "-";
+        const grp = f.group || f.grp || "-";
+        return `${clz}·${grp} (${fmt(f.score)}/${fmt(f.max)} / 최소 ${fmt(f.min)})`;
+      }).join(" · ")}</div>
     </div>`;
   }
 
   // 교시별 표
-  classOrder.forEach(cls=>{
-    const s = byClass[cls];
-    const g = s.groups || {};
-    const keys = Object.keys(g);
+  (dynamicOrder || []).forEach(cls=>{
+    const s = byClass[cls] || {};
+    const groups = s.groups || {};
+    const keys = Object.keys(groups);
 
     const subtotal = s.total || {score:0, max:0};
     const rr = pct(subtotal.score, subtotal.max);
@@ -185,43 +278,12 @@ function renderRound(sel, title, round){
     `;
 
     keys.forEach(k=>{
-      const gi = g[k];
+      const gi = groups[k] || {};
       const pr = pct(gi.score, gi.max);
-      const minReq = Math.round(gi.max * 0.4 * 1000) / 1000;
-      const failed = gi.score < minReq;
+      const minReq = Math.round((gi.max * 0.4 || 0) * 1000) / 1000;
+      const failed = (gi.score || 0) < (minReq || 0);
       html += `
         <div class="group">
           <div class="name">${k}</div>
           <div class="flex" style="gap:12px">
-            <span class="small">${fmt(gi.score)}/${fmt(gi.max)} (${pr}%)</span>
-            ${failed ? pill("과락","red") : pill("통과","ok")}
-          </div>
-        </div>
-      `;
-    });
-
-    html += `</div></div>`;
-  });
-
-  host.innerHTML = html;
-}
-
-// 쿼리스트링 ?id=015001 → 바로 보여주기
-(function(){
-  const p = new URLSearchParams(location.search);
-  const id = p.get("id");
-  if(id && /^\d{6}$/.test(id) && window.SCORE_DATA && window.SCORE_DATA[id]){
-    renderResult(id, window.SCORE_DATA[id]);
-    $("#view-home").classList.add("hidden");
-    $("#view-result").classList.remove("hidden");
-  }
-})();
-
-// 초기화: 폼 이벤트/최근조회 세팅
-document.addEventListener('DOMContentLoaded', () => {
-  const form = document.getElementById('lookup-form');
-  if (form) {
-    form.addEventListener('submit', lookupStudent);
-  }
-  scanHistory();
-});
+            <span class="small">${fmt(gi.score)}/${fmt(gi.max)} (${pr}%)
