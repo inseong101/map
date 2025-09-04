@@ -22,7 +22,7 @@ function fmt(n, digits=0){
 }
 function pct(score, max){
   if(!max) return 0;
-  return Math.round((score / max) * 100);
+  return Math.round((Number(score) / Number(max)) * 100);
 }
 function pill(text, type){
   const cls = type === 'ok' ? 'pill green' : (type === 'warn' ? 'pill warn' : 'pill red');
@@ -33,6 +33,12 @@ function showError(msg){
   if (!err) return;
   err.textContent = msg;
   err.classList.remove("hidden");
+}
+function hideError(){
+  const err = $("#error");
+  if (!err) return;
+  err.textContent = "";
+  err.classList.add("hidden");
 }
 
 // 최근 조회
@@ -57,7 +63,12 @@ function scanHistory(){
     btn.className = "chip";
     btn.type = "button";
     btn.textContent = id;
-    btn.onclick = ()=>{ $("#sid").value = id; $("#lookup-form").dispatchEvent(new Event("submit", {cancelable:true})); };
+    btn.onclick = ()=>{
+      const sid = $("#sid");
+      if (sid) sid.value = id;
+      const form = $("#lookup-form");
+      if (form) form.dispatchEvent(new Event("submit", {cancelable:true}));
+    };
     box.appendChild(btn);
   });
   box.classList.remove("hidden");
@@ -125,7 +136,7 @@ function normalizeRound(raw){
 
 // 데이터 내부에서 1차/2차 라운드를 찾아 정규화
 function extractRounds(student){
-  if (!student) return { r1:null, r2:null, _dbgKeys:Object.keys(student||{}) };
+  if (!student) return { r1:null, r2:null, _dbgKeys:[] };
 
   const r1Key = pickKey(student, ["1차","1차시험","round1","r1","first","회차1","1"]);
   const r2Key = pickKey(student, ["2차","2차시험","round2","r2","second","회차2","2"]);
@@ -156,9 +167,7 @@ async function lookupStudent(e){
   e.preventDefault();
   const input = $("#sid");
   const id = (input?.value || "").trim();
-  const err = $("#error");
-  err?.classList.add("hidden");
-  if (err) err.textContent = "";
+  hideError();
 
   // 숫자 6자리만 허용
   if(!/^\d{6}$/.test(id)){
@@ -194,22 +203,24 @@ async function lookupStudent(e){
 
 // 결과 렌더링
 function renderResult(id, round1, round2){
-  $("#res-sid").textContent = id;
-  const badges = $("#res-badges");
-  badges.innerHTML = "";
+  const sidEl = $("#res-sid");
+  if (sidEl) sidEl.textContent = id;
 
-  // 1차/2차 배지
-  if (round1){
-    const span = document.createElement("span");
-    span.className = "badge " + (round1.pass ? "pass":"fail");
-    span.textContent = `1차 ${round1.pass? "합격":"불합격"}`;
-    badges.appendChild(span);
-  }
-  if (round2){
-    const span = document.createElement("span");
-    span.className = "badge " + (round2.pass ? "pass":"fail");
-    span.textContent = `2차 ${round2.pass? "합격":"불합격"}`;
-    badges.appendChild(span);
+  const badges = $("#res-badges");
+  if (badges) {
+    badges.innerHTML = "";
+    if (round1){
+      const span = document.createElement("span");
+      span.className = "badge " + (round1.pass ? "pass":"fail");
+      span.textContent = `1차 ${round1.pass? "합격":"불합격"}`;
+      badges.appendChild(span);
+    }
+    if (round2){
+      const span = document.createElement("span");
+      span.className = "badge " + (round2.pass ? "pass":"fail");
+      span.textContent = `2차 ${round2.pass? "합격":"불합격"}`;
+      badges.appendChild(span);
+    }
   }
 
   // 회차별 카드 생성
@@ -279,11 +290,59 @@ function renderRound(sel, title, round){
 
     keys.forEach(k=>{
       const gi = groups[k] || {};
-      const pr = pct(gi.score, gi.max);
-      const minReq = Math.round((gi.max * 0.4 || 0) * 1000) / 1000;
-      const failed = (gi.score || 0) < (minReq || 0);
+      const pr = pct(gi.score || 0, gi.max || 0);
+      const minReq = Math.round(((gi.max || 0) * 0.4) * 1000) / 1000;
+      const failed = (Number(gi.score) || 0) < (minReq || 0);
       html += `
         <div class="group">
           <div class="name">${k}</div>
           <div class="flex" style="gap:12px">
-            <span class="small">${fmt(gi.score)}/${fmt(gi.max)} (${pr}%)
+            <span class="small">${fmt(gi.score)}/${fmt(gi.max)} (${pr}%)</span>
+            ${failed ? pill("과락","red") : pill("통과","ok")}
+          </div>
+        </div>
+      `;
+    });
+
+    html += `</div></div>`;
+  });
+
+  host.innerHTML = html;
+}
+
+// 초기화: 입력 필터링/폼 이벤트/최근조회/쿼리파라미터 적용
+function initApp(){
+  // 입력시 숫자만, 6자리 제한
+  const $sid = $("#sid");
+  if ($sid) {
+    $sid.addEventListener('input', () => {
+      $sid.value = ($sid.value || '').replace(/\D/g, '').slice(0, 6);
+    });
+    $sid.setAttribute('enterkeyhint', 'done');
+  }
+
+  // 폼 submit 핸들러
+  const form = $("#lookup-form");
+  if (form) form.addEventListener('submit', lookupStudent);
+
+  // 최근 보기 표시
+  scanHistory();
+
+  // ?sid=015001 있으면 자동 렌더
+  const p = new URLSearchParams(location.search);
+  const sid = p.get("sid") || p.get("id");
+  if (sid && /^\d{6}$/.test(sid) && window.SCORE_DATA && window.SCORE_DATA[sid]){
+    if ($sid) $sid.value = sid;
+    renderResult(sid, ...Object.values(extractRounds(window.SCORE_DATA[sid])).slice(0,2));
+    $("#view-home")?.classList.add("hidden");
+    $("#view-result")?.classList.remove("hidden");
+  }
+}
+
+// DOM 준비 후 초기화
+document.addEventListener('DOMContentLoaded', initApp);
+
+// 전역 노출 (HTML에서 호출 가능하도록)
+window.goHome = goHome;
+window.scanHistory = scanHistory;
+window.initApp = initApp;
