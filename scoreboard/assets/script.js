@@ -233,24 +233,37 @@ function goHome(){
 }
 
 // script.js
+// 기존 lookupStudent(e) 전체를 이걸로 교체
 async function lookupStudent(e){
   e.preventDefault();
-
-  const input = $("#sid");
-  const id = (input?.value || "").replace(/\D/g, "").slice(0, 6);
   hideError();
 
-  // 형식만 체크 (숫자 6자리)
-  if (id.length !== 6){
+  const input = $("#sid");
+  const id = (input?.value || "").replace(/\D/g,"").slice(0,6);
+
+  if(id.length !== 6){
     showError("학수번호는 숫자 6자리여야 합니다.");
     input?.focus();
     return false;
   }
 
-  // 🔒 여기서부턴 아무 것도 하지 않음.
-  // Firestore 쪽 제출 핸들러(assets/firestore-loader.js)가
-  // 같은 폼 submit 이벤트를 받아서 실제 조회/계산/렌더를 진행합니다.
+  try {
+    const r1 = await window.fetchRoundFromFirestore?.(id, "1차");
+    const r2 = await window.fetchRoundFromFirestore?.(id, "2차");
+
+    const norm1 = (window.normalizeRound?.(r1)) || r1;
+    const norm2 = (window.normalizeRound?.(r2)) || r2;
+
+    renderResult(id, norm1, norm2);
+    saveRecent(id);
+    $("#view-home")?.classList.add("hidden");
+    $("#view-result")?.classList.remove("hidden");
+  } catch (err){
+    console.error(err);
+    showError("Firestore에서 점수를 불러오지 못했습니다.");
+  }
   return false;
+}
 }
 
 /* --------------------------
