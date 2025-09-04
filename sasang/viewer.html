@@ -5,43 +5,58 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>사상의학 마인드맵</title>
   <style>
-    html, body {
-      height: 100%;
-      margin: 0;
-      overflow: hidden; /* ✅ 페이지 자체 스크롤 막음 */
-    }
+    html, body { height: 100%; margin: 0; }
     body {
       font-family: -apple-system, system-ui, "Noto Sans KR", Arial, sans-serif;
+      overflow: hidden; /* 페이지 스크롤 막고, 캔버스만 줌/팬 */
     }
     .topbar {
-      position: sticky; top: 0; z-index: 10;
-      display:flex; gap:12px; align-items:center; justify-content:space-between;
-      padding:10px 14px; border-bottom:1px solid rgba(0,0,0,.08); background:#fff;
+      height: 48px;              /* 고정 높이(아래 calc와 맞물림) */
+      display:flex; align-items:center; justify-content:space-between;
+      gap:12px; padding:10px 14px;
+      border-bottom:1px solid rgba(0,0,0,.08); background:#fff;
+      box-sizing: border-box;
     }
+    .topbar a { text-decoration:none; color:#0a66c2; font-weight:700; }
     .btn {
-      border:1px solid rgba(0,0,0,.15); background:#fff; color:#111;
+      appearance: none; border:1px solid rgba(0,0,0,.15); background:#fff; color:#111;
       border-radius:8px; padding:6px 10px; cursor:pointer; font-weight:700;
     }
-    #container { height: calc(100vh - 48px); }
-    svg.markmap { width: 100%; height: 100%; display:block; }
+    #container {
+      height: calc(100vh - 48px);
+      width: 100vw;
+      position: relative;
+    }
+    /* markmap이 만든 svg에 퍼센트 대신 픽셀을 넣기 위해 JS에서 설정하지만,
+       혹시 모를 기본값도 안전하게 */
+    svg.markmap {
+      display:block;
+      width: 100%;
+      height: 100%;
+    }
     .msg { padding:16px; color:#333; }
     .muted { color:#666; font-size:13px; }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-autoloader@0.16.0"></script>
+
+  <!-- ✅ 정확한 버전 고정: d3 v6 + markmap-view 0.16.0 -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@6.7.0/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.16.0/dist/browser/view.min.js"></script>
 </head>
 <body>
   <div class="topbar">
-    <div class="topbar-left">
+    <div style="display:flex;align-items:center;gap:12px">
       <a href="/">← 포털로 돌아가기</a>
       <div id="title"></div>
     </div>
-    <div class="topbar-right">
+    <div>
       <button id="btnRefit" class="btn">다시 맞춤</button>
     </div>
   </div>
 
   <div id="container">
-    <pre id="mm" class="markmap"></pre>
+    <!-- 마크다운 텍스트 주입용 -->
+    <pre id="md" style="display:none"></pre>
+    <!-- 상태 메시지 -->
     <div id="placeholder" class="msg"></div>
   </div>
 
