@@ -245,3 +245,31 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 .kpill {
   padding: 4px 10px; border-radius: 999px; background:#f1f5f9; color:#111827; font-weight:600; font-size:12px;
 }
+
+/* --- PASS/FAIL 총점 박스 --- */
+.round-box{
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:12px;
+  background:var(--surface-2);
+}
+.round-box.fail{
+  background:rgba(239,68,68,.14);       /* 빨강 톤 */
+  border-color:rgba(239,68,68,.55);
+}
+
+/* --- 진행도바(기존 .progress 그대로 두고 확장) --- */
+.progress { position: relative; }        /* 기준선 배치용 */
+.progress > div { transition: width .25s ease; }
+
+/* 평락(60% 미달)일 때 바를 빨간색으로 */
+.progress.danger > div{
+  background:linear-gradient(90deg, #ff7a7a, #ff5757);
+}
+
+/* 60% 컷 기준선 */
+.progress .cutoff{
+  position:absolute; top:0; bottom:0;
+  width:2px; background:rgba(255,255,255,.3);
+  transform:translateX(-1px);            /* 중앙 정렬 보정 */
+}
