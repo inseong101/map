@@ -58,7 +58,33 @@ function hideError(){
   err.textContent = "";
   err.classList.add("hidden");
 }
-
+// === 전시 정책: 그룹/순서/최대점수(총합 340) ===
+const GROUPS = {
+  "그룹1": ["간","심","비","폐","신","상한","사상"],
+  "그룹3": ["침구"],
+  "그룹2": ["보건"],
+  "그룹4": ["외과","신경","안이비"],
+  "그룹5": ["부인과","소아"],
+  "그룹6": ["예방","생리","본초"],
+};
+const GROUP_ORDER = ["그룹1","그룹3","그룹2","그룹4","그룹5","그룹6"];
+const GROUP_LABEL = {
+  "그룹1": "그룹1 (간/심/비/폐/신/상한/사상)",
+  "그룹3": "그룹3 (침구)",
+  "그룹2": "그룹2 (보건)",
+  "그룹4": "그룹4 (외과/신경/안이비)",
+  "그룹5": "그룹5 (부인과/소아)",
+  "그룹6": "그룹6 (예방/생리/본초)",
+};
+// 과목별 최대점수(사용자 요구: 16,16,16,16,16,16,16,48,20,16,16,16,32,24,24,16,16 → 총 340)
+const SUBJECT_MAX = {
+  "간":16, "심":16, "비":16, "폐":16, "신":16, "상한":16, "사상":16,
+  "침구":48,
+  "보건":20,
+  "외과":16, "신경":16, "안이비":16,
+  "부인과":32, "소아":24,
+  "예방":24, "생리":16, "본초":16,
+};
 // 최근 조회
 function saveRecent(id){
   try{
@@ -121,51 +147,93 @@ function pickKey(obj, candidates){
 }
 
 // 라운드 객체를 표준 형태로 정규화
+// 라운드 객체를 표준 형태로 정규화
 function normalizeRound(raw){
   if (!raw || typeof raw !== 'object') return null;
 
-  // ★★★ 새 스키마(total_questions/total_correct/group_results) 지원 ★★★
-  if ('total_questions' in raw && 'total_correct' in raw) {
-    const total = {
-      score: Number(raw.total_correct) || 0,
-      max:   Number(raw.total_questions) || 0
-    };
-    // overall_pass / round_pass / pass 중 있는 값 사용
-    const pass = !!(raw.overall_pass ?? raw.round_pass ?? raw.pass);
+  // (A) 새 스키마: total_questions/total_correct + group_results
+  if ('total_questions' in raw && 'total_correct' in raw && Array.isArray(raw.group_results)) {
+    // 과목 → 정답수 맵
+    const correctBySubject = {};
+    raw.group_results.forEach(g => {
+      const name = String(g.name || '').trim();
+      if (!name) return;
+      correctBySubject[name] = Number(g.correct) || 0;
+    });
 
-    // group_results 배열 → 과목별 점수/과락 변환
-    const groups = {};
-    (raw.group_results || []).forEach(g => {
-      groups[g.name] = {
-        score: Number(g.correct) || 0,
-        max:   Number(g.total) || 0
+    // 고정 그룹/최대점수를 사용해 by_class 구성
+    const by_class = {};
+    let totalScore = 0, totalMax = 0;
+    const failList = [];
+
+    GROUP_ORDER.forEach(grpName => {
+      const subjects = GROUPS[grpName] || [];
+      const groupsObj = {};
+      let secScore = 0, secMax = 0;
+
+      subjects.forEach(subj => {
+        const mx = SUBJECT_MAX[subj] ?? 0;
+        const sc = correctBySubject[subj] ?? 0;
+        const minReq = mx * 0.4;
+        const failed = sc < minReq;
+
+        groupsObj[subj] = { score: sc, max: mx };
+        secScore += sc; secMax += mx;
+        totalScore += sc; totalMax += mx;
+
+        if (mx > 0 && failed) {
+          failList.push({
+            class: grpName,
+            group: subj,
+            score: sc,
+            max: mx,
+            min: Math.round(minReq * 1000) / 1000
+          });
+        }
+      });
+
+      by_class[grpName] = {
+        total: { score: secScore, max: secMax },
+        groups: groupsObj
       };
     });
 
-    // 과락 목록
-    const fails = (raw.group_results || [])
-      .filter(g => g.is_fail)
-      .map(g => ({
-        class: "종합",
-        group: g.name,
-        score: Number(g.correct) || 0,
-        max:   Number(g.total) || 0,
-        min:   Number(g.cutoff) || 0
-      }));
+    // 합격 여부: 원본 값 있으면 그대로, 없으면 과락 없을 때 합격으로 간주
+    let pass = !!(raw.overall_pass ?? raw.round_pass ?? raw.pass);
+    if (typeof (raw.overall_pass ?? raw.round_pass ?? raw.pass) === 'undefined') {
+      pass = failList.length === 0;
+    }
 
-    // by_class가 없으므로 "종합" 섹션 하나로 묶어 렌더
     return {
-      total,
+      total: { score: totalScore, max: totalMax },
       pass,
-      fails,
-      by_class: {
-        "종합": {
-          total,
-          groups
-        }
-      }
+      fails: failList,
+      by_class
     };
   }
+
+  // (B) 기존(by_class 등) 스키마도 호환
+  const byClassKey = pickKey(raw, ["by_class","byClass","classes","sections"]);
+  const byClassRaw = (byClassKey && typeof raw[byClassKey] === 'object') ? raw[byClassKey] : {};
+
+  const normByClass = {};
+  Object.keys(byClassRaw).forEach(cls=>{
+    const sec = byClassRaw[cls] || {};
+    const groupsKey = pickKey(sec, ["groups","by_group","byGroup","sections","parts"]);
+    const groupsRaw = (groupsKey && typeof sec[groupsKey] === 'object') ? sec[groupsKey] : {};
+    const total = sec.total || sec.sum || { score: sec.score ?? 0, max: sec.max ?? 0 };
+    normByClass[cls] = { total, groups: groupsRaw };
+  });
+
+  const total = raw.total || raw.sum || { score: raw.score ?? 0, max: raw.max ?? 0 };
+  const passKey = pickKey(raw, ["pass","passed","is_pass","합격"]);
+  const pass = !!(passKey ? raw[passKey] : raw.pass);
+
+  const failsKey = pickKey(raw, ["fails","fail","fails_list","과락","과락목록"]);
+  const fails = Array.isArray(raw[failsKey]) ? raw[failsKey] : [];
+
+  return { total, pass, fails, by_class: normByClass };
+}
 
   // ★★★ 기존(by_class/byGroup 등) 스키마도 호환 유지 ★★★
   const byClassKey = pickKey(raw, ["by_class","byClass","classes","sections"]);
