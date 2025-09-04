@@ -5,11 +5,11 @@ import { getFirestore }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
+  apiKey: "AIzaSyD5M5IxzxEIdnNzky3ZijElrEP8clYX31Y",
   authDomain: "jeonjolhyup.firebaseapp.com",
   projectId: "jeonjolhyup",
   storageBucket: "jeonjolhyup.firebasestorage.app",
-  appId: "YOUR_APP_ID",
+  appId: "1:547424969197:web:92044afa9f174d6eda87e4",
 };
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
