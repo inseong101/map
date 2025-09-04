@@ -1,13 +1,21 @@
 (() => {
-  const DEFAULT_FILE = 'sasang.md'; // 같은 폴더에 있음
+  const DEFAULT_FILE = 'sasang.md';
   const params = new URLSearchParams(location.search);
   const file = params.get('file') || DEFAULT_FILE;
 
   const $mm = document.getElementById('mm');
   const $placeholder = document.getElementById('placeholder');
   const $btnRefit = document.getElementById('btnRefit');
+  const $container = document.getElementById('container');
 
-  // autoloader가 svg를 만들 때까지 기다렸다가 fit() 호출
+  // 컨테이너의 실제 px 크기를 svg에 적용
+  function sizeSvg(svg) {
+    const rect = $container.getBoundingClientRect();
+    svg.setAttribute('width', Math.max(1, Math.floor(rect.width)));
+    svg.setAttribute('height', Math.max(1, Math.floor(rect.height)));
+  }
+
+  // autoloader가 만든 svg를 기다림
   function waitForSvg(timeout = 5000) {
     return new Promise((resolve, reject) => {
       const start = performance.now();
@@ -18,6 +26,16 @@
         requestAnimationFrame(tick);
       })();
     });
+  }
+
+  // 리사이즈 디바운스
+  let resizeTimer = null;
+  function onResize(svg, mm) {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      sizeSvg(svg);
+      mm?.fit?.();
+    }, 80);
   }
 
   async function loadAndRender() {
@@ -41,17 +59,21 @@
       // 렌더 트리거
       window.markmap?.autoLoader?.renderAll?.();
 
-      // svg가 생기면 fit()
+      // svg 생성 대기 후 실제 px 크기 적용 + fit
       const svg = await waitForSvg();
-      const instance = svg.__markmap__ || svg.markmap;
-      if (instance?.fit) instance.fit();
+      const mm = svg.__markmap__ || svg.markmap;
 
-      // 다시 맞춤 버튼
+      sizeSvg(svg);
+      mm?.fit?.();
+
+      // 다시 맞춤
       $btnRefit.onclick = () => {
-        const svg2 = document.querySelector('svg.markmap');
-        const mm2 = svg2 && (svg2.__markmap__ || svg2.markmap);
-        mm2?.fit?.();
+        sizeSvg(svg);
+        mm?.fit?.();
       };
+
+      // 창 리사이즈 대응
+      window.addEventListener('resize', () => onResize(svg, mm));
     } catch (e) {
       console.error(e);
       $placeholder.innerHTML = `
@@ -60,8 +82,6 @@
     }
   }
 
-  // ❌ 휠 스크롤 막지 마세요. 그래야 줌/팬이 정상 동작합니다.
-  // 이전 코드에 있던 e.preventDefault() 제거!
-
+  // ❌ 휠 이벤트 막지 마세요 (줌/팬에 필요)
   loadAndRender();
 })();
