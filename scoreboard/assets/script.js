@@ -198,3 +198,12 @@ function renderRound(sel, title, round){
     $("#view-result").classList.remove("hidden");
   }
 })();
+
+// 초기화: 폼 이벤트/최근조회 세팅
+document.addEventListener('DOMContentLoaded', () => {
+  const form = document.getElementById('lookup-form');
+  if (form) {
+    form.addEventListener('submit', lookupStudent);
+  }
+  scanHistory();
+});
