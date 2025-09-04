@@ -110,7 +110,6 @@ function scanHistory(){
       const sid = $("#sid");
       if (sid) sid.value = id;
       const form = $("#lookup-form");
-      if (form) form.dispatchEvent(new Event("submit", {cancelable:true}));
     };
     box.appendChild(btn);
   });
