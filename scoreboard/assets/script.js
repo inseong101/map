@@ -338,6 +338,8 @@ function initApp(){
     });
     $sid.setAttribute('enterkeyhint', 'done');
   }
+   console.log("[SCORE] loaded?", typeof window.SCORE_DATA, "size:", window.SCORE_DATA && Object.keys(window.SCORE_DATA).length);
+console.log("[SCORE] sample(015001):", getStudentById("015001"));
 
   // 폼 submit 핸들러
   const form = $("#lookup-form");
