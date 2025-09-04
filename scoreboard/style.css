@@ -1,54 +1,124 @@
-
-:root {
+/* ===== 전졸협 성적 사이트 기본 테마 ===== */
+:root{
   --bg: #0b1020;
-  --card: #12182b;
-  --muted: #8aa1c7;
-  --good: #22c55e;
-  --warn: #f59e0b;
-  --bad: #ef4444;
-  --ink: #e5ecff;
-  --accent: #7c9cff;
+  --surface: #11172b;
+  --surface-2:#151d36;
+  --line: #213056;
+  --ink: #e8eeff;
+  --muted:#9db0d6;
+  --primary:#7ea2ff;
+  --ok:#22c55e;
+  --warn:#f59e0b;
+  --bad:#ef4444;
 }
-* { box-sizing: border-box; }
-html, body { margin:0; padding:0; font-family: ui-sans-serif, system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", Roboto, "Helvetica Neue", Arial; background: var(--bg); color: var(--ink); }
-a { color: var(--accent); text-decoration: none; }
-.container { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
-.header { display:flex; gap: 16px; align-items:center; justify-content: space-between; flex-wrap: wrap; }
-h1 { font-size: 24px; margin: 0 0 8px 0; }
-h2 { font-size: 18px; color: var(--muted); margin: 8px 0; }
-.badge { display:inline-block; padding: 4px 10px; border-radius: 999px; font-weight:600; letter-spacing: .2px; }
-.badge.pass { background: color-mix(in srgb, var(--good) 20%, transparent); border: 1px solid color-mix(in srgb, var(--good) 55%, transparent); color: var(--ink); }
-.badge.fail { background: color-mix(in srgb, var(--bad) 20%, transparent); border: 1px solid color-mix(in srgb, var(--bad) 55%, transparent); color: var(--ink); }
-.card { background: linear-gradient(180deg, color-mix(in srgb, var(--card) 95%, transparent), var(--card)); border: 1px solid #1b2542; box-shadow: 0 10px 30px rgba(0,0,0,.25); border-radius: 16px; padding: 16px; }
-.grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; }
-.col-12 { grid-column: span 12; }
-.col-6 { grid-column: span 6; }
-@media (max-width: 800px){ .col-6 { grid-column: span 12; } }
-.kpi { display:flex; gap:16px; align-items:center; }
-.kpi .num { font-size: 28px; font-weight: 800; }
-.kpi .sub { color: var(--muted); }
-.progress { width: 100%; height: 10px; background: #1b2542; border-radius: 999px; overflow: hidden; }
-.progress > div { height: 100%; background: linear-gradient(90deg, var(--accent), #42d0ff); }
-.group { display:flex; align-items:center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px dashed #2a355d; }
-.group:first-child { border-top: none; }
-.group .name { font-weight: 700; }
-.group .meter { flex: 1; }
-.pill { padding: 2px 8px; border-radius: 999px; font-size: 12px; border: 1px solid #33416f; color: var(--muted); }
-.pill.red { border-color: var(--bad); color: #ffd2d2; }
-.pill.warn { border-color: var(--warn); color: #fff3d2; }
-.pill.green { border-color: var(--good); color: #d8ffe8; }
-.flex { display:flex; gap:10px; align-items:center; flex-wrap: wrap; }
-hr.sep { border: none; height: 1px; background: #1b2542; margin: 14px 0; }
-.small { font-size: 12px; color: var(--muted); }
-.btn { padding: 8px 12px; border: 1px solid #2a355d; border-radius: 10px; background: #12182b; color: var(--ink); cursor: pointer; }
-.btn:hover { background: #0f1526; }
-.accordion { border-top: 1px solid #1b2542; }
-.accordion .item { border-bottom: 1px solid #1b2542; }
-.accordion button { width:100%; text-align:left; background:none; border:none; padding:12px 0; color:var(--ink); font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:space-between; }
-.rotate { transform: rotate(90deg); transition: transform .2s ease; }
-.rotate.open { transform: rotate(-90deg); }
-.qgrid { display:grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
-.qcell { padding: 6px; border-radius: 8px; text-align: center; font-weight:700; }
-.qcell.good { background: color-mix(in srgb, var(--good) 20%, transparent); }
-.qcell.bad { background: color-mix(in srgb, var(--bad) 20%, transparent); }
-.footer { color: var(--muted); text-align:center; padding: 24px 0 40px; }
+
+*{box-sizing:border-box}
+html,body{
+  margin:0; padding:0;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  background:var(--bg); color:var(--ink);
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+}
+a{color:var(--primary); text-decoration:none}
+img{max-width:100%; display:block}
+
+/* Layout */
+.container{max-width:1100px; margin:24px auto; padding:0 16px}
+.header{display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap}
+h1{margin:0 0 6px 0; font-size:24px; font-weight:800}
+h2{margin:8px 0; font-size:18px; color:var(--muted); font-weight:700}
+.small{color:var(--muted); font-size:12px}
+
+/* Grid */
+.grid{display:grid; grid-template-columns:repeat(12,1fr); gap:16px}
+.col-12{grid-column:span 12}
+.col-6{grid-column:span 6}
+@media (max-width: 860px){ .col-6{grid-column:span 12} }
+
+/* Card */
+.card{
+  background:linear-gradient(180deg, rgba(21,29,54,.9), var(--surface));
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:16px;
+  box-shadow:0 10px 30px rgba(0,0,0,.25);
+}
+
+/* Flex utils */
+.flex{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+
+/* KPI / Numbers */
+.kpi{display:flex; align-items:baseline; gap:10px}
+.kpi .num{font-size:28px; font-weight:800; letter-spacing:.2px}
+.kpi .sub{color:var(--muted); font-size:13px}
+
+/* Badges */
+.badge{
+  display:inline-block; padding:6px 10px; border-radius:999px;
+  font-weight:700; letter-spacing:.2px; border:1px solid transparent;
+}
+.badge.pass{background:rgba(34,197,94,.18); border-color:rgba(34,197,94,.55)}
+.badge.fail{background:rgba(239,68,68,.18); border-color:rgba(239,68,68,.55)}
+
+/* Buttons */
+.btn{
+  appearance:none; border:1px solid var(--line);
+  background:var(--surface-2); color:var(--ink);
+  padding:8px 12px; border-radius:10px; cursor:pointer;
+  font-weight:700;
+}
+.btn:hover{background:#0f1526}
+
+/* Separators */
+hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
+
+/* Progress (학생 상세에 사용) */
+.progress{width:100%; height:10px; background:#1b2542; border-radius:999px; overflow:hidden}
+.progress > div{height:100%; background:linear-gradient(90deg, #7ea2ff, #4cc9ff)}
+
+/* Group rows (학생 상세) */
+.group{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:10px 0; border-top:1px dashed #2a355d;
+}
+.group:first-child{border-top:none}
+.group .name{font-weight:800}
+.pill{
+  padding:3px 8px; border-radius:999px; font-size:12px; border:1px solid #33416f; color:var(--muted)
+}
+.pill.green{border-color:rgba(34,197,94,.6); color:#d9ffe7}
+.pill.warn{border-color:rgba(245,158,11,.6); color:#fff4d6}
+.pill.red{border-color:rgba(239,68,68,.7); color:#ffd8d8}
+
+/* Accordion (문항별 정오표) */
+.accordion{border-top:1px solid var(--line); margin-top:8px}
+.accordion .item{border-bottom:1px solid var(--line)}
+.accordion button{
+  width:100%; text-align:left; background:none; border:none; color:var(--ink);
+  font-weight:800; padding:12px 0; cursor:pointer; display:flex; align-items:center; justify-content:space-between
+}
+.rotate{transition:transform .2s ease; transform:rotate(90deg)}
+.rotate.open{transform:rotate(-90deg)}
+.panel{overflow:hidden; max-height:0}
+
+/* Question grid (문항별 정오표 셀) */
+.qgrid{display:grid; grid-template-columns:repeat(6,1fr); gap:8px}
+@media (max-width:600px){ .qgrid{grid-template-columns:repeat(4,1fr)} }
+.qcell{
+  text-align:center; font-weight:800; border-radius:8px; padding:6px 6px;
+  background:#1a2240; border:1px solid #2a355d
+}
+.qcell.good{background:rgba(34,197,94,.17); border-color:rgba(34,197,94,.5)}
+.qcell.bad{background:rgba(239,68,68,.17); border-color:rgba(239,68,68,.5)}
+
+/* Footer */
+.footer{color:var(--muted); text-align:center; padding:24px 0 40px}
+
+/* Print (학생 상세 인쇄용) */
+@media print{
+  :root{--bg:#ffffff; --ink:#000; --muted:#444}
+  body{background:#fff; color:#000}
+  .btn, .header a[href]{display:none !important}
+  .card{box-shadow:none; border-color:#ddd; background:#fff}
+  .badge{border-color:#999}
+}
