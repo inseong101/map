@@ -57,8 +57,6 @@ function getStudentById(id6){
 const $  = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
 
-const RECENT_KEY = "jjh_recent_ids";
-
 function fmt(n, digits=0){
   if (n === undefined || n === null || n === "" || isNaN(Number(n))) return "-";
   return Number(n).toLocaleString("ko-KR", {maximumFractionDigits:digits});
@@ -84,22 +82,8 @@ function hideError(){
   err.textContent = "";
   err.classList.add("hidden");
 }
-function saveRecent(id){
-  try{
-    const prev = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
-    const next = [id, ...prev.filter(v => v !== id)].slice(0, 8);
-    localStorage.setItem(RECENT_KEY, JSON.stringify(next));
-  }catch(_){}
-}
-function scanHistory(){
-  const box = $("#recent");
-  if (!box) return;
-  const list = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
-  box.innerHTML = "";
-  if(list.length === 0){
-    showError("최근 기록이 없습니다. 학수번호를 입력해 주세요.");
-    return;
-  }
+
+
   list.forEach(id=>{
     const btn = document.createElement("button");
     btn.className = "chip";
