@@ -363,7 +363,7 @@ if (sid && /^\d{6}$/.test(sid)) {
     showError("해당 학수번호의 성적 데이터를 찾을 수 없습니다. SCORE_DATA를 확인하세요.");
   }
 }
-
+}
 
 // DOM 준비 후 초기화
 document.addEventListener('DOMContentLoaded', initApp);
