@@ -323,3 +323,26 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 .form-row label {
   font-weight: 600;
 }
+/* === 입력·버튼 높이 통일: 전화번호/인증번호와 같은 높이로 고정 === */
+.input {
+  height: 40px;        /* ← 전화번호/인증번호와 동일 세로 높이 */
+  padding: 0 12px;     /* 세로 패딩 0으로 맞춤 */
+  line-height: 40px;   /* 텍스트 수직 중앙 정렬 느낌 */
+  font-size: 15px;     /* 모바일 확대 방지: 15~16px 권장 */
+}
+
+/* 버튼도 같은 높이로 */
+.btn {
+  height: 40px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* (선택) 라벨-입력 간격 살짝만 */
+.flex-col { gap: 10px; }
+.form-row { margin-bottom: 10px; }
+
+/* (선택) 힌트 문구는 별도 여백으로 처리 (줄 자체 높이에 영향 X) */
+.field-hint { margin-top: 6px; }
