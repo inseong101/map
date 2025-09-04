@@ -72,25 +72,43 @@ h2{margin:8px 0; font-size:18px; color:var(--muted); font-weight:700}
 /* Separators */
 hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 
-/* Progress (학생 상세에 사용) */
-.progress{width:100%; height:10px; background:#1b2542; border-radius:999px; overflow:hidden}
-.progress > div{height:100%; background:linear-gradient(90deg, #7ea2ff, #4cc9ff)}
+/* Progress */
+.progress{
+  position:relative;               /* 컷라인 배치용 */
+  width:100%; height:10px;
+  background:#1b2542; border-radius:999px; overflow:hidden
+}
+.progress > div{height:100%; background:linear-gradient(90deg, #7ea2ff, #4cc9ff); transition:width .25s ease}
 
-/* Group rows (학생 상세) */
+/* 60% 컷 라인 */
+.progress .cutline{
+  position:absolute; top:0; bottom:0;
+  left:60%; width:2px;
+  background:rgba(255,255,255,.55);
+  pointer-events:none;
+}
+
+/* 라운드가 평락(불합격)이면 막대 색을 빨간 계열로 */
+.round.fail .progress > .bar{
+  background:linear-gradient(90deg, var(--bad), #ff6b6b);
+}
+
+/* 바 아래 캡션 여백 */
+.progress-caption{ margin-top:10px; }
+
+/* Group rows */
 .group{
   display:flex; align-items:center; justify-content:space-between; gap:12px;
   padding:10px 0; border-top:1px dashed #2a355d;
 }
 .group:first-child{border-top:none}
 .group .name{font-weight:800}
-.pill{
-  padding:3px 8px; border-radius:999px; font-size:12px; border:1px solid #33416f; color:var(--muted)
-}
+.pill{padding:3px 8px; border-radius:999px; font-size:12px; border:1px solid #33416f; color:var(--muted)}
 .pill.green{border-color:rgba(34,197,94,.6); color:#d9ffe7}
 .pill.warn{border-color:rgba(245,158,11,.6); color:#fff4d6}
 .pill.red{border-color:rgba(239,68,68,.7); color:#ffd8d8}
 
-/* Accordion (문항별 정오표) */
+/* Accordion */
 .accordion{border-top:1px solid var(--line); margin-top:8px}
 .accordion .item{border-bottom:1px solid var(--line)}
 .accordion button{
@@ -101,7 +119,7 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 .rotate.open{transform:rotate(-90deg)}
 .panel{overflow:hidden; max-height:0}
 
-/* Question grid (문항별 정오표 셀) */
+/* Question grid */
 .qgrid{display:grid; grid-template-columns:repeat(6,1fr); gap:8px}
 @media (max-width:600px){ .qgrid{grid-template-columns:repeat(4,1fr)} }
 .qcell{
@@ -114,7 +132,7 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 /* Footer */
 .footer{color:var(--muted); text-align:center; padding:24px 0 40px}
 
-/* Print (학생 상세 인쇄용) */
+/* Print */
 @media print{
   :root{--bg:#ffffff; --ink:#000; --muted:#444}
   body{background:#fff; color:#000}
@@ -123,9 +141,7 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
   .badge{border-color:#999}
 }
 
-
-
-/* 폼 인풋 */
+/* 폼 인풋 (기본값만 유지) */
 .input{
   flex:1 1 220px;
   min-width:220px;
@@ -140,14 +156,6 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 }
 .input:focus{border-color:var(--primary)}
 
-/* Ghost 버튼 */
-.btn.ghost{
-  background:transparent;
-  border-color:var(--line);
-  opacity:.9;
-}
-.btn.ghost:hover{background:#0f1526}
-
 /* 알림/에러 */
 .alert{
   margin-top:10px;
@@ -160,222 +168,14 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 }
 .hidden{display:none}
 
-/* 최근 chips */
-.chips{display:flex; gap:8px; flex-wrap:wrap; margin-top:12px}
-.chip{
-  background:rgba(126,162,255,.12);
-  border:1px solid rgba(126,162,255,.4);
-  color:var(--ink);
-  padding:6px 10px;
-  border-radius:999px;
-  font-weight:800;
-  cursor:pointer;
-}
-.chip:hover{background:rgba(126,162,255,.2)}
-
-/* 입력박스/버튼 유틸 */
-.input{
-  flex:1 1 220px; min-width:220px;
-  background:var(--surface-2); color:var(--ink);
-  border:1px solid var(--line); border-radius:10px;
-  padding:10px 12px; font-weight:700; letter-spacing:.2px; outline:none;
-}
-.input:focus{border-color:var(--primary)}
-.btn.ghost{background:transparent; border-color:var(--line); opacity:.9}
-.btn.ghost:hover{background:#0f1526}
-.alert{margin-top:10px;padding:10px 12px;border-radius:10px;border:1px solid rgba(239,68,68,.55);background:rgba(239,68,68,.14);color:#ffd8d8;font-weight:700}
-.hidden{display:none}
-
-/* 라운드/그룹 섹션 */
-.round{margin-top:6px}
-.group-list{margin-top:6px}
-.group{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-top:1px dashed #2a355d}
-.group:first-child{border-top:none}
-.pill{padding:3px 8px;border-radius:999px;font-size:12px;border:1px solid #33416f;color:var(--muted)}
-.pill.green{border-color:rgba(34,197,94,.6);color:#d9ffe7}
-.pill.warn{border-color:rgba(245,158,11,.6);color:#fff4d6}
-.pill.red{border-color:rgba(239,68,68,.7);color:#ffd8d8}
-
-/* 최근 chips */
-.chips{display:flex; gap:8px; flex-wrap:wrap; margin-top:12px}
-.chip{background:rgba(126,162,255,.12); border:1px solid rgba(126,162,255,.4); color:var(--ink); padding:6px 10px; border-radius:999px; font-weight:800; cursor:pointer}
-.chip:hover{background:rgba(126,162,255,.2)}
-
-
-/* 검색 카드 */
-.lookup {
-  max-width: 560px;
-  margin: 24px auto;
-  padding: 20px;
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 6px 20px rgba(0,0,0,.06);
-}
-.lookup h2 { margin: 0 0 12px; font-size: 20px; }
-.lookup .row { display: flex; gap: 12px; }
-.lookup input[type="text"] {
-  flex: 1; padding: 12px 14px; border-radius: 10px; border: 1px solid #e5e7eb;
-  font-size: 16px; outline: none;
-}
-.lookup button {
-  padding: 12px 16px; border: 0; border-radius: 10px; cursor: pointer; font-weight: 600;
-  background: #111827; color: #fff;
-}
-.lookup button:disabled { opacity: .6; cursor: not-allowed; }
-
-/* 결과 카드(요약) */
-.result-card {
-  max-width: 880px; margin: 20px auto; padding: 20px; background: #fff;
-  border-radius: 16px; box-shadow: 0 6px 20px rgba(0,0,0,.06);
-}
-.result-card .badges { display:flex; gap:8px; flex-wrap: wrap; margin: 6px 0 0; }
-.badge.pass { background:#10b9811a; color:#065f46; border:1px solid #10b98155; }
-.badge.fail { background:#ef44441a; color:#7f1d1d; border:1px solid #ef444455; }
-
-/* 테이블 */
-.tbl { width:100%; border-collapse: collapse; margin-top: 12px; }
-.tbl th, .tbl td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; text-align: left; }
-.tbl th { font-size: 13px; color:#475569; text-transform: uppercase; letter-spacing: .02em; }
-.tbl td .muted { color:#64748b; font-size: 12px; }
-.tbl td .ok { color:#16a34a; font-weight:600; }
-.tbl td .ng { color:#dc2626; font-weight:600; }
-
-/* 캡슐 KPI */
-.kpi { display:flex; gap:8px; align-items:center; }
-.kpill {
-  padding: 4px 10px; border-radius: 999px; background:#f1f5f9; color:#111827; font-weight:600; font-size:12px;
-}
-
-/* --- PASS/FAIL 총점 박스 --- */
-.round-box{
-  border:1px solid var(--line);
-  border-radius:16px;
-  padding:12px;
-  background:var(--surface-2);
-}
-.round-box.fail{
-  background:rgba(239,68,68,.14);       /* 빨강 톤 */
-  border-color:rgba(239,68,68,.55);
-}
-
-/* --- 진행도바(기존 .progress 그대로 두고 확장) --- */
-.progress { position: relative; }        /* 기준선 배치용 */
-.progress > div { transition: width .25s ease; }
-
-/* 평락(60% 미달)일 때 바를 빨간색으로 */
-.progress.danger > div{
-  background:linear-gradient(90deg, #ff7a7a, #ff5757);
-}
-
-/* 60% 컷 기준선 */
-.progress .cutoff{
-  position:absolute; top:0; bottom:0;
-  width:2px; background:rgba(255,255,255,.3);
-  transform:translateX(-1px);            /* 중앙 정렬 보정 */
-}
-/* ==== 진행도 바: 60% 컷 라인 & 상태별 색 ==== */
-.progress{ position:relative }               /* 라인 겹치기 위해 포지셔닝 */
-.progress .bar{ height:100% }                /* 막대 엘리먼트 명시 */
-.progress .cutline{
-  position:absolute; top:0; bottom:0;
-  left:60%; width:2px;                       /* 60% 위치에 세로 라인 */
-  background:rgba(255,255,255,.55);
-  pointer-events:none;
-}
-
-/* 라운드가 평락(불합격)이면 막대 색을 빨간 계열로 */
-.round.fail .progress > .bar{
-  background:linear-gradient(90deg, var(--bad), #ff6b6b);
-}
-
-/* 바 아래 캡션 여백 늘리기 */
-.progress-caption{ margin-top:10px; }
-.flex-col {
-  display: flex;
-  flex-direction: column;
-  gap: 12px; /* 각 줄 간격 */
-}
-
-.form-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.form-row label {
-  min-width: 80px;
-  font-weight: 700;
-  color: var(--muted);
-}
-/* 카드 폭 좁게 */
-.card.narrow {
-  max-width: 420px;  /* 원하는 폭: 360~480px 추천 */
-  margin: 0 auto;
-}
-
-/* 입력 줄 정리 */
-.form-row {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 14px;
-}
-.form-row label {
-  font-weight: 600;
-}
-/* === 입력·버튼 높이 통일: 전화번호/인증번호와 같은 높이로 고정 === */
-.input {
-  height: 40px;        /* ← 전화번호/인증번호와 동일 세로 높이 */
-  padding: 0 12px;     /* 세로 패딩 0으로 맞춤 */
-  line-height: 40px;   /* 텍스트 수직 중앙 정렬 느낌 */
-  font-size: 15px;     /* 모바일 확대 방지: 15~16px 권장 */
-}
-
-/* 버튼도 같은 높이로 */
-.btn {
-  height: 40px;
-  padding: 0 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* (선택) 라벨-입력 간격 살짝만 */
-.flex-col { gap: 10px; }
-.form-row { margin-bottom: 10px; }
-
-/* (선택) 힌트 문구는 별도 여백으로 처리 (줄 자체 높이에 영향 X) */
-.field-hint { margin-top: 6px; }
-/* === 모든 입력란 높이 강제 통일 === */
-.input {
-  height: 38px;          /* 원하는 높이 (전화번호 입력칸과 동일 값으로) */
-  padding: 0 10px;       /* 세로 패딩 제거 */
-  line-height: 38px;     /* 텍스트 수직 가운데 */
-  font-size: 15px;       /* 글씨 크기 유지 */
-  box-sizing: border-box;
-}
-
-/* 버튼도 똑같은 높이 */
-.btn {
-  height: 38px;
-  padding: 0 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-:root { --control-h: 40px; }   /* 필요하면 36~42px 사이로 조절 */
-
-.input {
-  height: var(--control-h) !important;
-  padding: 0 12px !important;    /* 세로 패딩 제거 */
-  line-height: normal !important;
-  box-sizing: border-box;
-}
-
-.btn {
-  height: var(--control-h) !important;
-  padding: 0 12px !important;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
+/* ==== 결과(그룹 박스)용 보조 스타일 ==== */
+.group-grid{display:grid; grid-template-columns:repeat(12,1fr); gap:12px}
+.group-box{border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--surface-2)}
+.group-box.ok{background:rgba(34,197,94,.12); border-color:rgba(34,197,94,.55)}
+.group-box.fail{background:rgba(239,68,68,.12); border-color:rgba(239,68,68,.55)}
+.span-12{grid-column:span 12}.span-6{grid-column:span 12}
+@media(min-width:860px){.span-6{grid-column:span 6}}
+.group-head{display:flex; align-items:center; justify-content:space-between; gap:10px}
+.subj-row{display:flex; flex-wrap:wrap; gap:6px 10px; margin-top:6px}
+.subj-chip{padding:4px 8px; border:1px solid var(--line); border-radius:999px; font-weight:800}
+.subj-chip .muted{opacity:.7; font-weight:600}
