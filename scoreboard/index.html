@@ -29,7 +29,9 @@
                  inputmode="numeric" placeholder="예) 015001"
                  maxlength="6" required />
         </div>
-
+<div id="hint" class="small" style="margin-top:10px">
+        • 숫자 6자리만 입력 가능합니다. 예: <code>015001</code>
+      </div>
         <!-- 전화번호 -->
         <div class="form-row">
           <label for="phone" class="small">전화번호</label>
@@ -57,9 +59,7 @@
         </div>
       </form>
 
-      <div id="hint" class="small" style="margin-top:10px">
-        • 숫자 6자리만 입력 가능합니다. 예: <code>015001</code>
-      </div>
+      
 
       <div id="error" class="alert hidden" role="alert" aria-live="assertive"></div>
     </div>
