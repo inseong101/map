@@ -290,3 +290,20 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 
 /* 바 아래 캡션 여백 늘리기 */
 .progress-caption{ margin-top:10px; }
+.flex-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px; /* 각 줄 간격 */
+}
+
+.form-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.form-row label {
+  min-width: 80px;
+  font-weight: 700;
+  color: var(--muted);
+}
