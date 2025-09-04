@@ -4,13 +4,12 @@ import { initializeApp, getApps, getApp }
 import { getFirestore }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-// ↓ 너의 Firebase 설정으로 교체
 const firebaseConfig = {
-  apiKey: "...",
-  authDomain: "...",
+  apiKey: "YOUR_API_KEY",
+  authDomain: "jeonjolhyup.firebaseapp.com",
   projectId: "jeonjolhyup",
   storageBucket: "jeonjolhyup.firebasestorage.app",
-  appId: "...",
+  appId: "YOUR_APP_ID",
 };
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
