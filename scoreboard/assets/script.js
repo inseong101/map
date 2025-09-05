@@ -628,8 +628,7 @@ document.addEventListener('DOMContentLoaded', initApp);
 window.goHome = goHome;
 window.initApp = initApp;
 window.normalizeRound = normalizeRound;
-window.renderResult   = renderResult;
-
+window.renderResultDynamic = renderResultDynamic;  // ← 필요 시 외부에서 쓰려면 이걸로
 // Firestore 로더가 참조할 전역(중복 선언 금지)
 window.__SUBJECT_TOTALS = SUBJECT_MAX;
 window.__GROUPS_DEF     = GROUPS;
