@@ -98,6 +98,32 @@ function getStudentById(id6){
   return (window.__SCORE_INDEX__ && window.__SCORE_INDEX__[id6]) || window.SCORE_DATA[id6] || null;
 }
 
+const ROUND_LABELS = ["1차","2차","3차","4차","5차","6차","7차","8차"];
+
+async function discoverRoundsFor(sid){
+  const found = [];
+  for (const label of ROUND_LABELS){
+    try {
+      const r = await window.fetchRoundFromFirestore(sid, label);
+      // 데이터 존재 판단: 과목 총점이 0보다 크거나, 새스키마면 total_correct>0
+      if (r && (
+        (typeof r.total_correct === 'number' && r.total_correct > 0) ||
+        (()=>{ // 과목합 검사
+          const norm = (window.normalizeRound?.(r)) || r;
+          const subjects = getSubjectScores(norm);
+          const sum = ALL_SUBJECTS.reduce((a,n)=>a+(subjects[n]?.score||0),0);
+          return sum > 0;
+        })()
+      )) {
+        found.push({ label, raw:r });
+      }
+    } catch (_e) {
+      // 없는 회차는 조용히 무시
+    }
+  }
+  return found; // [{label, raw}]
+}
+
 /* --------------------------
    2) DOM/유틸
 --------------------------- */
@@ -130,7 +156,29 @@ function hideError(){
   err.classList.add("hidden");
 }
 
-
+function makeFlipCard({id, title, frontHTML}){
+  const wrap = document.createElement('div');
+  wrap.className = 'col-12 col-lg-4';
+  wrap.innerHTML = `
+    <div id="${id}" class="flip-card">
+      <div class="flip-inner">
+        <div class="flip-face flip-front card">${frontHTML}</div>
+        <div class="flip-face flip-back card">
+          <h2 style="margin-top:0">${title} 평균 비교</h2>
+          <canvas id="${id}-canvas" width="360" height="180"></canvas>
+          <div class="small" id="${id}-cap" style="margin-top:8px; opacity:.8"></div>
+        </div>
+      </div>
+    </div>
+  `;
+  // 클릭으로 뒤집기(버튼 클릭은 제외)
+  const card = wrap.querySelector('.flip-card');
+  card.addEventListener('click', (e)=>{
+    if (e.target.closest('button')) return;
+    card.classList.toggle('is-flipped');
+  });
+  return wrap;
+}
 /* --------------------------
    3) 키 호환/정규화
 --------------------------- */
@@ -285,9 +333,9 @@ async function lookupStudent(e){
     const norm1 = (window.normalizeRound?.(r1)) || r1;
     const norm2 = (window.normalizeRound?.(r2)) || r2;
 
-    renderResult(id, norm1, norm2);
-    $("#view-home")?.classList.add("hidden");
-    $("#view-result")?.classList.remove("hidden");
+await renderResultDynamic(id);
+$("#view-home")?.classList.add("hidden");
+$("#view-result")?.classList.remove("hidden");
   } catch (err){
     console.error(err);
     showError("존재하지 않는 학수번호거나 미응시자입니다.");
@@ -316,15 +364,105 @@ async function lookupStudent(e){
   document.head.appendChild(el);
 })();
 
-function renderResult(id, round1, round2){
-  $("#res-sid").textContent = id;
-  const badges = $("#res-badges");
-  badges.innerHTML = "";
-  if (round1){ badges.innerHTML += `<span class="badge ${round1.pass?"pass":"fail"}">1차 ${round1.pass?"합격":"불합격"}</span>`; }
-  if (round2){ badges.innerHTML += `<span class="badge ${round2.pass?"pass":"fail"}">2차 ${round2.pass?"합격":"불합격"}</span>`; }
+async function renderResultDynamic(sid){
+  // 0) 학교/학수번호 카드 먼저
+  const school = getSchoolFromSid(sid);
+  const grid = document.getElementById('cards-grid');
+  grid.innerHTML = '';
 
-  renderRound("#round-1", "1차", round1);
-  renderRound("#round-2", "2차", round2);
+  const sidCard = makeFlipCard({
+    id: 'card-sid',
+    title: '종합',
+    frontHTML: `
+      <div class="flex" style="justify-content:space-between;">
+        <div>
+          <div class="small">학수번호</div>
+          <div class="kpi"><div class="num">${sid}</div></div>
+          <div class="small">${school}</div>
+        </div>
+        <div class="flex" id="res-badges"></div>
+      </div>
+      <hr class="sep" />
+      <div class="small" style="opacity:.8">카드를 클릭하면 학교/전국 평균 비교 그래프가 나옵니다.</div>
+    `
+  });
+  grid.appendChild(sidCard);
+
+  // 1) 회차 자동 탐색
+  const rounds = await discoverRoundsFor(sid); // [{label, raw}]
+  if (rounds.length === 0){
+    // 없으면 메시지
+    const msg = document.createElement('div');
+    msg.className = 'col-12';
+    msg.innerHTML = `<div class="card"><div class="small" style="opacity:.8">조회 가능한 회차 데이터가 없습니다.</div></div>`;
+    grid.appendChild(msg);
+  }
+
+  // 2) 각 회차 카드 생성 + 앞면에 기존 renderRound 재사용
+  //    renderRound(selector, title, roundNorm)
+  const totalMax = ALL_SUBJECTS.reduce((a,n)=>a+(SUBJECT_MAX[n]||0),0);
+  const studentTotals = {}; // { '1차': number, ... } — 뒤면 차트에 사용
+
+  for (const {label, raw} of rounds){
+    const norm = (window.normalizeRound?.(raw)) || raw;
+
+    // 앞면 컨테이너 id를 만들어 renderRound 삽입
+    const hostId = `round-host-${label}`;
+    const card = makeFlipCard({
+      id: `card-${label}`,
+      title: label,
+      frontHTML: `<div id="${hostId}"></div>`
+    });
+    grid.appendChild(card);
+    renderRound(`#${hostId}`, label, norm);
+
+    // 개인 총점 산출(뒤면 차트용)
+    const subjects = getSubjectScores(norm);
+    studentTotals[label] = ALL_SUBJECTS.reduce((a,n)=>a+(subjects[n]?.score||0),0);
+  }
+
+  // 3) 배지(최상단) — 1차/2차만 표시하고 싶으면 rounds에서 찾아서 붙임
+  const badgesHost = document.getElementById('res-badges');
+  if (badgesHost){
+    badgesHost.innerHTML = '';
+    for (const check of ['1차','2차']){
+      const r = rounds.find(x=>x.label===check);
+      if (!r) continue;
+      const norm = (window.normalizeRound?.(r.raw)) || r.raw;
+      const subjects = getSubjectScores(norm);
+      const sc = ALL_SUBJECTS.reduce((a,n)=>a+(subjects[n]?.score||0),0);
+      const passOverall = sc >= totalMax*0.6; // (여기선 단순 pass만 배지로)
+      badgesHost.innerHTML += `<span class="badge ${passOverall?'pass':'fail'}">${check} ${passOverall?'합격':'불합격'}</span>`;
+    }
+  }
+
+  // 4) 뒤면 그래프 그리기
+  const schoolName = school;
+  for (const {label} of rounds){
+    const my = studentTotals[label]||0;
+    const { nationalAvg, schoolAvg } = await getAverages(schoolName, label);
+    drawBarChart(document.getElementById(`card-${label}-canvas`), [
+      {label:'본인', value: my},
+      {label:'학교평균', value: schoolAvg},
+      {label:'전국평균', value: nationalAvg},
+    ]);
+    const c = document.getElementById(`card-${label}-cap`);
+    if (c) c.textContent = `${label} 총점 기준 / 최대 ${totalMax}`;
+  }
+
+  // 학수번호 카드(종합) — 최근 회차(있으면 2차→… 우선)로 비교
+  const pick = rounds.find(r=>r.label==='2차') || rounds[rounds.length-1] || null;
+  if (pick){
+    const my = studentTotals[pick.label]||0;
+    const { nationalAvg, schoolAvg } = await getAverages(schoolName, pick.label);
+    drawBarChart(document.getElementById('card-sid-canvas'), [
+      {label:'본인', value: my},
+      {label:'학교평균', value: schoolAvg},
+      {label:'전국평균', value: nationalAvg},
+    ]);
+    const c = document.getElementById('card-sid-cap');
+    if (c) c.textContent = `${pick.label} 총점 기준 / 최대 ${totalMax}`;
+  }
 }
 
 // 과목 점수 맵을 뽑는다(없으면 0점), max는 SUBJECT_MAX 강제
