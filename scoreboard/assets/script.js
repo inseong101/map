@@ -32,6 +32,53 @@ const GROUPS = [
   { id: "그룹6", label: "그룹 6", subjects: ["예방","생리","본초"], span: 6 },
 ];
 
+// 01~12 → 학교명
+const SCHOOL_MAP = {
+  "01":"가천대","02":"경희대","03":"대구한","04":"대전대",
+  "05":"동국대","06":"동신대","07":"동의대","08":"부산대",
+  "09":"상지대","10":"세명대","11":"원광대","12":"우석대"
+};
+function getSchoolFromSid(sid){
+  const p2 = String(sid||"").slice(0,2);
+  return SCHOOL_MAP[p2] || "미상";
+}
+
+// (임시) 평균치 가져오기 — 나중에 Firestore 값으로 교체 가능
+async function getAverages(schoolName, roundLabel){
+  const TOTAL = ALL_SUBJECTS.reduce((a,n)=>a+(SUBJECT_MAX[n]||0),0);
+  return {
+    nationalAvg: Math.round(TOTAL * 0.60),
+    schoolAvg:   Math.round(TOTAL * 0.62)
+  };
+}
+
+// 캔버스 막대 그래프
+function drawBarChart(canvas, items){
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
+  const padding = 24, axisY = H - padding;
+  const maxV = Math.max(1, ...items.map(i=>i.value));
+  const barW = Math.min(60, (W - padding*2) / (items.length * 1.8));
+  const gap  = barW * 0.8;
+
+  ctx.strokeStyle = 'rgba(255,255,255,.25)';
+  ctx.beginPath(); ctx.moveTo(padding, axisY); ctx.lineTo(W-padding, axisY); ctx.stroke();
+
+  const colors = ['#7ea2ff','#4cc9ff','#22c55e'];
+  items.forEach((it, i)=>{
+    const x = padding + i*(barW+gap) + 10;
+    const h = Math.round((it.value / maxV) * (H - padding*2));
+    const y = axisY - h;
+    ctx.fillStyle = colors[i % colors.length];
+    ctx.fillRect(x, y, barW, h);
+    ctx.fillStyle = '#e8eeff'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(String(it.value), x+barW/2, y-6);
+    ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.font = '12px system-ui';
+    ctx.fillText(it.label, x+barW/2, axisY+14);
+  });
+}
 // 모든 과목 목록(렌더/합계에 사용)
 const ALL_SUBJECTS = GROUPS.flatMap(g => g.subjects);
 
