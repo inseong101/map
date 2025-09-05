@@ -247,6 +247,69 @@ function drawLineChart(canvas, labels, series, maxValue){
 }
 
 
+/* -------------------- 6.5) scores_raw → round 오답 주입기 -------------------- */
+/**
+ * Firestore 로더가 제공하는 훅들을 “있으면 사용, 없으면 그냥 통과” 방식으로 호출.
+ * 기대하는 로더 측 함수(아무거나 하나만 구현돼도 됨):
+ *  - window.fetchScoresRawSession(sid, roundLabel, sessionLabel) → { wrongNumbers: [...]} 또는 { wrong: [...]} 등
+ *  - window.fetchScoresRawAllSessions(sid, roundLabel) → { "1교시":[...], "2교시":[...], ... }
+ *  - window.fetchWrongBySession(sid, roundLabel) → { "1교시":[...], ... } (별칭)
+ *
+ * 반환: roundRaw에 { wrong_by_session: {...} } 을 병합한 새 객체
+ */
+async function enrichRoundWithWrongs(sid, roundLabel, roundRaw) {
+  const dst = { ...roundRaw };
+
+  // 1) 한 방에 모든 교시를 주는 API가 있으면 사용
+  if (typeof window.fetchScoresRawAllSessions === 'function') {
+    try {
+      const all = await window.fetchScoresRawAllSessions(sid, roundLabel);
+      if (all && typeof all === 'object') {
+        dst.wrong_by_session = all;
+        return dst;
+      }
+    } catch(e) { /* ignore */ }
+  }
+  if (typeof window.fetchWrongBySession === 'function') {
+    try {
+      const all = await window.fetchWrongBySession(sid, roundLabel);
+      if (all && typeof all === 'object') {
+        dst.wrong_by_session = all;
+        return dst;
+      }
+    } catch(e) { /* ignore */ }
+  }
+
+  // 2) 세션별로 하나씩 불러오는 API가 있으면 1~4교시 순회
+  const sessions = ["1교시","2교시","3교시","4교시"];
+  const bag = {};
+  let hit = false;
+
+  if (typeof window.fetchScoresRawSession === 'function') {
+    for (const sess of sessions) {
+      try {
+        const doc = await window.fetchScoresRawSession(sid, roundLabel, sess);
+        // 예상 필드: wrongNumbers / wrong / wrong_questions / wrongQuestions
+        const arr = toNumArray(
+          doc?.wrongNumbers ?? doc?.wrong ?? doc?.wrong_questions ?? doc?.wrongQuestions
+        );
+        if (arr.length) { bag[sess] = arr; hit = true; }
+      } catch(e) { /* ignore */ }
+    }
+  }
+
+  if (hit) {
+    dst.wrong_by_session = { ...(dst.wrong_by_session||{}), ...bag };
+  }
+
+  return dst;
+}
+
+
+
+
+
+
 /* -------------------- 7) 오답 수집 & 패널 -------------------- */
 
 /** ① 교시 → 과목 구간표
