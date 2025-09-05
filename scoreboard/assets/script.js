@@ -25,11 +25,11 @@ const SUBJECT_MAX = {
 // 표시 순서: 1 → 3 → 2 → 4 → 5 → 6
 const GROUPS = [
   { id: "그룹1", label: "그룹 1", subjects: ["간","심","비","폐","신","상한","사상"], layoutChunks: [5,2], span: 12 },
-  { id: "그룹3", label: "그룹 3", subjects: ["침구"], span: 6 },
-  { id: "그룹2", label: "그룹 2", subjects: ["보건"], span: 6 },
+  { id: "그룹3", label: "그룹 3", subjects: ["침구"], span: 12 },
+  { id: "그룹2", label: "그룹 2", subjects: ["보건"], span: 12 },
   { id: "그룹4", label: "그룹 4", subjects: ["외과","신경","안이비"], span: 12 },
-  { id: "그룹5", label: "그룹 5", subjects: ["부인과","소아"], span: 6 },
-  { id: "그룹6", label: "그룹 6", subjects: ["예방","생리","본초"], span: 6 },
+  { id: "그룹5", label: "그룹 5", subjects: ["부인과","소아"], span: 12 },
+  { id: "그룹6", label: "그룹 6", subjects: ["예방","생리","본초"], span: 12 },
 ];
 
 // 01~12 → 학교명
