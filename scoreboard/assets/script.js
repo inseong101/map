@@ -437,7 +437,6 @@ async function renderResultDynamic(sid){
     `
   });
   // SID 카드 높이 조금 더
-  sidCard.style.setProperty('--flip-h', '320px');
   grid.appendChild(sidCard);
 
   // 회차 자동 탐색
@@ -518,6 +517,9 @@ async function renderResultDynamic(sid){
   );
   const cap = document.getElementById('card-sid-cap');
   if (cap) cap.textContent = `회차별 총점 추이 (최대 ${TOTAL_MAX})`;
+
+   syncFlipHeights(document.getElementById('cards-grid'));
+installFlipHeightObservers();
 }
 
 /* --------------------------
@@ -588,3 +590,52 @@ window.renderResultDynamic = renderResultDynamic;
 // Firestore 로더가 참조할 전역
 window.__SUBJECT_TOTALS = SUBJECT_MAX;
 window.__GROUPS_DEF     = GROUPS;
+
+
+// ===== Flip 높이 동기화: 앞/뒤 중 더 큰 높이에 맞추기 =====
+function measureFaceHeight(card, faceEl){
+  // 카드의 너비에 맞춰 오프스크린에서 자연 높이 측정
+  const tmp = document.createElement('div');
+  tmp.className = faceEl.className.replace('flip-face','').trim(); // .card 등의 스타일 유지
+  tmp.style.cssText = `
+    position:absolute; visibility:hidden; left:-9999px; top:-9999px;
+    width:${card.clientWidth}px;
+  `;
+  tmp.innerHTML = faceEl.innerHTML;
+  document.body.appendChild(tmp);
+  const h = tmp.scrollHeight;
+  document.body.removeChild(tmp);
+  return h;
+}
+
+function syncFlipHeights(root=document){
+  const cards = (root instanceof Element ? root : document).querySelectorAll('.flip-card');
+  cards.forEach(card=>{
+    const inner = card.querySelector('.flip-inner');
+    const front = card.querySelector('.flip-front');
+    const back  = card.querySelector('.flip-back');
+    if (!inner || !front || !back) return;
+
+    // 앞/뒤 각자 자연 높이 측정 후 큰 값 적용
+    const hf = measureFaceHeight(card, front);
+    const hb = measureFaceHeight(card, back);
+    const H  = Math.max(hf, hb);
+    inner.style.height = H + 'px';
+  });
+}
+
+// 최초 1회: 리사이즈/폰트로드/캔버스그림 끝나고도 재동기화
+let __flipObserverInstalled = false;
+function installFlipHeightObservers(){
+  if (__flipObserverInstalled) return;
+  __flipObserverInstalled = true;
+
+  // 창 크기 변경 시
+  window.addEventListener('resize', ()=> syncFlipHeights(document.getElementById('cards-grid')));
+
+  // 각 카드 앞/뒤 면 콘텐츠 변화 감지
+  const ro = new ResizeObserver(()=> syncFlipHeights(document.getElementById('cards-grid')));
+  document.addEventListener('DOMContentLoaded', ()=>{
+    document.querySelectorAll('.flip-card .flip-face').forEach(el=> ro.observe(el));
+  });
+}
