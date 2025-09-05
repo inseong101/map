@@ -192,3 +192,52 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 
 /* 3열 레이아웃(넓은 화면) */
 @media (min-width: 960px){ .col-lg-4 { grid-column: span 4; } }
+
+/* 카드 그리드 */
+.cards-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+@media (min-width: 960px){
+  .cards-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* Flip card */
+.flip-card { perspective: 1200px; }
+.flip-card .flip-inner{
+  position: relative;
+  width: 100%;
+  height: var(--flip-h, 280px);       /* 필요하면 JS에서 --flip-h 조절 */
+  transform-style: preserve-3d;
+  transition: transform .6s ease;
+}
+.flip-card.is-flipped .flip-inner{ transform: rotateY(180deg); }
+
+.flip-card .flip-face{
+  position: absolute; inset: 0;
+  backface-visibility: hidden;
+  border-radius: 16px;
+  overflow: hidden;
+}
+.flip-card .flip-front { transform: rotateY(0deg); }
+.flip-card .flip-back  { transform: rotateY(180deg); }
+
+/* 회차 그룹 카드 내부 공통 (가독용) */
+.group-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
+.group-box{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--surface-2)}
+.group-box.ok{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.55)}
+.group-box.fail{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.55)}
+.span-12{grid-column:span 12}
+.group-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.subj-row{display:flex;flex-wrap:wrap;gap:6px 10px;margin-top:6px}
+.subj-chip{padding:4px 8px;border:1px solid var(--line);border-radius:999px;font-weight:800}
+.subj-chip .muted{opacity:.7;font-weight:600}
+
+/* 진행도 바(60% 컷 라인) */
+.progress{position:relative;width:100%;height:10px;background:#1b2542;border-radius:999px;overflow:hidden}
+.progress > .bar{height:100%;background:linear-gradient(90deg,#7ea2ff,#4cc9ff)}
+.progress .cutline{position:absolute;top:0;bottom:0;left:60%;width:2px;background:rgba(255,255,255,.55);pointer-events:none}
+
+/* 터치/클릭 시 버튼 제외하고 뒤집기 */
+.flip-card button{position:relative; z-index: 2;}
