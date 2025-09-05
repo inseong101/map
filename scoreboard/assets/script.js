@@ -53,6 +53,36 @@ async function getAverages(schoolName, roundLabel){
 }
 
 
+
+
+// 캔버스 막대 그래프
+function drawBarChart(canvas, items){
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
+  const padding = 24, axisY = H - padding;
+  const maxV = Math.max(1, ...items.map(i=>i.value));
+  const barW = Math.min(60, (W - padding*2) / (items.length * 1.8));
+  const gap  = barW * 0.8;
+
+  ctx.strokeStyle = 'rgba(255,255,255,.25)';
+  ctx.beginPath(); ctx.moveTo(padding, axisY); ctx.lineTo(W-padding, axisY); ctx.stroke();
+
+  const colors = ['#7ea2ff','#4cc9ff','#22c55e'];
+  items.forEach((it, i)=>{
+    const x = padding + i*(barW+gap) + 10;
+    const h = Math.round((it.value / maxV) * (H - padding*2));
+    const y = axisY - h;
+    ctx.fillStyle = colors[i % colors.length];
+    ctx.fillRect(x, y, barW, h);
+    ctx.fillStyle = '#e8eeff'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(String(it.value), x+barW/2, y-6);
+    ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.font = '12px system-ui';
+    ctx.fillText(it.label, x+barW/2, axisY+14);
+  });
+}
+
 // 꺾은선 그래프: labels = ["1차", "2차", ...], series = [{name, values: [..]}]
 function drawLineChart(canvas, labels, series, maxValue){
   if (!canvas) return;
@@ -125,34 +155,6 @@ function drawLineChart(canvas, labels, series, maxValue){
   });
 }
 
-
-// 캔버스 막대 그래프
-function drawBarChart(canvas, items){
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const W = canvas.width, H = canvas.height;
-  ctx.clearRect(0,0,W,H);
-  const padding = 24, axisY = H - padding;
-  const maxV = Math.max(1, ...items.map(i=>i.value));
-  const barW = Math.min(60, (W - padding*2) / (items.length * 1.8));
-  const gap  = barW * 0.8;
-
-  ctx.strokeStyle = 'rgba(255,255,255,.25)';
-  ctx.beginPath(); ctx.moveTo(padding, axisY); ctx.lineTo(W-padding, axisY); ctx.stroke();
-
-  const colors = ['#7ea2ff','#4cc9ff','#22c55e'];
-  items.forEach((it, i)=>{
-    const x = padding + i*(barW+gap) + 10;
-    const h = Math.round((it.value / maxV) * (H - padding*2));
-    const y = axisY - h;
-    ctx.fillStyle = colors[i % colors.length];
-    ctx.fillRect(x, y, barW, h);
-    ctx.fillStyle = '#e8eeff'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
-    ctx.fillText(String(it.value), x+barW/2, y-6);
-    ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.font = '12px system-ui';
-    ctx.fillText(it.label, x+barW/2, axisY+14);
-  });
-}
 // 모든 과목 목록(렌더/합계에 사용)
 const ALL_SUBJECTS = GROUPS.flatMap(g => g.subjects);
 
