@@ -320,46 +320,69 @@ function renderRound(sel, title, round){
 
   // 전체 합계(총점 340 기준)
   const totalScore = ALL_SUBJECTS.reduce((a,n)=>a+(subjects[n]?.score||0), 0);
-  const totalMax   = ALL_SUBJECTS.reduce((a,n)=>a+(subjects[n]?.max||0),   0); // = 340
-const overallRate = pct(totalScore, totalMax);
-const overallPass = (round && typeof round.pass === "boolean")
-  ? round.pass
-  : (totalScore >= totalMax * 0.6);
+  const totalMax   = ALL_SUBJECTS.reduce((a,n)=>a+(subjects[n]?.max||0),   0);
+  const overallRate = pct(totalScore, totalMax);
 
-// ✅ 라운드 박스에 상태 클래스(불합격이면 .fail) 추가
-const roundCls = `round ${overallPass ? "" : "fail"}`;
-
-let html = `
-  <div class="${roundCls}">
-    <div class="flex" style="justify-content:space-between;">
-      <h2 style="margin:0">${title} 총점</h2>
-      <div class="kpi"><div class="num">${fmt(totalScore)}</div><div class="sub">/ ${fmt(totalMax)}</div></div>
-    </div>
-
-    <!-- ✅ 진행도 바: 막대(.bar) + 60% 컷라인(.cutline) -->
-    <div class="progress" style="margin:8px 0 2px 0">
-      <div class="bar" style="width:${overallRate}%"></div>
-      <div class="cutline"></div>
-    </div>
-
-    <!-- ✅ 캡션에 여백 클래스 추가 -->
-    <div class="small progress-caption">
-      정답률 ${overallRate}% (컷 60%)
-      ${overallPass ? pill("합격","ok") : pill("불합격","red")}
-    </div>
-  </div>
-  <div class="group-grid" style="margin-top:12px">
-`;
-  // 그룹 박스들 (기존 로직 동일: 그룹별 40% 과락은 각 카드에서 빨강/초록)
-  GROUPS.forEach(g=>{
+  // ====== 그룹별 과락 판정(40% 미만) 미리 계산 ======
+  const groupSummaries = GROUPS.map(g => {
     const gScore = g.subjects.reduce((a,n)=>a+(subjects[n]?.score||0), 0);
     const gMax   = g.subjects.reduce((a,n)=>a+(subjects[n]?.max||0),   0);
     const gRate  = pct(gScore, gMax);
-    const gPass  = gScore >= Math.ceil(gMax * 0.4);
+    const gPass  = gScore >= Math.ceil(gMax * 0.4); // 40%
+    return { def:g, score:gScore, max:gMax, rate:gRate, pass:gPass };
+  });
 
+  const anyGroupFail = groupSummaries.some(s => !s.pass);
+
+  // ====== 평락(총점 60% 미만) 판정 ======
+  const meets60 = (totalScore >= totalMax * 0.6); // 60% 이상이면 통과
+  const overallPass = meets60 && !anyGroupFail;
+
+  // ====== 사유 문구 생성 ======
+  let reasonText = "통과";
+  if (!overallPass){
+    if (!meets60 && anyGroupFail) reasonText = "과락 및 평락으로 인한 불합격";
+    else if (!meets60)            reasonText = "평락으로 인한 불합격";
+    else                          reasonText = "과락으로 인한 불합격";
+  }
+
+  // 라운드 박스 상태 클래스
+  const roundCls = `round ${overallPass ? "" : "fail"}`;
+
+  // ====== 상단 총점 박스 + 진행도바(60% 컷 라인 포함) ======
+  let html = `
+    <div class="${roundCls}">
+      <div class="flex" style="justify-content:space-between;">
+        <h2 style="margin:0">${title} 총점</h2>
+        <div class="kpi"><div class="num">${fmt(totalScore)}</div><div class="sub">/ ${fmt(totalMax)}</div></div>
+      </div>
+
+      <div class="progress" style="margin:8px 0 2px 0">
+        <div class="bar" style="width:${overallRate}%"></div>
+        <div class="cutline" style="left:60%"></div>
+      </div>
+
+      <div class="small progress-caption" style="margin-top:10px">
+        정답률 ${overallRate}% (컷 60%) · ${overallPass ? pill("통과","ok") : pill("불합격","red")}
+        <div class="small" style="margin-top:6px; opacity:.9">${reasonText}</div>
+      </div>
+    </div>
+
+    <div class="group-grid" style="margin-top:12px">
+  `;
+
+  // ====== 그룹 박스 렌더(각 그룹 옆에 '통과'/'과락' 표시) ======
+  groupSummaries.forEach(({def, score, max, rate, pass})=>{
+    // 과목 칩들
     let chipsHtml = "";
-    if (g.layoutChunks && g.layoutChunks.length){
-      const rows = chunk(g.subjects, g.layoutChunks);
+    const names = def.subjects;
+    if (def.layoutChunks && def.layoutChunks.length){
+      const rows = (function chunk(arr, sizes){
+        const out=[]; let i=0;
+        for(const s of sizes){ out.push(arr.slice(i,i+s)); i+=s; }
+        if (i < arr.length) out.push(arr.slice(i));
+        return out;
+      })(names, def.layoutChunks);
       rows.forEach(row=>{
         chipsHtml += `<div class="subj-row">` + row.map(n=>{
           const s = subjects[n]||{score:0,max:SUBJECT_MAX[n]||0};
@@ -367,24 +390,27 @@ let html = `
         }).join("") + `</div>`;
       });
     } else {
-      chipsHtml = `<div class="subj-row">` + g.subjects.map(n=>{
+      chipsHtml = `<div class="subj-row">` + names.map(n=>{
         const s = subjects[n]||{score:0,max:SUBJECT_MAX[n]||0};
         return `<span class="subj-chip">${n} <span class="muted">${fmt(s.score)}/${fmt(s.max)}</span></span>`;
       }).join("") + `</div>`;
     }
 
     html += `
-      <div class="group-box ${gPass? "ok":"fail"} span-${g.span||12}">
+      <div class="group-box ${pass ? "ok" : "fail"} span-${def.span||12}">
         <div class="group-head">
-          <div class="name" style="font-weight:800">${g.label}</div>
-          <div class="small">소계 ${fmt(gScore)}/${fmt(gMax)} · 정답률 ${gRate}% ${gPass? pill("통과","ok"):pill("과락","red")}</div>
+          <div class="name" style="font-weight:800">${def.label}</div>
+          <div class="small">
+            소계 ${fmt(score)}/${fmt(max)} · 정답률 ${rate}% 
+            ${pass ? pill("통과","ok") : pill("과락","red")}
+          </div>
         </div>
         ${chipsHtml}
       </div>
     `;
   });
 
-  html += `</div>`; // .group-grid 끝
+  html += `</div>`;
   host.innerHTML = html;
 }
 /* --------------------------
