@@ -49,13 +49,13 @@ const SESSION_SUBJECT_RANGES = {
     { from: 1,  to: 16, s: "상한" },
     { from: 17, to: 32, s: "사상" },
     { from: 33, to: 80, s: "침구" },
-    { from: 80, to: 100, s: "법규" },
+    { from: 81, to: 100, s: "보건" },
   ],
      "3교시": [
     { from: 1,  to: 16, s: "외과" },
     { from: 17, to: 32, s: "신경" },
     { from: 33, to: 48, s: "안이비" },
-    { from: 49, to: 80, s: "부인" }
+    { from: 49, to: 80, s: "부인과" }
   ],
      "4교시": [
     { from: 1,  to: 24, s: "소아" },
@@ -179,7 +179,7 @@ function getDb(){
 }
 function resolveScoresRootName(){
   if (window.__SCORES_ROOT_NAME__) return window.__SCORES_ROOT_NAME__;
-  return 'scores_raw'; // 네 로그가 scores_raw로 찍혀서 그대로 둠
+  return 'scores_raw'; // 네 DB 구조에 맞춤
 }
 // v9 modular 또는 v8 네임스페이스 둘 다 지원
 async function readDocMaybe(db, root, roundLabel, session, sid){
