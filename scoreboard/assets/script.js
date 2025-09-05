@@ -551,33 +551,33 @@ async function renderResultDynamic(sid){
     return;
   }
 
-  /* (A) (선택) 맨 위 카드: 앞(SID/학교/회차배지) / 뒤(꺾은선) */
-  if (SHOW_TREND_CARD) {
-    const topCard = makeFlipCard({
-      id: 'card-trend',
-      title: '종합 추이',
-      frontHTML: `
-        <div class="flex" style="justify-content:space-between;">
-          <div>
-            <div class="small">학수번호</div>
-            <div class="kpi"><div class="num" id="trend-sid">${sid}</div></div>
-            <div class="small" id="trend-school">${school}</div>
-          </div>
-          <div class="flex" id="trend-badges"></div>
-        </div>
-        <hr class="sep" />
-        <div class="small" style="opacity:.8">카드를 클릭하면 회차별 본인/학교/전국 꺾은선 그래프가 보입니다.</div>
-      `
-    });
-    grid.appendChild(topCard);
-  }
+/* (A) 맨 위 카드(옵션): 앞(SID/학교/회차배지) / 뒤(꺾은선) */
+let studentTotalsByRound = null; // 카드 꺼두면 null
+let labelsForTrend = null;
 
-  // 꺾은선 데이터(상단 카드가 있을 때만 준비)
-  let studentTotalsByRound, labelsForTrend;
-  if (SHOW_TREND_CARD) {
-    studentTotalsByRound = {};
-    labelsForTrend = [];
-  }
+if (SHOW_TREND_CARD) {
+  const topCard = makeFlipCard({
+    id: 'card-trend',
+    title: '종합 추이',
+    frontHTML: `
+      <div class="flex" style="justify-content:space-between;">
+        <div>
+          <div class="small">학수번호</div>
+          <div class="kpi"><div class="num" id="trend-sid">${sid}</div></div>
+          <div class="small" id="trend-school">${school}</div>
+        </div>
+        <div class="flex" id="trend-badges"></div>
+      </div>
+      <hr class="sep" />
+      <div class="small" style="opacity:.8">카드를 클릭하면 회차별 본인/학교/전국 꺾은선 그래프가 보입니다.</div>
+    `
+  });
+  grid.appendChild(topCard);
+
+  // 꺾은선 데이터 준비(맨 위 카드 켰을 때만)
+  studentTotalsByRound = {};
+  labelsForTrend = [];
+}
 
   /* (B) 회차 카드들: 앞(상세) / 뒤(오답 패널) */
   for (const {label, raw} of rounds){
@@ -602,12 +602,12 @@ async function renderResultDynamic(sid){
     renderRound(`#${hostId}`, label, norm);
 
     // 꺾은선용 본인 총점(상단 카드가 있을 때만 수집)
-    if (SHOW_TREND_CARD) {
-      const subs = getSubjectScores(norm);
-      const total = ALL_SUBJECTS.reduce((a,n)=>a+(subs[n]?.score||0),0);
-      studentTotalsByRound[label] = total;
-      labelsForTrend.push(label);
-    }
+if (SHOW_TREND_CARD) {
+  const subs = getSubjectScores(norm);
+  const total = ALL_SUBJECTS.reduce((a,n)=>a+(subs[n]?.score||0),0);
+  studentTotalsByRound[label] = total;
+  labelsForTrend.push(label);
+}
   }
 
   // (C) 상단 배지 & 꺾은선 — 트렌드 카드가 있을 때만
