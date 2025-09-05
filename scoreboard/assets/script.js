@@ -39,6 +39,9 @@ async function getAverages(_schoolName, _roundLabel){
   return { nationalAvg: Math.round(TOTAL_MAX * 0.60), schoolAvg: Math.round(TOTAL_MAX * 0.62) };
 }
 
+/* 맨 위 트렌드(학수번호) 카드 표시 여부 — false면 상단 카드만 숨김 */
+const SHOW_TREND_CARD = false;
+
 /* -------------------- 2) 오프라인 인덱스 -------------------- */
 window.SCORE_DATA = window.SCORE_DATA || {};
 (function buildIndex(){
@@ -139,14 +142,11 @@ function getSubjectScores(round){
 /*  - 프로젝트에 맞는 Firestore 인스턴스를 자동 탐색합니다.
     - 컬렉션명은 scores_raws 또는 scores_raw 모두 대응합니다. */
 function getDb(){
-  // 네 프로젝트에서 Firestore 인스턴스를 어디에 두었는지 확인하여 아래 후보 중 하나를 반환
   return window.firebaseDb || window.db || window.__db || null;
 }
 function resolveScoresRootName(){
-  // 외부에서 지정해두면 우선 사용
   if (window.__SCORES_ROOT_NAME__) return window.__SCORES_ROOT_NAME__;
-  // 기본은 scores_raws 사용, 필요하면 scores_raw로 바꿔도 됨
-  return 'scores_raw';
+  return 'scores_raw'; // 네 로그가 scores_raw로 찍혀서 그대로 둠
 }
 // v9 modular 또는 v8 네임스페이스 둘 다 지원
 async function readDocMaybe(db, root, roundLabel, session, sid){
@@ -155,12 +155,9 @@ async function readDocMaybe(db, root, roundLabel, session, sid){
       const snap = await db.collection(root).doc(roundLabel).collection(session).doc(sid).get();
       return snap.exists ? (snap.data()||null) : null;
     } else if (window.firebase && window.firebase.firestore && typeof window.firebase.firestore === 'function') {
-      // 혹시 다른 초기화 케이스
       const snap = await window.firebase.firestore().collection(root).doc(roundLabel).collection(session).doc(sid).get();
       return snap.exists ? (snap.data()||null) : null;
-    } else if (window['firebase-firestore'] || window.getFirestore){ // v9 (전역 import가 있을 수 있음)
-      // 전역에서 getFirestore/doc/getDoc가 노출되지 않으면 로더에서 처리 중일 수도 있음
-      // 여기서는 안전하게 v8 방식만 우선 지원하도록 함
+    } else if (window['firebase-firestore'] || window.getFirestore){
       return null;
     }
   }catch(e){ console.warn('[scores_raw readDocMaybe]', e); }
@@ -521,28 +518,33 @@ async function renderResultDynamic(sid){
     return;
   }
 
-  /* (A) 맨 위 카드: 앞(SID/학교/회차배지) / 뒤(꺾은선) */
-  const topCard = makeFlipCard({
-    id: 'card-trend',
-    title: '종합 추이',
-    frontHTML: `
-      <div class="flex" style="justify-content:space-between;">
-        <div>
-          <div class="small">학수번호</div>
-          <div class="kpi"><div class="num" id="trend-sid">${sid}</div></div>
-          <div class="small" id="trend-school">${school}</div>
+  /* (A) (선택) 맨 위 카드: 앞(SID/학교/회차배지) / 뒤(꺾은선) */
+  if (SHOW_TREND_CARD) {
+    const topCard = makeFlipCard({
+      id: 'card-trend',
+      title: '종합 추이',
+      frontHTML: `
+        <div class="flex" style="justify-content:space-between;">
+          <div>
+            <div class="small">학수번호</div>
+            <div class="kpi"><div class="num" id="trend-sid">${sid}</div></div>
+            <div class="small" id="trend-school">${school}</div>
+          </div>
+          <div class="flex" id="trend-badges"></div>
         </div>
-        <div class="flex" id="trend-badges"></div>
-      </div>
-      <hr class="sep" />
-      <div class="small" style="opacity:.8">카드를 클릭하면 회차별 본인/학교/전국 꺾은선 그래프가 보입니다.</div>
-    `
-  });
-  grid.appendChild(topCard);
+        <hr class="sep" />
+        <div class="small" style="opacity:.8">카드를 클릭하면 회차별 본인/학교/전국 꺾은선 그래프가 보입니다.</div>
+      `
+    });
+    grid.appendChild(topCard);
+  }
 
-  // 꺾은선 데이터 준비
-  const studentTotalsByRound = {};
-  const labelsForTrend = [];
+  // 꺾은선 데이터(상단 카드가 있을 때만 준비)
+  let studentTotalsByRound, labelsForTrend;
+  if (SHOW_TREND_CARD) {
+    studentTotalsByRound = {};
+    labelsForTrend = [];
+  }
 
   /* (B) 회차 카드들: 앞(상세) / 뒤(오답 패널) */
   for (const {label, raw} of rounds){
@@ -566,51 +568,54 @@ async function renderResultDynamic(sid){
     grid.appendChild(card);
     renderRound(`#${hostId}`, label, norm);
 
-    // 꺾은선용 본인 총점
-    const subs = getSubjectScores(norm);
-    const total = ALL_SUBJECTS.reduce((a,n)=>a+(subs[n]?.score||0),0);
-    studentTotalsByRound[label] = total;
-    labelsForTrend.push(label);
-  }
-
-  // (C) 상단 배지
-  const badgesHost = $('#trend-badges');
-  if (badgesHost){
-    badgesHost.innerHTML = '';
-    rounds.forEach(({label, raw})=>{
-      const norm = (window.normalizeRound?.(raw)) || raw;
+    // 꺾은선용 본인 총점(상단 카드가 있을 때만 수집)
+    if (SHOW_TREND_CARD) {
       const subs = getSubjectScores(norm);
-      const sc = ALL_SUBJECTS.reduce((a,n)=>a+(subs[n]?.score||0),0);
-      const passOverall = (sc >= TOTAL_MAX*0.6);
-      badgesHost.innerHTML += `<span class="badge ${passOverall?'pass':'fail'}">${label} ${passOverall?'합격':'불합격'}</span>`;
-    });
+      const total = ALL_SUBJECTS.reduce((a,n)=>a+(subs[n]?.score||0),0);
+      studentTotalsByRound[label] = total;
+      labelsForTrend.push(label);
+    }
   }
 
-  // (D) 상단 카드 뒤: 꺾은선 (본인/학교/전국 더미)
-  const trendCanvas = document.createElement('canvas');
-  trendCanvas.id = 'card-trend-canvas';
-  trendCanvas.width = 360; trendCanvas.height = 220;
-  $('#card-trend .flip-back.card').appendChild(trendCanvas);
+  // (C) 상단 배지 & 꺾은선 — 트렌드 카드가 있을 때만
+  if (SHOW_TREND_CARD) {
+    const badgesHost = $('#trend-badges');
+    if (badgesHost){
+      badgesHost.innerHTML = '';
+      rounds.forEach(({label, raw})=>{
+        const norm = (window.normalizeRound?.(raw)) || raw;
+        const subs = getSubjectScores(norm);
+        const sc = ALL_SUBJECTS.reduce((a,n)=>a+(subs[n]?.score||0),0);
+        const passOverall = (sc >= TOTAL_MAX*0.6);
+        badgesHost.innerHTML += `<span class="badge ${passOverall?'pass':'fail'}">${label} ${passOverall?'합격':'불합격'}</span>`;
+      });
+    }
 
-  const labels = labelsForTrend.sort((a,b)=> parseInt(a) - parseInt(b));
-  const meSeries   = labels.map(lb => studentTotalsByRound[lb] ?? null);
+    // 상단 카드 뒤: 꺾은선 (본인/학교/전국 더미)
+    const trendCanvas = document.createElement('canvas');
+    trendCanvas.id = 'card-trend-canvas';
+    trendCanvas.width = 360; trendCanvas.height = 220;
+    $('#card-trend .flip-back.card')?.appendChild(trendCanvas);
 
-  // (학교/전국 평균은 더미 계산 — 필요 시 실제 API 대체)
-  const schoolAvgSeries = await Promise.all(labels.map(async lb=>{
-    const { schoolAvg } = await getAverages(school, lb);
-    return schoolAvg;
-  }));
-  const nationalAvgSeries = await Promise.all(labels.map(async lb=>{
-    const { nationalAvg } = await getAverages('all', lb);
-    return nationalAvg;
-  }));
+    const labels = labelsForTrend.sort((a,b)=> parseInt(a) - parseInt(b));
+    const meSeries   = labels.map(lb => studentTotalsByRound[lb] ?? null);
 
-  const maxV = Math.max(...meSeries.filter(v=>v!=null), ...schoolAvgSeries, ...nationalAvgSeries, 1);
-  drawLineChart(trendCanvas, labels, [
-    { name:'본인',   values: meSeries },
-    { name:'학교',   values: schoolAvgSeries },
-    { name:'전국',   values: nationalAvgSeries },
-  ], maxV);
+    const schoolAvgSeries = await Promise.all(labels.map(async lb=>{
+      const { schoolAvg } = await getAverages(school, lb);
+      return schoolAvg;
+    }));
+    const nationalAvgSeries = await Promise.all(labels.map(async lb=>{
+      const { nationalAvg } = await getAverages('all', lb);
+      return nationalAvg;
+    }));
+
+    const maxV = Math.max(...meSeries.filter(v=>v!=null), ...schoolAvgSeries, ...nationalAvgSeries, 1);
+    drawLineChart(trendCanvas, labels, [
+      { name:'본인',   values: meSeries },
+      { name:'학교',   values: schoolAvgSeries },
+      { name:'전국',   values: nationalAvgSeries },
+    ], maxV);
+  }
 
   // 플립 높이 동기화
   requestAnimationFrame(()=>{
