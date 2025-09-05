@@ -1,11 +1,10 @@
 /* =========================================================
-   전졸협 성적 SPA 스크립트 (통합본)
-   - 상단 카드(앞): 학수번호/학교 + 회차 배지
-   - 상단 카드(뒤): 꺾은선(본인/학교/전국) — 존재 회차만
-   - 회차 카드(앞): 상세(총점/그룹/과락)
-   - 회차 카드(뒤): 과목별 틀린 문항 목록(wrongQuestions)
-   - scores_raw 교시별 오답 → 과목 매핑 주입(enrichRoundWithWrongs)
-   - 플립 높이: 앞/뒤 큰 쪽으로 자동 맞춤
+   전졸협 성적 SPA 스크립트 (오답 패널 반영판, scores_raw 연동)
+   - 상단 카드 앞면: 학수번호/학교 + 회차 배지
+   - 상단 카드 뒷면: 꺾은선(본인/학교/전국) — 존재하는 회차만
+   - 각 회차 카드 앞면: 상세(총점/그룹/과락)
+   - 각 회차 카드 뒷면: 과목별 틀린 문항 목록 (scores_raw → 교시별 번호 → 과목 매핑)
+   - 플립 높이: 앞/뒤 중 큰 쪽에 자동 맞춤
 ========================================================= */
 
 /* -------------------- 0) 과목/그룹 정의 -------------------- */
@@ -29,19 +28,26 @@ const GROUPS = [
 const ALL_SUBJECTS = GROUPS.flatMap(g => g.subjects);
 const TOTAL_MAX = ALL_SUBJECTS.reduce((a,n)=>a+(SUBJECT_MAX[n]||0),0); // 340
 
-// 학교 코드 → 이름
+};
+const GROUPS = [
+  { id: "그룹1", label: "그룹 1", subjects: ["간","심","비","폐","신","상한","사상"], layoutChunks: [5,2], span: 12 },
+  { id: "그룹3", label: "그룹 3", subjects: ["침구"], span: 12 },
+  { id: "그룹2", label: "그룹 2", subjects: ["보건"], span: 12 },
+  { id: "그룹4", label: "그룹 4", subjects: ["외과","신경","안이비"], span: 12 },
+  { id: "그룹5", label: "그룹 5", subjects: ["부인과","소아"], span: 12 },
+  { id: "그룹6", label: "그룹 6", subjects: ["예방","생리","본초"], span: 12 },
+];
+/* -------------------- 0-2) 학수번호 → 학교명 -------------------- */
 const SCHOOL_MAP = {
   "01":"가천대","02":"경희대","03":"대구한","04":"대전대",
   "05":"동국대","06":"동신대","07":"동의대","08":"부산대",
   "09":"상지대","10":"세명대","11":"우석대","12":"원광대"
 };
 function getSchoolFromSid(sid){ const p2 = String(sid||"").slice(0,2); return SCHOOL_MAP[p2] || "미상"; }
-
 const ROUND_LABELS = ["1차","2차","3차","4차","5차","6차","7차","8차"];
 
-/* -------------------- 1) 평균치(임시) -------------------- */
+/* -------------------- 1) 평균치(임시 더미) -------------------- */
 async function getAverages(_schoolName, _roundLabel){
-  // 백엔드 준비되기 전까지 임시
   return { nationalAvg: Math.round(TOTAL_MAX * 0.60), schoolAvg: Math.round(TOTAL_MAX * 0.62) };
 }
 
@@ -79,11 +85,6 @@ function pickKey(obj, candidates){
   }
   return null;
 }
-function toNumArray(v){
-  if (Array.isArray(v)) return v.map(n=>+n).filter(n=>!isNaN(n));
-  if (typeof v === 'string') return v.split(/[,\s]+/).map(n=>+n).filter(n=>!isNaN(n));
-  return [];
-}
 
 /* -------------------- 4) 정규화 -------------------- */
 function normalizeRound(raw){
@@ -105,12 +106,7 @@ function normalizeRound(raw){
         }
       });
     }
-    return {
-      total:{score:0,max:0},
-      pass:!!(raw.overall_pass ?? raw.round_pass ?? raw.pass),
-      fails:[],
-      by_class:{ "종합":{ total:{score:0,max:0}, groups } }
-    };
+    return { total:{score:0,max:0}, pass:!!(raw.overall_pass ?? raw.round_pass ?? raw.pass), fails:[], by_class:{ "종합":{ total:{score:0,max:0}, groups } } };
   }
 
   // 구 스키마
@@ -151,59 +147,57 @@ function getSubjectScores(round){
   return result;
 }
 
-/* -------------------- 4.5) 교시→과목 범위 (매핑 표) -------------------- */
-/* 반드시 실제 출제 범위로 보완해줘야 함 */
-const SESSION_SUBJECT_RANGES = {
-  "1교시": [
-    { s: "간", from:  1, to: 16 },
-    { s: "심", from: 17, to: 32 },
-    { s: "비", from: 33, to: 48 },
-    { s: "폐", from: 49, to: 64 },
-    { s: "신", from: 65, to: 80 }
-     ],
-  "2교시": [
-    { s: "상한", from:  1, to: 16 },
-    { s: "사상", from: 17, to: 32 },
-    { s: "침구", from: 33, to: 80 },
-    { s: "보건", from: 81, to: 100 },  
-],
-       "3교시": [
-    { s: "외과", from:  1, to: 16 },
-    { s: "신경"", from: 17, to: 32 },
-    { s: "안이비", from: 33, to: 48 },
-    { s: "부인", from: 49, to: 80 }
-  ],
-       "4교시": [
-    { s: "소아", from:  1, to: 24 },
-    { s: "예방", from: 25, to: 48 },
-    { s: "생리", from: 49, to: 64 },
-    { s: "본초", from: 65, to: 80 },
-  ]
-};
-
-// 세션 오답 → 과목별 오답으로 분배
-function mapSessionWrongsToSubjects(wrongBySession){
+/* -------------------- 5) Firestore scores_raw(s) 로더 -------------------- */
+/*  - 프로젝트에 맞는 Firestore 인스턴스를 자동 탐색합니다.
+    - 컬렉션명은 scores_raws 또는 scores_raw 모두 대응합니다. */
+function getDb(){
+  // 네 프로젝트에서 Firestore 인스턴스를 어디에 두었는지 확인하여 아래 후보 중 하나를 반환
+  return window.firebaseDb || window.db || window.__db || null;
+}
+function resolveScoresRootName(){
+  // 외부에서 지정해두면 우선 사용
+  if (window.__SCORES_ROOT_NAME__) return window.__SCORES_ROOT_NAME__;
+  // 기본은 scores_raws 사용, 필요하면 scores_raw로 바꿔도 됨
+  return 'scores_raws';
+}
+// v9 modular 또는 v8 네임스페이스 둘 다 지원
+async function readDocMaybe(db, root, roundLabel, session, sid){
+  try{
+    if (window.firebase && db && typeof db.collection === 'function'){ // v8
+      const snap = await db.collection(root).doc(roundLabel).collection(session).doc(sid).get();
+      return snap.exists ? (snap.data()||null) : null;
+    } else if (window.firebase && window.firebase.firestore && typeof window.firebase.firestore === 'function') {
+      // 혹시 다른 초기화 케이스
+      const snap = await window.firebase.firestore().collection(root).doc(roundLabel).collection(session).doc(sid).get();
+      return snap.exists ? (snap.data()||null) : null;
+    } else if (window['firebase-firestore'] || window.getFirestore){ // v9 (전역 import가 있을 수 있음)
+      // 전역에서 getFirestore/doc/getDoc가 노출되지 않으면 로더에서 처리 중일 수도 있음
+      // 여기서는 안전하게 v8 방식만 우선 지원하도록 함
+      return null;
+    }
+  }catch(e){ console.warn('[scores_raw readDocMaybe]', e); }
+  return null;
+}
+async function fetchScoresRawAllSessions(sid, roundLabel){
+  const db = getDb();
+  if (!db) return {};
+  const root = resolveScoresRootName();
+  const sessions = ["1교시","2교시","3교시","4교시"];
   const out = {};
-  ALL_SUBJECTS.forEach(s=> out[s] = []);
-  Object.entries(wrongBySession||{}).forEach(([sess, nums])=>{
-    const ranges = SESSION_SUBJECT_RANGES[sess] || [];
-    const arr = toNumArray(nums);
-    if (!ranges.length || !arr.length) return;
-
-    arr.forEach(n=>{
-      const r = ranges.find(rr => n >= rr.from && n <= rr.to);
-      if (r) out[r.s].push(n);
-    });
-  });
-  // 각 과목 숫자 정렬 중복 제거
-  Object.keys(out).forEach(k=>{
-    const uniq = Array.from(new Set(out[k])).sort((a,b)=>a-b);
-    out[k] = uniq;
-  });
+  for (const sess of sessions){
+    const data = await readDocMaybe(db, root, roundLabel, sess, sid);
+    if (!data) continue;
+    let v = data.wrongQuestions ?? data.wrong_questions ?? data.wrong ?? data.wrongNumbers ?? data.wrong_numbers ?? data.wrongs;
+    if (Array.isArray(v)) {
+      out[sess] = v.map(n=>+n).filter(n=>!isNaN(n));
+    } else if (typeof v === 'string') {
+      out[sess] = v.split(/[,\s]+/).map(n=>+n).filter(n=>!isNaN(n));
+    }
+  }
   return out;
 }
 
-/* -------------------- 5) 회차 자동 탐색(존재하는 회차만) -------------------- */
+/* -------------------- 6) 회차 자동 탐색 -------------------- */
 async function discoverRoundsFor(sid){
   const found = [];
   for (const label of ROUND_LABELS){
@@ -222,7 +216,7 @@ async function discoverRoundsFor(sid){
   return found;
 }
 
-/* -------------------- 6) Canvas 꺾은선 -------------------- */
+/* -------------------- 7) Canvas 꺾은선 -------------------- */
 function drawLineChart(canvas, labels, series, maxValue){
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -277,54 +271,8 @@ function drawLineChart(canvas, labels, series, maxValue){
   });
 }
 
-/* -------------------- 6.5) scores_raw → round 오답 주입기 -------------------- */
-async function enrichRoundWithWrongs(sid, roundLabel, roundRaw) {
-  const dst = { ...roundRaw };
-
-  // 한 번에 전 교시
-  if (typeof window.fetchScoresRawAllSessions === 'function') {
-    try {
-      const all = await window.fetchScoresRawAllSessions(sid, roundLabel);
-      if (all && typeof all === 'object') {
-        dst.wrong_by_session = all;
-        return dst;
-      }
-    } catch(e) {}
-  }
-  if (typeof window.fetchWrongBySession === 'function') {
-    try {
-      const all = await window.fetchWrongBySession(sid, roundLabel);
-      if (all && typeof all === 'object') {
-        dst.wrong_by_session = all;
-        return dst;
-      }
-    } catch(e) {}
-  }
-
-  // 개별 교시
-  const sessions = ["1교시","2교시","3교시","4교시"];
-  const bag = {};
-  let hit = false;
-
-  if (typeof window.fetchScoresRawSession === 'function') {
-    for (const sess of sessions) {
-      try {
-        const doc = await window.fetchScoresRawSession(sid, roundLabel, sess);
-        const arr = toNumArray(
-          doc?.wrongNumbers ?? doc?.wrong ?? doc?.wrong_questions ?? doc?.wrongQuestions
-        );
-        if (arr.length) { bag[sess] = arr; hit = true; }
-      } catch(e) {}
-    }
-  }
-
-  if (hit) {
-    dst.wrong_by_session = { ...(dst.wrong_by_session||{}), ...bag };
-  }
-  return dst;
-}
-
-/* -------------------- 7) 오답 수집 & 패널 -------------------- */
+/* -------------------- 8) 오답 수집/매핑 -------------------- */
+// (A) row 안에서 오답 키 추출
 function extractWrongFromSubjectRow(row){
   const keys = [
     "wrongQuestions","wrong_questions","wrongs","wrong",
@@ -336,27 +284,52 @@ function extractWrongFromSubjectRow(row){
       const v = row[k];
       if (Array.isArray(v)) return v.map(n=>+n).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
       if (typeof v === 'string') {
-        return v.split(/[,\s]+/).map(n=>+n).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
+        return v.split(/[,\s]+/)
+                .map(n=>+n)
+                .filter(n=>!isNaN(n))
+                .sort((a,b)=>a-b);
       }
     }
   }
   return [];
 }
 
-// 다양한 스키마 + wrong_by_session 지원
-function collectWrongQuestions(roundRawOrNorm){
-  // wrong_by_session(교시별 배열)이 있으면 우선 사용
-  if (roundRawOrNorm && roundRawOrNorm.wrong_by_session) {
-    return mapSessionWrongsToSubjects(roundRawOrNorm.wrong_by_session);
-  }
+// (B) 교시별 번호 → 과목별 배열로 분배
+function mapWrongBySessionToSubjects(wrong_by_session){
+  const result = {};
+  ALL_SUBJECTS.forEach(s => result[s] = []); // 빈 배열 준비
 
-  const r = (roundRawOrNorm?.by_class || roundRawOrNorm?.subject_results || roundRawOrNorm?.group_results)
+  Object.entries(wrong_by_session||{}).forEach(([sess, arr])=>{
+    const ranges = SESSION_SUBJECT_RANGES[sess] || [];
+    (arr||[]).forEach(num=>{
+      const r = ranges.find(rg => num >= rg.from && num <= rg.to);
+      if (r && result[r.s]) result[r.s].push(num);
+    });
+  });
+
+  // 과목별 정렬 및 중복 제거
+  Object.keys(result).forEach(k=>{
+    const uniq = Array.from(new Set(result[k]||[])).sort((a,b)=>a-b);
+    result[k] = uniq;
+  });
+  return result;
+}
+
+// (C) round에서 과목별 오답 맵 추출 (scores_raw 우선)
+function collectWrongQuestions(roundRawOrNorm){
+  const r = (roundRawOrNorm?.by_class || roundRawOrNorm?.subject_results || roundRawOrNorm?.group_results || roundRawOrNorm?.wrong_by_session)
     ? roundRawOrNorm
     : (window.normalizeRound?.(roundRawOrNorm) || roundRawOrNorm);
 
+  // 0) scores_raw(s)에서 불러온 교시별 → 과목 분배가 있으면 최우선
+  if (r.wrong_by_session && Object.keys(r.wrong_by_session).length){
+    return mapWrongBySessionToSubjects(r.wrong_by_session);
+  }
+
+  const out = {};
+
   // 1) 새 스키마: subject_results
   if (Array.isArray(r?.subject_results)) {
-    const out = {};
     r.subject_results.forEach(s=>{
       const nm = s.name;
       if (!nm) return;
@@ -366,9 +339,8 @@ function collectWrongQuestions(roundRawOrNorm){
     return out;
   }
 
-  // 2) 새 스키마(폴백): group_results에 과목명이 들어간 경우
+  // 2) 새 스키마(폴백): group_results에 과목명
   if (Array.isArray(r?.group_results)) {
-    const out = {};
     r.group_results.forEach(g=>{
       const nm = String(g.name);
       if (!(nm in SUBJECT_MAX)) return;
@@ -380,7 +352,6 @@ function collectWrongQuestions(roundRawOrNorm){
 
   // 3) 구 스키마: by_class → "종합".groups
   const groups = r?.by_class?.["종합"]?.groups || {};
-  const out = {};
   Object.keys(groups).forEach(nm=>{
     const row = groups[nm] || {};
     const wrongs = extractWrongFromSubjectRow(row);
@@ -389,10 +360,11 @@ function collectWrongQuestions(roundRawOrNorm){
   return out;
 }
 
+// (D) 오답 패널 HTML
 function buildWrongPanelHTML(roundLabel, roundRawOrNorm){
   const wrongMapRaw = collectWrongQuestions(roundRawOrNorm);
 
-  // 17개 과목 전부 버튼으로 노출 (오답 없어도 버튼)
+  // 17개 과목 전부 버튼 노출(오답 없어도)
   const items = ALL_SUBJECTS.map(sj => {
     const arr = Array.isArray(wrongMapRaw[sj]) ? wrongMapRaw[sj].slice(0, 999) : [];
     const cells = arr.length
@@ -422,7 +394,7 @@ function buildWrongPanelHTML(roundLabel, roundRawOrNorm){
   `;
 }
 
-/* -------------------- 8) 플립 카드 -------------------- */
+/* -------------------- 9) 플립 카드 -------------------- */
 function makeFlipCard({id, title, frontHTML, backHTML, backCaption}){
   const wrap = document.createElement('div');
   wrap.innerHTML = `
@@ -446,7 +418,6 @@ function makeFlipCard({id, title, frontHTML, backHTML, backCaption}){
   });
   return wrap.firstElementChild;
 }
-
 function chunk(arr, sizes){
   const out = []; let i=0;
   for (const s of sizes){ out.push(arr.slice(i, i+s)); i+=s; }
@@ -454,7 +425,7 @@ function chunk(arr, sizes){
   return out;
 }
 
-/* -------------------- 9) 회차 상세(앞면) -------------------- */
+/* -------------------- 10) 회차 상세(앞면) -------------------- */
 function renderRound(hostSel, title, round){
   const host = $(hostSel);
   if(!host) return;
@@ -548,7 +519,7 @@ function renderRound(hostSel, title, round){
   host.innerHTML = html;
 }
 
-/* -------------------- 10) 전체 렌더 -------------------- */
+/* -------------------- 11) 전체 렌더 -------------------- */
 async function renderResultDynamic(sid){
   const grid = $("#cards-grid");
   grid.innerHTML = "";
@@ -578,76 +549,80 @@ async function renderResultDynamic(sid){
       <hr class="sep" />
       <div class="small" style="opacity:.8">카드를 클릭하면 회차별 본인/학교/전국 꺾은선 그래프가 보입니다.</div>
     `
-    // backHTML 미지정 → 캔버스 템플릿 사용
   });
   grid.appendChild(topCard);
 
-  // 상단 카드 뒤 캔버스 id 고정
-  const trendCanvasId = 'card-trend-canvas';
+  // 꺾은선 데이터 준비
+  const studentTotalsByRound = {};
+  const labelsForTrend = [];
 
   /* (B) 회차 카드들: 앞(상세) / 뒤(오답 패널) */
-  const studentTotalsByRound = {};   // 꺾은선용
-  const labelsForTrend = [];         // 존재 회차 라벨
   for (const {label, raw} of rounds){
-    // 1) scores_raw 기반 교시 오답을 round에 병합
-    const enrichedRaw = await enrichRoundWithWrongs(sid, label, raw);
+    // 1) scores_raw(s)에서 교시별 wrongQuestions 읽어와 주입
+    try{
+      const wrongBySession = await fetchScoresRawAllSessions(sid, label);
+      if (wrongBySession && Object.keys(wrongBySession).length){
+        raw.wrong_by_session = wrongBySession;
+      }
+    }catch(e){ /* no-op */ }
 
-    // 2) 앞면(총점/과락)은 정규화 round로
-    const norm = (window.normalizeRound?.(enrichedRaw)) || enrichedRaw;
-
+    // 2) 앞면 렌더
+    const norm = (window.normalizeRound?.(raw)) || raw;
     const hostId = `round-host-${label}`;
-
-    // 3) 뒷면(오답 패널)은 enrichedRaw를 넘겨야 교시→과목 변환 가능
-    const roundBackHTML = buildWrongPanelHTML(label, enrichedRaw);
-
     const card = makeFlipCard({
       id: `card-${label}`,
       title: label,
       frontHTML: `<div id="${hostId}"></div>`,
-      backHTML: roundBackHTML
+      backHTML: buildWrongPanelHTML(label, raw)  // 3) 뒷면: 과목별 오답 패널
     });
     grid.appendChild(card);
-
-    // 앞면 상세 렌더
     renderRound(`#${hostId}`, label, norm);
 
-    // 꺾은선용 본인 총점 적재
+    // 꺾은선용 본인 총점
     const subs = getSubjectScores(norm);
     const total = ALL_SUBJECTS.reduce((a,n)=>a+(subs[n]?.score||0),0);
     studentTotalsByRound[label] = total;
     labelsForTrend.push(label);
   }
 
-  /* (C) 상단 배지(존재 회차만) */
+  // (C) 상단 배지
   const badgesHost = $('#trend-badges');
   if (badgesHost){
     badgesHost.innerHTML = '';
-    labelsForTrend.forEach(lb=>{
-      const sc = studentTotalsByRound[lb] ?? 0;
+    rounds.forEach(({label, raw})=>{
+      const norm = (window.normalizeRound?.(raw)) || raw;
+      const subs = getSubjectScores(norm);
+      const sc = ALL_SUBJECTS.reduce((a,n)=>a+(subs[n]?.score||0),0);
       const passOverall = (sc >= TOTAL_MAX*0.6);
-      badgesHost.innerHTML += `<span class="badge ${passOverall?'pass':'fail'}">${lb} ${passOverall?'합격':'불합격'}</span>`;
+      badgesHost.innerHTML += `<span class="badge ${passOverall?'pass':'fail'}">${label} ${passOverall?'합격':'불합격'}</span>`;
     });
   }
 
-  /* (D) 상단 카드 뒤: 꺾은선(본인/학교/전국) */
-  const sortedLabels = labelsForTrend.slice().sort((a,b)=> parseInt(a) - parseInt(b));
-  const me  = sortedLabels.map(lb => studentTotalsByRound[lb] ?? null);
+  // (D) 상단 카드 뒤: 꺾은선 (본인/학교/전국 더미)
+  const trendCanvas = document.createElement('canvas');
+  trendCanvas.id = 'card-trend-canvas';
+  trendCanvas.width = 360; trendCanvas.height = 220;
+  $('#card-trend .flip-back.card').appendChild(trendCanvas);
 
-  // 평균치(학교/전국) 라인: 회차별 동일값 사용(임시)
-  const avgPromises = sortedLabels.map(lb => getAverages(school, lb));
-  const avgs = await Promise.all(avgPromises);
-  const nat = avgs.map(a => a.nationalAvg);
-  const sch = avgs.map(a => a.schoolAvg);
+  const labels = labelsForTrend.sort((a,b)=> parseInt(a) - parseInt(b));
+  const meSeries   = labels.map(lb => studentTotalsByRound[lb] ?? null);
 
-  // 캔버스 그리기
-  requestAnimationFrame(()=>{
-    const cvs = document.getElementById(trendCanvasId);
-    drawLineChart(cvs, sortedLabels, [
-      { name:"본인", values: me },
-      { name:"학교평균", values: sch },
-      { name:"전국평균", values: nat },
-    ], TOTAL_MAX);
-  });
+  // (학교/전국 평균은 더미 계산 — 필요 시 실제 API 대체)
+  const schoolAvgSeries = await Promise.all(labels.map(async lb=>{
+    const { schoolAvg } = await getAverages(school, lb);
+    return schoolAvg;
+  }));
+  const nationalAvgSeries = await Promise.all(labels.map(async lb=>{
+    const { nationalAvg } = await getAverages('all', lb);
+    return nationalAvg;
+  }));
+
+  const maxV = Math.max(...meSeries.filter(v=>v!=null), ...schoolAvgSeries, ...nationalAvgSeries, 1);
+  drawLineChart(trendCanvas, labels, [
+    { name:'본인',   values: meSeries },
+    { name:'학교',   values: schoolAvgSeries },
+    { name:'전국',   values: nationalAvgSeries },
+  ], maxV);
 
   // 플립 높이 동기화
   requestAnimationFrame(()=>{
@@ -656,15 +631,14 @@ async function renderResultDynamic(sid){
   });
 }
 
-/* -------------------- 11) 폼/라우팅 -------------------- */
+/* -------------------- 12) 폼/라우팅 -------------------- */
 function goHome(){
   $("#view-result")?.classList.add("hidden");
   $("#view-home")?.classList.remove("hidden");
   $("#sid")?.focus();
 }
-
 async function lookupStudent(e){
-  e.preventDefault();
+  e?.preventDefault?.();
   hideError();
   const input = $("#sid");
   const id = (input?.value || "").replace(/\D/g,"").slice(0,6);
@@ -686,9 +660,9 @@ async function lookupStudent(e){
   return false;
 }
 
-/* -------------------- 12) 초기화 & 전역 -------------------- */
+/* -------------------- 13) 초기화 & 전역 -------------------- */
 function initApp(){
-  // 살짝 간격(붙어있던 박스 간)
+  // 간격/컴포넌트 보조 스타일(필요 시 삭제 가능)
   (function injectMinorSpacing(){
     const css = `
       #cards-grid { display:grid; gap:14px; }
@@ -741,7 +715,7 @@ window.renderResultDynamic = renderResultDynamic;
 window.__SUBJECT_TOTALS = SUBJECT_MAX;
 window.__GROUPS_DEF     = GROUPS;
 
-/* -------------------- 13) Flip 높이 동기화 -------------------- */
+/* -------------------- 14) Flip 높이 동기화 -------------------- */
 function measureFaceHeight(card, faceEl){
   const tmp = document.createElement('div');
   tmp.className = faceEl.className.replace('flip-face','').trim(); // .card 스타일 유지
@@ -774,6 +748,7 @@ function installFlipHeightObservers(){
   __flipObserverInstalled = true;
 
   const grid = document.getElementById('cards-grid');
+
   window.addEventListener('resize', ()=> syncFlipHeights(grid));
 
   const ro = new ResizeObserver(()=> syncFlipHeights(grid));
@@ -789,6 +764,7 @@ function installFlipHeightObservers(){
     });
   });
   if (grid) mo.observe(grid, { childList:true, subtree:true });
+
   document.querySelectorAll('.flip-card .flip-face').forEach(el=> ro.observe(el));
 
   if (document.fonts && document.fonts.ready) {
