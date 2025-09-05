@@ -87,31 +87,16 @@
     </div>
   </div>
 
-  <!-- 결과 뷰 -->
-  <div id="view-result" class="hidden">
-    <div class="card">
-      <div class="flex" style="justify-content:space-between;">
-        <div>
-          <div class="small">학수번호</div>
-          <div class="kpi"><div id="res-sid" class="num">-</div></div>
-        </div>
-        <div class="flex" id="res-badges"></div>
-      </div>
+<!-- 결과 뷰 -->
+<div id="view-result" class="hidden">
+  <div id="cards-grid" class="grid"></div>
 
-      <hr class="sep" />
-
-      <div id="round-1"></div>
-      <div id="round-2" style="margin-top:16px"></div>
-
-      <hr class="sep" />
-      <div class="flex" style="gap:8px; flex-wrap:wrap;">
-        <button class="btn" type="button" onclick="goHome()">다른 학생 조회</button>
-        <button class="btn ghost" type="button" onclick="window.print()">인쇄하기</button>
-      </div>
+  <div class="card" style="margin-top:16px">
+    <div class="flex" style="gap:8px; flex-wrap:wrap;">
+      <button class="btn" type="button" onclick="goHome()">다른 학생 조회</button>
+      <button class="btn ghost" type="button" onclick="window.print()">인쇄하기</button>
     </div>
   </div>
-
-  <div class="footer small">© 전졸협 • 성적 통지 사이트</div>
 </div>
 
 <!-- Firebase 초기화 -->
