@@ -446,34 +446,13 @@ async function renderResultDynamic(sid){
     return;
   }
 
-  // (A) 맨 위 카드 (앞: SID/학교/배지, 뒤: 꺾은선)
-  const topCard = makeFlipCard({
-    id: 'card-trend',
-    title: '종합 추이',
-    frontHTML: `
-      <div class="flex" style="justify-content:space-between;">
-        <div>
-          <div class="small">학수번호</div>
-          <div class="kpi"><div class="num">${sid}</div></div>
-          <div class="small">${school}</div>
-        </div>
-        <div class="flex" id="trend-badges"></div>
-      </div>
-      <hr class="sep" />
-      <div class="small" style="opacity:.8">카드를 클릭하면 회차별 본인/학교/전국 꺾은선 그래프가 보입니다.</div>
-    `
-    // backHTML 미지정 → 꺾은선 캔버스 템플릿
-  });
-  topCard.querySelector('.flip-inner').style.setProperty('--flip-h','320px');
-  grid.appendChild(topCard);
-
-  // (B) 회차 카드들 (앞: 상세, 뒤: 오답 패널)
-  const studentTotals = {}; // 꺾은선에 사용
+  // 회차 카드들만 렌더 (앞: 상세, 뒤: 오답 패널)
   for (const {label, raw} of rounds){
     const norm = (window.normalizeRound?.(raw)) || raw;
     const hostId = `round-host-${label}`;
 
-    const roundBackHTML = buildWrongPanelHTML(label, raw); // 오답 패널 생성
+    // 뒤면: 과목별 오답 패널 (항상 17개 과목을 버튼으로 노출)
+    const roundBackHTML = buildWrongPanelHTML(label, raw);
 
     const card = makeFlipCard({
       id: `card-${label}`,
@@ -483,57 +462,16 @@ async function renderResultDynamic(sid){
     });
     grid.appendChild(card);
 
+    // 앞면 상세 렌더
     renderRound(`#${hostId}`, label, norm);
-
-    // 본인 총점 저장(상단 꺾은선용)
-    const subs = getSubjectScores(norm);
-    studentTotals[label] = ALL_SUBJECTS.reduce((a,n)=>a+(subs[n]?.score||0),0);
   }
 
-  // (C) 상단 배지(존재 회차만)
-  const badgesHost = $('#trend-badges');
-  if (badgesHost){
-    badgesHost.innerHTML = '';
-    rounds.forEach(({label, raw})=>{
-      const norm = (window.normalizeRound?.(raw)) || raw;
-      const subs = getSubjectScores(norm);
-      const sc = ALL_SUBJECTS.reduce((a,n)=>a+(subs[n]?.score||0),0);
-      const passOverall = (sc >= TOTAL_MAX*0.6);
-      badgesHost.innerHTML += `<span class="badge ${passOverall?'pass':'fail'}">${label} ${passOverall?'합격':'불합격'}</span>`;
-    });
-  }
-
-  // (D) 상단 카드 뒤: 존재 회차만 꺾은선
-  const labels = rounds
-    .map(r => r.label)
-    .sort((a,b)=> parseInt(a) - parseInt(b));
-  const me  = labels.map(lb => studentTotals[lb] ?? null);
-  const nat = [], sch = [];
-  for (const lb of labels){
-    const { nationalAvg, schoolAvg } = await getAverages(school, lb);
-    nat.push(nationalAvg ?? null);
-    sch.push(schoolAvg   ?? null);
-  }
-  drawLineChart(
-    document.getElementById('card-trend-canvas'),
-    labels,
-    [
-      { name: '본인',     values: me  },
-      { name: '학교평균', values: sch },
-      { name: '전국평균', values: nat },
-    ],
-    TOTAL_MAX
-  );
-  const cap = document.getElementById('card-trend-cap');
-  if (cap) cap.textContent = `회차별 총점 추이 (최대 ${TOTAL_MAX})`;
-
-  // (E) 플립 높이 동기화(앞/뒤 큰쪽)
+  // 플립 높이 동기화(앞/뒤 큰쪽)
   requestAnimationFrame(()=>{
     syncFlipHeights(grid);
     installFlipHeightObservers();
   });
 }
-
 /* -------------------- 11) 폼/라우팅 -------------------- */
 function goHome(){
   $("#view-result")?.classList.add("hidden");
