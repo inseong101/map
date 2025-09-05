@@ -438,6 +438,7 @@ async function renderResultDynamic(sid){
   });
   // SID 카드 높이 조금 더
   grid.appendChild(sidCard);
+   requestAnimationFrame(()=> syncFlipHeights(grid));
 
   // 회차 자동 탐색
   const rounds = await discoverRoundsFor(sid);
@@ -594,29 +595,31 @@ window.__GROUPS_DEF     = GROUPS;
 
 // ===== Flip 높이 동기화: 앞/뒤 중 더 큰 높이에 맞추기 =====
 function measureFaceHeight(card, faceEl){
-  // 카드의 너비에 맞춰 오프스크린에서 자연 높이 측정
+  // 카드와 동일 너비로 오프스크린에서 자연 높이 측정
   const tmp = document.createElement('div');
-  tmp.className = faceEl.className.replace('flip-face','').trim(); // .card 등의 스타일 유지
+  // face의 스타일(.card 패딩 등) 최대한 유지
+  tmp.className = faceEl.className.replace('flip-face','').trim();
   tmp.style.cssText = `
     position:absolute; visibility:hidden; left:-9999px; top:-9999px;
     width:${card.clientWidth}px;
   `;
   tmp.innerHTML = faceEl.innerHTML;
   document.body.appendChild(tmp);
-  const h = tmp.scrollHeight;
+  const h = Math.ceil(tmp.scrollHeight);
   document.body.removeChild(tmp);
   return h;
 }
 
-function syncFlipHeights(root=document){
-  const cards = (root instanceof Element ? root : document).querySelectorAll('.flip-card');
+function syncFlipHeights(root = document){
+  const scope = (root instanceof Element ? root : document);
+  const cards = scope.querySelectorAll('.flip-card');
   cards.forEach(card=>{
     const inner = card.querySelector('.flip-inner');
     const front = card.querySelector('.flip-front');
     const back  = card.querySelector('.flip-back');
     if (!inner || !front || !back) return;
 
-    // 앞/뒤 각자 자연 높이 측정 후 큰 값 적용
+    // 앞/뒤 자연 높이 측정 → 큰 값 적용
     const hf = measureFaceHeight(card, front);
     const hb = measureFaceHeight(card, back);
     const H  = Math.max(hf, hb);
@@ -624,18 +627,41 @@ function syncFlipHeights(root=document){
   });
 }
 
+
 // 최초 1회: 리사이즈/폰트로드/캔버스그림 끝나고도 재동기화
 let __flipObserverInstalled = false;
 function installFlipHeightObservers(){
   if (__flipObserverInstalled) return;
   __flipObserverInstalled = true;
 
-  // 창 크기 변경 시
-  window.addEventListener('resize', ()=> syncFlipHeights(document.getElementById('cards-grid')));
+  const grid = document.getElementById('cards-grid');
 
-  // 각 카드 앞/뒤 면 콘텐츠 변화 감지
-  const ro = new ResizeObserver(()=> syncFlipHeights(document.getElementById('cards-grid')));
-  document.addEventListener('DOMContentLoaded', ()=>{
-    document.querySelectorAll('.flip-card .flip-face').forEach(el=> ro.observe(el));
+  // 창 크기 변경 시 재동기화
+  window.addEventListener('resize', ()=> syncFlipHeights(grid));
+
+  // face 내용/크기 변화를 감지(캔버스 그린 직후 등)
+  const ro = new ResizeObserver(()=> syncFlipHeights(grid));
+
+  // 그리드에 동적 카드가 추가될 때 새 face도 관찰 시작
+  const mo = new MutationObserver((mutList)=>{
+    mutList.forEach(m=>{
+      m.addedNodes.forEach(node=>{
+        if (!(node instanceof Element)) return;
+        node.querySelectorAll?.('.flip-card .flip-face').forEach(face => ro.observe(face));
+        // 카드가 추가된 다음 프레임에 한 번 측정
+        if (node.matches?.('.flip-card') || node.querySelector?.('.flip-card')) {
+          requestAnimationFrame(()=> syncFlipHeights(grid));
+        }
+      });
+    });
   });
+  mo.observe(grid, { childList:true, subtree:true });
+
+  // 초기에도 이미 있는 face들 관찰 시작
+  document.querySelectorAll('.flip-card .flip-face').forEach(el=> ro.observe(el));
+
+  // 폰트 로드 완료 뒤 재동기화(글꼴에 따라 줄바꿈/높이 달라짐)
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(()=> syncFlipHeights(grid)).catch(()=>{});
+  }
 }
