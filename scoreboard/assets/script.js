@@ -146,7 +146,7 @@ function resolveScoresRootName(){
   // 외부에서 지정해두면 우선 사용
   if (window.__SCORES_ROOT_NAME__) return window.__SCORES_ROOT_NAME__;
   // 기본은 scores_raws 사용, 필요하면 scores_raw로 바꿔도 됨
-  return 'scores_raws';
+  return 'scores_raw';
 }
 // v9 modular 또는 v8 네임스페이스 둘 다 지원
 async function readDocMaybe(db, root, roundLabel, session, sid){
