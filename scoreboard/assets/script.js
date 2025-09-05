@@ -33,6 +33,39 @@ const SCHOOL_MAP = {
 };
 function getSchoolFromSid(sid){ const p2 = String(sid||"").slice(0,2); return SCHOOL_MAP[p2] || "미상"; }
 const ROUND_LABELS = ["1차","2차","3차","4차","5차","6차","7차","8차"];
+// 교시별 문항번호 → 과목 매핑
+// 1교시: 1~16 간, 17~32 심, 33~48 비, 49~64 폐, 65~80 신
+const SESSION_SUBJECT_RANGES = {
+  "1교시": [
+    { from: 1,  to: 16, s: "간" },
+    { from: 17, to: 32, s: "심" },
+    { from: 33, to: 48, s: "비" },
+    { from: 49, to: 64, s: "폐" },
+    { from: 65, to: 80, s: "신" }
+  ],
+
+  // ⬇️ 2~4교시는 정확한 범위 알려주면 여기 채워줄게
+    "2교시": [
+    { from: 1,  to: 16, s: "상한" },
+    { from: 17, to: 32, s: "사상" },
+    { from: 33, to: 80, s: "침구" },
+    { from: 80, to: 100, s: "법규" },
+  ],
+     "3교시": [
+    { from: 1,  to: 16, s: "외과" },
+    { from: 17, to: 32, s: "신경" },
+    { from: 33, to: 48, s: "안이비" },
+    { from: 49, to: 80, s: "부인" }
+  ],
+     "4교시": [
+    { from: 1,  to: 24, s: "소아" },
+    { from: 25, to: 48, s: "예방" },
+    { from: 49, to: 64, s: "생리" },
+    { from: 65, to: 80, s: "본초" }
+  ],
+};
+
+
 
 /* -------------------- 1) 평균치(임시 더미) -------------------- */
 async function getAverages(_schoolName, _roundLabel){
