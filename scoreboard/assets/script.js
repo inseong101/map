@@ -363,7 +363,7 @@ function renderRound(hostSel, title, round){
         <div class="cutline"></div>
       </div>
       <div class="small" style="margin-top:10px">
-        정답률 ${overallRate}% (컷 60%) · ${overallPass ? pill("통과","ok") : pill("불합격","red")}
+        정답률 ${overallRate}% (컷 60%: 204/340) · ${overallPass ? pill("통과","ok") : pill("불합격","red")}
         <div class="small" style="margin-top:6px; opacity:.9">${reasonText}</div>
       </div>
     </div>
