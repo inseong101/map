@@ -648,21 +648,27 @@ async function renderResultDynamic(sid){
   }
 
 for (const {label, raw} of rounds){
-  const norm = (window.normalizeRound?.(raw)) || raw;
+  // 1) scores_raw 기반 교시 오답을 round에 병합
+  const enrichedRaw = await enrichRoundWithWrongs(sid, label, raw);
+
+  // 2) 앞면(총점/과락)은 정규화 round로
+  const norm = (window.normalizeRound?.(enrichedRaw)) || enrichedRaw;
+
   const hostId = `round-host-${label}`;
-  const roundBackHTML = buildWrongPanelHTML(label, raw);
 
-    const card = makeFlipCard({
-      id: `card-${label}`,
-      title: label,
-      frontHTML: `<div id="${hostId}"></div>`,
-      backHTML: roundBackHTML
-    });
-    grid.appendChild(card);
+  // 3) 뒷면(오답 패널)은 'enrichedRaw'를 넘겨야 교시→과목 변환이 가능
+  const roundBackHTML = buildWrongPanelHTML(label, enrichedRaw);
 
-    // 앞면 렌더
-    renderRound(`#${hostId}`, label, norm);
-  }
+  const card = makeFlipCard({
+    id: `card-${label}`,
+    title: label,
+    frontHTML: `<div id="${hostId}"></div>`,
+    backHTML: roundBackHTML
+  });
+  grid.appendChild(card);
+
+  renderRound(`#${hostId}`, label, norm);
+}
 
   // 플립 높이 동기화(앞/뒤 큰쪽)
   requestAnimationFrame(()=>{
