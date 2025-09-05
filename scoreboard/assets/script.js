@@ -76,9 +76,7 @@ function pickKey(obj, candidates){
 }
 
 /* -------------------- 3-1) 과목명 정규화(별칭 ↔ 표준명) -------------------- */
-/* Firestore에서 과목 키가 영문/축약/다른 라벨로 올 가능성 대비 */
 const SUBJECT_ALIAS = {
-  // 한글 변형
   "간":"간","간학":"간","간담":"간",
   "심":"심","심학":"심",
   "비":"비","비학":"비",
@@ -86,44 +84,29 @@ const SUBJECT_ALIAS = {
   "신":"신","신학":"신",
   "상한":"상한","상한론":"상한",
   "사상":"사상","사상의학":"사상",
-
   "침구":"침구","침구학":"침구","acupuncture":"침구","chimgu":"침구",
-
   "보건":"보건","공중보건":"보건",
-
   "외과":"외과","외과학":"외과",
-  "신경":"신경","신경과":"신경",
-  "안이비":"안이비","안이비과":"안이비","안·이비":"안이비","안이비인후":"안이비",
-
-  "부인과":"부인과","부인":"부인과",
-  "소아":"소아","소아과":"소아",
-
-  "예방":"예방","예방의학":"예방",
-  "생리":"생리","생리학":"생리",
-  "본초":"본초","본초학":"본초",
-
-  // 로마자 축약 흔한 키(앱 내부/스프레드시트 등)
+  "신경":"신경","신경과":"신경","neuro":"신경",
+  "안이비":"안이비","안이비과":"안이비","안·이비":"안이비","안이비인후":"안이비","eyeent":"안이비",
+  "부인과":"부인과","부인":"부인과","obgy":"부인과",
+  "소아":"소아","소아과":"소아","pedi":"소아",
+  "예방":"예방","예방의학":"예방","preventive":"예방",
+  "생리":"생리","생리학":"생리","physio":"생리",
+  "본초":"본초","본초학":"본초","materiamedica":"본초",
+  // 로마자/축약
   "gan":"간","sim":"심","bi":"비","pye":"폐","pe":"폐","sin":"신","shin":"신",
-  "sanghan":"상한","sasang":"사상",
-  "chimgu":"침구","jingju":"침구",
-  "bogun":"보건","bogeon":"보건",
-  "oegwa":"외과","oe":"외과",
-  "singyeong":"신경","sin-gyeong":"신경","neuro":"신경",
-  "anibi":"안이비","eyeent":"안이비",
-  "buin":"부인과","obgy":"부인과",
-  "soa":"소아","pedi":"소아",
-  "yebang":"예방","preventive":"예방",
-  "saengri":"생리","physio":"생리",
-  "boncho":"본초","materiamedica":"본초"
+  "sanghan":"상한","sasang":"사상","bogun":"보건","bogeon":"보건","oegwa":"외과","oe":"외과",
+  "singyeong":"신경","sin-gyeong":"신경","anibi":"안이비","buin":"부인과","soa":"소아",
+  "yebang":"예방","saengri":"생리","boncho":"본초","chimgu":"침구","jingju":"침구"
 };
 function toStdSubjectName(name){
   if (!name) return null;
   const raw = String(name).trim();
-  if (SUBJECT_MAX[raw] != null) return raw;                 // 이미 표준명
-  const key1 = raw.toLowerCase().replace(/\s+/g,'');        // 공백 제거 소문자
+  if (SUBJECT_MAX[raw] != null) return raw;
+  const key1 = raw.toLowerCase().replace(/\s+/g,'');
   if (SUBJECT_ALIAS[key1]) return SUBJECT_ALIAS[key1];
   if (SUBJECT_ALIAS[raw])  return SUBJECT_ALIAS[raw];
-  // 마지막 시도: 괄호/대시 제거 후 재조회
   const key2 = key1.replace(/[()\[\]\-_.]/g,'');
   return SUBJECT_ALIAS[key2] || null;
 }
@@ -254,7 +237,6 @@ function drawLineChart(canvas, labels, series, maxValue){
     });
   });
 
-  // 범례
   const legendX = padL, legendY = 12;
   series.forEach((s, si)=>{
     const col = colors[si % colors.length];
@@ -265,7 +247,6 @@ function drawLineChart(canvas, labels, series, maxValue){
 }
 
 /* -------------------- 7) 오답 수집(모든 스키마 지원) -------------------- */
-// 값 → [숫자배열] 로 표준화
 function toNumArray(v){
   if (Array.isArray(v)) return v.map(n=>+n).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
   if (typeof v === 'string') {
@@ -275,7 +256,6 @@ function toNumArray(v){
   return [];
 }
 
-// 과목 row 안에서 오답 키 추출
 function extractWrongFromSubjectRow(row){
   const keys = [
     "wrongQuestions","wrong_questions","wrongs","wrong",
@@ -299,7 +279,7 @@ function collectWrongQuestions(roundRawOrNorm){
 
   const out = {};
 
-  // A) 최상위 맵 형태 지원: wrong_questions / wrongs / incorrect…
+  // A) 최상위 맵 형태 지원
   const topKeys = ["wrong_questions","wrongQuestions","wrongs","incorrect_questions","incorrectQuestions"];
   for (const tk of topKeys){
     if (r && r[tk] && typeof r[tk] === 'object'){
@@ -308,7 +288,6 @@ function collectWrongQuestions(roundRawOrNorm){
         const arr = toNumArray(r[tk][rawName]);
         if (SUBJECT_MAX[nmStd] != null && arr.length) out[nmStd] = arr;
       });
-      // 병합하지만, 이미 채운 게 있으면 유지
     }
   }
 
@@ -396,7 +375,7 @@ function makeFlipCard({id, title, frontHTML, backHTML, backCaption}){
   `;
   const card = wrap.querySelector('.flip-card');
   card.addEventListener('click', (e)=>{
-    if (e.target.closest('button')) return; // 아코디언 버튼 클릭은 뒤집지 않기
+    if (e.target.closest('button')) return; // 아코디언 버튼은 뒤집지 않기
     card.classList.toggle('is-flipped');
   });
   return wrap.firstElementChild;
@@ -508,7 +487,7 @@ async function renderResultDynamic(sid){
   const grid = $("#cards-grid");
   grid.innerHTML = "";
 
-  // (요청 반영) 맨 위 SID 카드 없음 → 바로 회차 카드들 렌더
+  // 맨 위 SID 카드 없음 → 바로 회차 카드 렌더
   const rounds = await discoverRoundsFor(sid);
   if (rounds.length === 0){
     const msg = document.createElement('div');
@@ -521,7 +500,7 @@ async function renderResultDynamic(sid){
     const norm = (window.normalizeRound?.(raw)) || raw;
     const hostId = `round-host-${label}`;
 
-    // 뒤면: 과목별 오답 패널(17개 과목 버튼, 오답 없으면 "오답 없음")
+    // 뒤면: 과목별 오답 패널
     const roundBackHTML = buildWrongPanelHTML(label, raw);
 
     const card = makeFlipCard({
@@ -596,7 +575,6 @@ function initApp(){
       .subj-chip{ padding:4px 8px; border:1px solid var(--line); border-radius:999px; font-weight:800 }
       .subj-chip .muted{ opacity:.7; font-weight:600 }
       .cutline{ left:60% }
-      /* 플립 카드 간격(세로) */
       .flip-card { margin-bottom:16px; }
     `;
     const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
@@ -633,7 +611,7 @@ window.__GROUPS_DEF     = GROUPS;
 /* -------------------- 13) Flip 높이 동기화 -------------------- */
 function measureFaceHeight(card, faceEl){
   const tmp = document.createElement('div');
-  tmp.className = faceEl.className.replace('flip-face','').trim(); // .card 스타일 유지
+  tmp.className = faceEl.className.replace('flip-face','').trim();
   tmp.style.cssText = `
     position:absolute; visibility:hidden; left:-9999px; top:-9999px;
     width:${card.clientWidth}px;
@@ -689,4 +667,3 @@ function installFlipHeightObservers(){
     document.fonts.ready.then(()=> syncFlipHeights(grid)).catch(()=>{});
   }
 }
-</script>
