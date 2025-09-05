@@ -215,63 +215,66 @@ function drawLineChart(canvas, labels, series, maxValue){
 
 /* -------------------- 7) 오답 수집 & 패널 -------------------- */
 
-// 다양한 키를 허용해 과목별 오답 배열을 안전하게 뽑는다.
+// 다양한 스키마를 지원해 과목별 오답 배열을 뽑아주는 함수
+function collectWrongQuestions(roundRawOrNorm){
+  const r = (roundRawOrNorm?.by_class || roundRawOrNorm?.subject_results || roundRawOrNorm?.group_results)
+    ? roundRawOrNorm
+    : (window.normalizeRound?.(roundRawOrNorm) || roundRawOrNorm);
+
+  const out = {};
+
+  // 1) 새 스키마: subject_results
+  if (Array.isArray(r?.subject_results)) {
+    r.subject_results.forEach(s=>{
+      const nm = s.name;
+      if (!nm) return;
+      const wrongs = extractWrongFromSubjectRow(s);
+      if (wrongs.length) out[nm] = wrongs;
+    });
+    return out;
+  }
+
+  // 2) 새 스키마(폴백): group_results에 과목명이 들어간 경우
+  if (Array.isArray(r?.group_results)) {
+    r.group_results.forEach(g=>{
+      const nm = String(g.name);
+      if (!(nm in SUBJECT_MAX)) return;
+      const wrongs = extractWrongFromSubjectRow(g);
+      if (wrongs.length) out[nm] = wrongs;
+    });
+    return out;
+  }
+
+  // 3) 구 스키마: by_class → "종합".groups
+  const groups = r?.by_class?.["종합"]?.groups || {};
+  Object.keys(groups).forEach(nm=>{
+    const row = groups[nm] || {};
+    const wrongs = extractWrongFromSubjectRow(row);
+    if (wrongs.length) out[nm] = wrongs;
+  });
+  return out;
+}
+
+// 오답 키 추출 유틸
 function extractWrongFromSubjectRow(row){
-  const candidates = [
+  const keys = [
     "wrongQuestions","wrong_questions","wrongs","wrong",
     "incorrectQuestions","incorrect_questions","incorrect",
     "오답","틀린문항"
   ];
-  for (const k of candidates){
-    if (!row || !(k in row)) continue;
-    const v = row[k];
-    if (Array.isArray(v)) {
-      return v.map(n=>+n).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
-    }
-    if (typeof v === 'string') {
-      const arr = v.split(/[,\s]+/).map(n=>+n).filter(n=>!isNaN(n));
-      if (arr.length) return arr.sort((a,b)=>a-b);
+  for (const k of keys){
+    if (k in (row||{})) {
+      const v = row[k];
+      if (Array.isArray(v)) return v.map(n=>+n).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
+      if (typeof v === 'string') {
+        return v.split(/[,\s]+/)
+                .map(n=>+n)
+                .filter(n=>!isNaN(n))
+                .sort((a,b)=>a-b);
+      }
     }
   }
   return [];
-}
-
-// round(raw 또는 normalized)에서 과목별 오답 맵 {과목명:[번호...]} 추출
-function collectWrongQuestions(roundRawOrNorm){
-  // 1) 새 스키마: subject_results에 직접 오답이 있을 수 있음
-  if (Array.isArray(roundRawOrNorm?.subject_results)) {
-    const out = {};
-    roundRawOrNorm.subject_results.forEach(s=>{
-      const name = s?.name;
-      if (!name) return;
-      const wrongs = extractWrongFromSubjectRow(s);
-      if (wrongs.length) out[name] = wrongs;
-    });
-    return out;
-  }
-
-  // 2) 새 스키마(폴백): group_results 항목의 name이 과목명일 때
-  if (Array.isArray(roundRawOrNorm?.group_results)) {
-    const out = {};
-    roundRawOrNorm.group_results.forEach(g=>{
-      const name = String(g?.name || '');
-      if (!(name in SUBJECT_MAX)) return; // 과목명 아니면 스킵
-      const wrongs = extractWrongFromSubjectRow(g);
-      if (wrongs.length) out[name] = wrongs;
-    });
-    return out;
-  }
-
-  // 3) 구 스키마 계열: by_class["종합"].groups 안의 각 과목 row에서 오답 키 탐색
-  const normalized = (roundRawOrNorm?.by_class) ? roundRawOrNorm : (window.normalizeRound?.(roundRawOrNorm) || roundRawOrNorm);
-  const groups = normalized?.by_class?.["종합"]?.groups || {};
-  const out = {};
-  Object.keys(groups).forEach(name=>{
-    const row = groups[name] || {};
-    const wrongs = extractWrongFromSubjectRow(row);
-    if (wrongs.length) out[name] = wrongs;
-  });
-  return out;
 }
 
 function buildWrongPanelHTML(roundLabel, roundRawOrNorm){
