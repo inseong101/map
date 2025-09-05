@@ -214,94 +214,35 @@ function drawLineChart(canvas, labels, series, maxValue){
 }
 
 /* -------------------- 7) 오답 수집 & 패널 -------------------- */
-function extractWrongFromSubjectRow(row){
-  const keys = [
-    "wrongQuestions","wrong_questions","wrongs","wrong",
-    "incorrectQuestions","incorrect_questions","incorrect",
-    "오답","틀린문항"
-  ];
-  for (const k of keys){
-    if (k in (row||{})) {
-      const v = row[k];
-      if (Array.isArray(v)) return v.map(n=>+n).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
-      if (typeof v === 'string') {
-        const arr = v.split(/[,\s]+/).map(n=>+n).filter(n=>!isNaN(n));
-        if (arr.length) return arr.sort((a,b)=>a-b);
-      }
-    }
-  }
-  return [];
-}
-
-// {과목:[번호...]}로 정규화
-function collectWrongQuestions(roundRawOrNorm){
-  const r = (roundRawOrNorm?.by_class || roundRawOrNorm?.subject_results || roundRawOrNorm?.group_results)
-    ? roundRawOrNorm
-    : (window.normalizeRound?.(roundRawOrNorm) || roundRawOrNorm);
-
-  // 새 스키마: subject_results
-  if (Array.isArray(roundRawOrNorm?.subject_results)) {
-    const out = {};
-    roundRawOrNorm.subject_results.forEach(s=>{
-      const nm = s.name; if (!nm) return;
-      const wrongs = extractWrongFromSubjectRow(s);
-      if (wrongs.length) out[nm] = wrongs;
-    });
-    return out;
-  }
-  // 새 스키마(폴백): group_results
-  if (Array.isArray(roundRawOrNorm?.group_results)) {
-    const out = {};
-    roundRawOrNorm.group_results.forEach(g=>{
-      const nm = String(g.name);
-      if (!(nm in SUBJECT_MAX)) return;
-      const wrongs = extractWrongFromSubjectRow(g);
-      if (wrongs.length) out[nm] = wrongs;
-    });
-    return out;
-  }
-  // 구 스키마: by_class → "종합".groups.* 에 오답 키가 있을 때
-  const groups = r?.by_class?.["종합"]?.groups || {};
-  const out = {};
-  Object.keys(groups).forEach(nm=>{
-    const wrongs = extractWrongFromSubjectRow(groups[nm]||{});
-    if (wrongs.length) out[nm] = wrongs;
-  });
-  return out;
-}
-
 function buildWrongPanelHTML(roundLabel, roundRawOrNorm){
-  const wrongMap = collectWrongQuestions(roundRawOrNorm);
-  const subjectOrder = ALL_SUBJECTS;
-  const items = subjectOrder
-    .filter(sj => Array.isArray(wrongMap[sj]) && wrongMap[sj].length)
-    .map(sj => {
-      const arr = wrongMap[sj].slice(0, 999);
-      const cells = arr.map(n => `<div class="qcell bad">${n}</div>`).join('');
-      return `
-        <div class="item">
-          <button type="button" class="acc-btn" onclick="this.classList.toggle('open'); const p=this.nextElementSibling; p.style.maxHeight = p.style.maxHeight ? '' : p.scrollHeight + 'px';">
-            <span>${sj} 오답 (${arr.length}문항)</span>
-            <span class="rotate">❯</span>
-          </button>
-          <div class="panel">
-            <div class="qgrid" style="padding:6px 0">${cells || '<div class="small">오답 없음</div>'}</div>
-          </div>
-        </div>
-      `;
-    });
+  const wrongMapRaw = collectWrongQuestions(roundRawOrNorm);
 
-  const emptyHtml = `
-    <div class="small" style="opacity:.8">
-      제공된 데이터에 과목별 오답 항목이 없습니다.
-    </div>
-  `;
+  // 17개 과목 전부 버튼으로 노출 (오답이 없어도 버튼 생성)
+  const items = ALL_SUBJECTS.map(sj => {
+    const arr = Array.isArray(wrongMapRaw[sj]) ? wrongMapRaw[sj].slice(0, 999) : [];
+    const cells = arr.length
+      ? arr.map(n => `<div class="qcell bad">${n}</div>`).join('')
+      : '<div class="small" style="opacity:.8">오답 없음</div>';
+
+    return `
+      <div class="item">
+        <button type="button" class="acc-btn"
+          onclick="this.classList.toggle('open'); const p=this.nextElementSibling; p.style.maxHeight = p.style.maxHeight ? '' : p.scrollHeight + 'px';">
+          <span>${sj} 오답 (${arr.length}문항)</span>
+          <span class="rotate">❯</span>
+        </button>
+        <div class="panel">
+          <div class="qgrid" style="padding:6px 0">${cells}</div>
+        </div>
+      </div>
+    `;
+  });
 
   return `
     <h2 style="margin-top:0">${roundLabel} 오답 피드백</h2>
     <div class="small" style="opacity:.8; margin-bottom:6px">과목명을 클릭하면 틀린 문항이 펼쳐집니다.</div>
     <div class="accordion">
-      ${items.length ? items.join('') : emptyHtml}
+      ${items.join('')}
     </div>
   `;
 }
