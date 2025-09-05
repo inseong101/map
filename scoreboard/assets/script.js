@@ -632,3 +632,29 @@ window.renderResultDynamic = renderResultDynamic;  // ← 필요 시 외부에�
 // Firestore 로더가 참조할 전역(중복 선언 금지)
 window.__SUBJECT_TOTALS = SUBJECT_MAX;
 window.__GROUPS_DEF     = GROUPS;
+
+/* === Flip card 안정화 === */
+.flip-card { perspective: 1200px; }
+.flip-card .flip-inner{
+  position: relative;
+  width: 100%;
+  height: var(--flip-h, 280px); /* 카드 높이 고정 (필요시 260~340px로 조절) */
+  transform-style: preserve-3d;
+  transition: transform .6s ease;
+}
+.flip-card.is-flipped .flip-inner{ transform: rotateY(180deg); }
+
+.flip-card .flip-face{
+  position: absolute;
+  inset: 0;                 /* 앞/뒤 면을 래퍼 높이 안에서 겹치게 */
+  backface-visibility: hidden;
+  border-radius: 16px;
+  overflow: hidden;         /* 내용이 넘치면 잘림 */
+}
+.flip-card .flip-front{ transform: rotateY(0deg); }
+.flip-card .flip-back { transform: rotateY(180deg); }
+
+/* 데스크탑에서 3열 카드 쓸 때 */
+@media (min-width: 960px){
+  .col-lg-4{ grid-column: span 4; }
+}
