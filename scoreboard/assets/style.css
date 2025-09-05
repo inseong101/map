@@ -181,47 +181,28 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 .subj-chip .muted{opacity:.7; font-weight:600}
 
 /* ==== Flip Cards (공용) ==== */
-.flip-card { perspective: 1200px; cursor: pointer; }
-.flip-card .flip-inner {
-  position: relative; width: 100%; height: 100%;
-  transition: transform .6s ease; transform-style: preserve-3d;
-}
-.flip-card.is-flipped .flip-inner { transform: rotateY(180deg); }
-.flip-card .flip-face { position: relative; backface-visibility: hidden; border-radius: 16px; min-height: 220px; }
-.flip-card .flip-back { transform: rotateY(180deg); }
-
-/* 3열 레이아웃(넓은 화면) */
-@media (min-width: 960px){ .col-lg-4 { grid-column: span 4; } }
-
-/* 카드 그리드 */
-.cards-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-}
-@media (min-width: 960px){
-  .cards-grid { grid-template-columns: repeat(3, 1fr); }
-}
-
-/* Flip card */
+/* === Flip 카드 === */
 .flip-card { perspective: 1200px; }
 .flip-card .flip-inner{
   position: relative;
   width: 100%;
-  height: var(--flip-h, 280px);       /* 필요하면 JS에서 --flip-h 조절 */
+  /* height: var(--flip-h, 280px);  ← 이 줄 삭제 */
+  height: auto;                      /* 콘텐츠 기준 */
   transform-style: preserve-3d;
   transition: transform .6s ease;
 }
 .flip-card.is-flipped .flip-inner{ transform: rotateY(180deg); }
 
 .flip-card .flip-face{
-  position: absolute; inset: 0;
+  position: absolute;
+  inset: 0;
   backface-visibility: hidden;
   border-radius: 16px;
   overflow: hidden;
 }
-.flip-card .flip-front { transform: rotateY(0deg); }
-.flip-card .flip-back  { transform: rotateY(180deg); }
+.flip-card .flip-front{ transform: rotateY(0deg); }
+.flip-card .flip-back { transform: rotateY(180deg); }
+
 
 /* 회차 그룹 카드 내부 공통 (가독용) */
 .group-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
