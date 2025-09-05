@@ -73,7 +73,7 @@ async function getAverages(_schoolName, _roundLabel){
 }
 
 /* 맨 위 트렌드(학수번호) 카드 표시 여부 — false면 상단 카드만 숨김 */
-const SHOW_TREND_CARD = false;
+const SHOW_TREND_CARD = true;
 
 /* -------------------- 2) 오프라인 인덱스 -------------------- */
 window.SCORE_DATA = window.SCORE_DATA || {};
