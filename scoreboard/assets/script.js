@@ -1,13 +1,11 @@
+<script>
 /* =========================================================
-   전졸협 성적 SPA 스크립트 (최종 정리본)
-   - 입력 → Firestore(우선) 또는 오프라인 → 플립 카드 렌더
-   - 규칙: 과목340 고정 / 그룹40% 과락 / 전체60% 평락 / 종합PASS=둘다충족
-   - 카드: 상단(종합: 꺾은선), 회차별(막대)
+   전졸협 성적 SPA 스크립트 (오답 패널 반영판)
+   - 상단 카드 뒤: 꺾은선(본인/학교/전국)
+   - 회차 카드 뒤: 과목별 틀린 문제 목록(wrongQuestions)
 ========================================================= */
 
-/* --------------------------
-   0) 과목/그룹 정의
---------------------------- */
+/* -------------------- 0) 과목/그룹 정의 -------------------- */
 const SUBJECT_MAX = {
   "간":16, "심":16, "비":16, "폐":16, "신":16,
   "상한":16, "사상":16,
@@ -17,7 +15,6 @@ const SUBJECT_MAX = {
   "부인과":32, "소아":24,
   "예방":24, "생리":16, "본초":16
 };
-
 const GROUPS = [
   { id: "그룹1", label: "그룹 1", subjects: ["간","심","비","폐","신","상한","사상"], layoutChunks: [5,2], span: 12 },
   { id: "그룹3", label: "그룹 3", subjects: ["침구"], span: 12 },
@@ -26,36 +23,24 @@ const GROUPS = [
   { id: "그룹5", label: "그룹 5", subjects: ["부인과","소아"], span: 12 },
   { id: "그룹6", label: "그룹 6", subjects: ["예방","생리","본초"], span: 12 },
 ];
-
 const ALL_SUBJECTS = GROUPS.flatMap(g => g.subjects);
 const TOTAL_MAX = ALL_SUBJECTS.reduce((a,n)=>a+(SUBJECT_MAX[n]||0),0); // 340
 
-// 01~12 → 학교명
 const SCHOOL_MAP = {
   "01":"가천대","02":"경희대","03":"대구한","04":"대전대",
   "05":"동국대","06":"동신대","07":"동의대","08":"부산대",
   "09":"상지대","10":"세명대","11":"우석대","12":"원광대"
 };
-function getSchoolFromSid(sid){
-  const p2 = String(sid||"").slice(0,2);
-  return SCHOOL_MAP[p2] || "미상";
-}
+function getSchoolFromSid(sid){ const p2 = String(sid||"").slice(0,2); return SCHOOL_MAP[p2] || "미상"; }
 
 const ROUND_LABELS = ["1차","2차","3차","4차","5차","6차","7차","8차"];
 
-/* --------------------------
-   1) 평균치(임시) — 나중에 Firestore로 교체 가능
---------------------------- */
+/* -------------------- 1) 평균치(임시) -------------------- */
 async function getAverages(schoolName, roundLabel){
-  return {
-    nationalAvg: Math.round(TOTAL_MAX * 0.60),
-    schoolAvg:   Math.round(TOTAL_MAX * 0.62)
-  };
+  return { nationalAvg: Math.round(TOTAL_MAX * 0.60), schoolAvg: Math.round(TOTAL_MAX * 0.62) };
 }
 
-/* --------------------------
-   2) 오프라인 인덱스(폴백)
---------------------------- */
+/* -------------------- 2) 오프라인 인덱스 -------------------- */
 window.SCORE_DATA = window.SCORE_DATA || {};
 (function buildIndex(){
   const idx = {};
@@ -69,9 +54,7 @@ function getStudentById(id6){
   return (window.__SCORE_INDEX__ && window.__SCORE_INDEX__[id6]) || window.SCORE_DATA[id6] || null;
 }
 
-/* --------------------------
-   3) 유틸
---------------------------- */
+/* -------------------- 3) 유틸 -------------------- */
 const $  = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
 function fmt(n){ return (n==null || isNaN(Number(n))) ? "-" : Number(n).toLocaleString("ko-KR"); }
@@ -92,9 +75,7 @@ function pickKey(obj, candidates){
   return null;
 }
 
-/* --------------------------
-   4) 정규화 (새/구 스키마 수용)
---------------------------- */
+/* -------------------- 4) 정규화 -------------------- */
 function normalizeRound(raw){
   if (!raw || typeof raw !== 'object') return null;
 
@@ -113,15 +94,9 @@ function normalizeRound(raw){
         }
       });
     }
-    return {
-      total: { score: 0, max: 0 },
-      pass:  !!(raw.overall_pass ?? raw.round_pass ?? raw.pass),
-      fails: [],
-      by_class: { "종합": { total: {score:0, max:0}, groups } }
-    };
+    return { total:{score:0,max:0}, pass:!!(raw.overall_pass ?? raw.round_pass ?? raw.pass), fails:[], by_class:{ "종합":{ total:{score:0,max:0}, groups } } };
   }
 
-  // 구 스키마
   const byClassKey = pickKey(raw, ["by_class","byClass","classes","sections"]);
   const byClassRaw = (byClassKey && typeof raw[byClassKey]==='object') ? raw[byClassKey] : {};
   const normByClass = {};
@@ -159,9 +134,7 @@ function getSubjectScores(round){
   return result;
 }
 
-/* --------------------------
-   5) Firestore 회차 자동 탐색 (존재하는 회차만)
---------------------------- */
+/* -------------------- 5) 회차 자동 탐색 -------------------- */
 async function discoverRoundsFor(sid){
   const found = [];
   for (const label of ROUND_LABELS){
@@ -180,9 +153,8 @@ async function discoverRoundsFor(sid){
   return found;
 }
 
-/* --------------------------
-   6) Canvas 차트
---------------------------- */
+/* -------------------- 6) Canvas 차트 -------------------- */
+// 막대(상단 카드가 아님: 회차 카드 뒤는 이제 오답 패널이라 사용X, 필요시 남겨둠)
 function drawBarChart(canvas, items){
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -264,26 +236,124 @@ function drawLineChart(canvas, labels, series, maxValue){
   });
 }
 
-/* --------------------------
-   7) 플립 카드
---------------------------- */
-function makeFlipCard({id, title, frontHTML}){
+/* -------------------- 7) 오답 수집 & 패널 -------------------- */
+// 다양한 키를 허용해 과목별 오답 배열을 뽑는다.
+function extractWrongFromSubjectRow(row){
+  // 후보 키들
+  const keys = [
+    "wrongQuestions","wrong_questions","wrongs","wrong","incorrectQuestions","incorrect_questions","incorrect","오답","틀린문항"
+  ];
+  for (const k of keys){
+    if (k in (row||{})) {
+      const v = row[k];
+      if (Array.isArray(v)) return v.map(n=>+n).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
+      // 문자열 "1, 3, 7" 형태도 허용
+      if (typeof v === 'string') {
+        const arr = v.split(/[,\s]+/).map(n=>+n).filter(n=>!isNaN(n));
+        if (arr.length) return arr.sort((a,b)=>a-b);
+      }
+    }
+  }
+  return [];
+}
+
+// round(raw or normalized)에서 과목별 오답 맵 {과목:[번호...]}
+function collectWrongQuestions(roundRawOrNorm){
+  const r = (roundRawOrNorm?.by_class || roundRawOrNorm?.subject_results || roundRawOrNorm?.group_results)
+    ? roundRawOrNorm
+    : (window.normalizeRound?.(roundRawOrNorm) || roundRawOrNorm);
+
+  // 1) 새 스키마: subject_results
+  if (Array.isArray(roundRawOrNorm?.subject_results)) {
+    const out = {};
+    roundRawOrNorm.subject_results.forEach(s=>{
+      const nm = s.name;
+      if (!nm) return;
+      const wrongs = extractWrongFromSubjectRow(s);
+      if (wrongs.length) out[nm] = wrongs;
+    });
+    return out;
+  }
+  // 2) 새 스키마(폴백): group_results 항목이 과목명일 때
+  if (Array.isArray(roundRawOrNorm?.group_results)) {
+    const out = {};
+    roundRawOrNorm.group_results.forEach(g=>{
+      const nm = String(g.name);
+      if (!(nm in SUBJECT_MAX)) return; // 과목명 아닌 그룹은 스킵
+      const wrongs = extractWrongFromSubjectRow(g);
+      if (wrongs.length) out[nm] = wrongs;
+    });
+    return out;
+  }
+  // 3) 구 스키마 계열(by_class → "종합".groups 안의 과목 row에 오답 키가 있는 경우)
+  const groups = r?.by_class?.["종합"]?.groups || {};
+  const out = {};
+  Object.keys(groups).forEach(nm=>{
+    const row = groups[nm] || {};
+    const wrongs = extractWrongFromSubjectRow(row);
+    if (wrongs.length) out[nm] = wrongs;
+  });
+  return out;
+}
+
+// 오답 패널 HTML (과목별 아코디언 + qcell 목록)
+function buildWrongPanelHTML(roundLabel, roundRawOrNorm){
+  const wrongMap = collectWrongQuestions(roundRawOrNorm);
+
+  const subjectOrder = ALL_SUBJECTS; // 표준 과목 순서 유지
+  const items = subjectOrder
+    .filter(sj => Array.isArray(wrongMap[sj]) && wrongMap[sj].length)
+    .map(sj => {
+      const arr = wrongMap[sj].slice(0, 999); // 과도한 길이 방지
+      const cells = arr.map(n => `<div class="qcell bad">${n}</div>`).join('');
+      return `
+        <div class="item">
+          <button type="button" onclick="this.classList.toggle('open'); const p=this.nextElementSibling; p.style.maxHeight = p.style.maxHeight ? '' : p.scrollHeight + 'px';">
+            <span>${sj} 오답 (${arr.length}문항)</span>
+            <span class="rotate">❯</span>
+          </button>
+          <div class="panel">
+            <div class="qgrid" style="padding:6px 0">${cells || '<div class="small">오답 없음</div>'}</div>
+          </div>
+        </div>
+      `;
+    });
+
+  const emptyHtml = `
+    <div class="small" style="opacity:.8">
+      제공된 데이터에 과목별 오답 항목이 없습니다.
+    </div>
+  `;
+
+  return `
+    <h2 style="margin-top:0">${roundLabel} 오답 피드백</h2>
+    <div class="small" style="opacity:.8; margin-bottom:6px">과목명을 클릭하면 틀린 문항이 펼쳐집니다.</div>
+    <div class="accordion">
+      ${items.length ? items.join('') : emptyHtml}
+    </div>
+  `;
+}
+
+/* -------------------- 8) 플립 카드 -------------------- */
+function makeFlipCard({id, title, frontHTML, backHTML, backCaption}){
   const wrap = document.createElement('div');
   wrap.innerHTML = `
     <div id="${id}" class="flip-card">
       <div class="flip-inner">
         <div class="flip-face flip-front card">${frontHTML}</div>
         <div class="flip-face flip-back card">
-          <h2 style="margin-top:0">${title} 평균 비교</h2>
-          <canvas id="${id}-canvas" width="360" height="200"></canvas>
-          <div class="small" id="${id}-cap" style="margin-top:8px; opacity:.8"></div>
+          ${backHTML ?? `
+            <h2 style="margin-top:0">${title} 평균 비교</h2>
+            <canvas id="${id}-canvas" width="360" height="200"></canvas>
+            <div class="small" id="${id}-cap" style="margin-top:8px; opacity:.8">${backCaption||''}</div>
+          `}
         </div>
       </div>
     </div>
   `;
   const card = wrap.querySelector('.flip-card');
   card.addEventListener('click', (e)=>{
-    if (e.target.closest('button')) return;
+    if (e.target.closest('button')) return; // 아코디언 버튼 클릭 예외
     card.classList.toggle('is-flipped');
   });
   return wrap.firstElementChild;
@@ -296,9 +366,7 @@ function chunk(arr, sizes){
   return out;
 }
 
-/* --------------------------
-   8) 회차 상세 렌더(앞면)
---------------------------- */
+/* -------------------- 9) 회차 상세(앞면) -------------------- */
 function renderRound(hostSel, title, round){
   const host = $(hostSel);
   if(!host) return;
@@ -392,17 +460,12 @@ function renderRound(hostSel, title, round){
   host.innerHTML = html;
 }
 
-/* --------------------------
-   9) 결과 전체 렌더(상단카드=플립, 회차카드=플립)
---------------------------- */
+/* -------------------- 10) 전체 렌더 -------------------- */
 async function renderResultDynamic(sid){
-  const grid = ensureResultGrid();   // ← 레거시 상단 고정 카드 제거 + 그리드 확보
-  if (!grid) return;
+  const grid = $("#cards-grid");
   grid.innerHTML = "";
 
   const school = getSchoolFromSid(sid);
-
-  // (1) 존재 회차 탐색
   const rounds = await discoverRoundsFor(sid);
   if (rounds.length === 0){
     const msg = document.createElement('div');
@@ -411,7 +474,7 @@ async function renderResultDynamic(sid){
     return;
   }
 
-  // (2) 맨 위 플립카드 (앞: sid/학교/배지, 뒤: 꺾은선)
+  // (A) 맨 위 카드 (앞: SID/학교/배지, 뒤: 꺾은선)
   const topCard = makeFlipCard({
     id: 'card-trend',
     title: '종합 추이',
@@ -427,31 +490,35 @@ async function renderResultDynamic(sid){
       <hr class="sep" />
       <div class="small" style="opacity:.8">카드를 클릭하면 회차별 본인/학교/전국 꺾은선 그래프가 보입니다.</div>
     `
+    // backHTML 미지정 → 캔버스 기본 템플릿 사용
   });
   topCard.querySelector('.flip-inner').style.setProperty('--flip-h','320px');
   grid.appendChild(topCard);
 
-  // (3) 회차 카드(앞: 상세, 뒤: 막대)
-  const studentTotals = {};  // {'1차': 총점}
+  // (B) 회차 카드들 (앞: 상세, 뒤: 오답 패널)
+  const studentTotals = {}; // 꺾은선에 사용
   for (const {label, raw} of rounds){
     const norm = (window.normalizeRound?.(raw)) || raw;
-
     const hostId = `round-host-${label}`;
+
+    const roundBackHTML = buildWrongPanelHTML(label, raw); // 오답 패널 생성
+
     const card = makeFlipCard({
       id: `card-${label}`,
       title: label,
-      frontHTML: `<div id="${hostId}"></div>`
+      frontHTML: `<div id="${hostId}"></div>`,
+      backHTML: roundBackHTML
     });
     grid.appendChild(card);
 
     renderRound(`#${hostId}`, label, norm);
 
-    // 개인 총점 저장(뒤면 막대)
+    // 본인 총점 저장(상단 꺾은선용)
     const subs = getSubjectScores(norm);
     studentTotals[label] = ALL_SUBJECTS.reduce((a,n)=>a+(subs[n]?.score||0),0);
   }
 
-  // (4) 맨 위 카드 앞면 배지 — 존재 회차만 표시
+  // (C) 상단 배지(존재 회차만)
   const badgesHost = $('#trend-badges');
   if (badgesHost){
     badgesHost.innerHTML = '';
@@ -464,196 +531,7 @@ async function renderResultDynamic(sid){
     });
   }
 
-  // (5) 회차 카드 뒤면 — 막대
-  for (const {label} of rounds){
-    const my = studentTotals[label]||0;
-    const { nationalAvg, schoolAvg } = await getAverages(school, label);
-    drawBarChart(document.getElementById(`card-${label}-canvas`), [
-      {label:'본인', value: my},
-      {label:'학교평균', value: schoolAvg},
-      {label:'전국평균', value: nationalAvg},
-    ]);
-    const c = document.getElementById(`card-${label}-cap`);
-    if (c) c.textContent = `${label} 총점 기준 / 최대 ${TOTAL_MAX}`;
-  }
-
-  // (6) 맨 위 카드 뒤면 — 존재 회차만 꺾은선
-  const labels = rounds
-    .map(r => r.label)
-    .sort((a,b)=> parseInt(a) - parseInt(b));
+  // (D) 상단 카드 뒤: 존재 회차만 꺾은선
+  const labels = rounds.map(r => r.label).sort((a,b)=> parseInt(a) - parseInt(b));
   const me  = labels.map(lb => studentTotals[lb] ?? null);
-  const nat = [], sch = [];
-  for (const lb of labels){
-    const { nationalAvg, schoolAvg } = await getAverages(school, lb);
-    nat.push(nationalAvg ?? null);
-    sch.push(schoolAvg   ?? null);
-  }
-  drawLineChart(
-    document.getElementById('card-trend-canvas'),
-    labels,
-    [
-      { name: '본인',     values: me  },
-      { name: '학교평균', values: sch },
-      { name: '전국평균', values: nat },
-    ],
-    TOTAL_MAX
-  );
-  const cap = document.getElementById('card-trend-cap');
-  if (cap) cap.textContent = `회차별 총점 추이 (최대 ${TOTAL_MAX})`;
-
-  // (7) 플립 높이 동기화(앞/뒤 큰쪽)
-  requestAnimationFrame(()=>{
-    syncFlipHeights(grid);
-    installFlipHeightObservers();
-  });
-}
-// === 레거시 결과 카드 제거 & 플립 카드 그리드 보장 ===
-function ensureResultGrid(){
-  const view = document.getElementById('view-result');
-  if (!view) return null;
-
-  // (A) view-result 바로 아래 붙은 옛 .card(플립카드 아님) 제거
-  view.querySelectorAll(':scope > .card').forEach(el => {
-    if (!el.closest('.flip-card')) el.remove();
-  });
-
-  // (B) cards-grid 보장 (없으면 만들어서 맨 앞에 추가)
-  let grid = document.getElementById('cards-grid');
-  if (!grid) {
-    grid = document.createElement('div');
-    grid.id = 'cards-grid';
-    grid.className = 'grid';
-    view.prepend(grid);
-  }
-  return grid;
-}
-/* --------------------------
-   10) 폼/라우팅
---------------------------- */
-function goHome(){
-  $("#view-result")?.classList.add("hidden");
-  $("#view-home")?.classList.remove("hidden");
-  $("#sid")?.focus();
-}
-
-async function lookupStudent(e){
-  e.preventDefault();
-  hideError();
-  const input = $("#sid");
-  const id = (input?.value || "").replace(/\D/g,"").slice(0,6);
-
-  if(id.length !== 6){
-    showError("학수번호는 숫자 6자리여야 합니다.");
-    input?.focus();
-    return false;
-  }
-
-  try {
-    await renderResultDynamic(id);
-    $("#view-home")?.classList.add("hidden");
-    $("#view-result")?.classList.remove("hidden");
-  } catch (err){
-    console.error(err);
-    showError("존재하지 않는 학수번호거나 미응시자입니다.");
-  }
-  return false;
-}
-
-/* --------------------------
-   11) 초기화 & 전역
---------------------------- */
-function initApp(){
-  const $sid = $("#sid");
-  if ($sid) {
-    $sid.addEventListener('input', () => {
-      $sid.value = ($sid.value || '').replace(/\D/g, '').slice(0, 6);
-    });
-    $sid.setAttribute('enterkeyhint', 'done');
-  }
-
-  const form = $("#lookup-form");
-  if (form) form.addEventListener('submit', lookupStudent);
-
-  const p = new URLSearchParams(location.search);
-  const sid = p.get("sid") || p.get("id");
-  if (sid && /^\d{6}$/.test(sid)) {
-    if ($sid) $sid.value = sid;
-    form?.dispatchEvent(new Event("submit", {cancelable:true}));
-  }
-}
-document.addEventListener('DOMContentLoaded', initApp);
-
-// 전역 노출
-window.goHome = goHome;
-window.initApp = initApp;
-window.normalizeRound = normalizeRound;
-window.renderResultDynamic = renderResultDynamic;
-window.__SUBJECT_TOTALS = SUBJECT_MAX;
-window.__GROUPS_DEF     = GROUPS;
-
-/* --------------------------
-   12) Flip 높이 동기화(앞/뒤 중 큰 높이)
---------------------------- */
-function measureFaceHeight(card, faceEl){
-  const tmp = document.createElement('div');
-  tmp.className = faceEl.className.replace('flip-face','').trim(); // .card 스타일 유지
-  tmp.style.cssText = `
-    position:absolute; visibility:hidden; left:-9999px; top:-9999px;
-    width:${card.clientWidth}px;
-  `;
-  tmp.innerHTML = faceEl.innerHTML;
-  document.body.appendChild(tmp);
-  const h = Math.ceil(tmp.scrollHeight);
-  document.body.removeChild(tmp);
-  return h;
-}
-
-function syncFlipHeights(root = document){
-  const scope = (root instanceof Element ? root : document);
-  const cards = scope.querySelectorAll('.flip-card');
-  cards.forEach(card=>{
-    const inner = card.querySelector('.flip-inner');
-    const front = card.querySelector('.flip-front');
-    const back  = card.querySelector('.flip-back');
-    if (!inner || !front || !back) return;
-    const hf = measureFaceHeight(card, front);
-    const hb = measureFaceHeight(card, back);
-    inner.style.height = Math.max(hf, hb) + 'px';
-  });
-}
-
-let __flipObserverInstalled = false;
-function installFlipHeightObservers(){
-  if (__flipObserverInstalled) return;
-  __flipObserverInstalled = true;
-
-  const grid = document.getElementById('cards-grid');
-
-  // 창 크기 변경 시
-  window.addEventListener('resize', ()=> syncFlipHeights(grid));
-
-  // face 크기 변화를 감지(캔버스 렌더 후 포함)
-  const ro = new ResizeObserver(()=> syncFlipHeights(grid));
-
-  // 동적 추가된 카드의 face도 관찰
-  const mo = new MutationObserver((mutList)=>{
-    mutList.forEach(m=>{
-      m.addedNodes.forEach(node=>{
-        if (!(node instanceof Element)) return;
-        node.querySelectorAll?.('.flip-card .flip-face').forEach(face => ro.observe(face));
-        if (node.matches?.('.flip-card') || node.querySelector?.('.flip-card')) {
-          requestAnimationFrame(()=> syncFlipHeights(grid));
-        }
-      });
-    });
-  });
-  mo.observe(grid, { childList:true, subtree:true });
-
-  // 초기 face 등록
-  document.querySelectorAll('.flip-card .flip-face').forEach(el=> ro.observe(el));
-
-  // 폰트 로드 이후 재동기화
-  if (document.fonts && document.fonts.ready) {
-    document.fonts.ready.then(()=> syncFlipHeights(grid)).catch(()=>{});
-  }
-}
+  const
