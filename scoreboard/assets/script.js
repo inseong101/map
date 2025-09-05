@@ -246,16 +246,62 @@ function drawLineChart(canvas, labels, series, maxValue){
   });
 }
 
-/* -------------------- 7) 오답 수집(모든 스키마 지원) -------------------- */
+
+/* -------------------- 7) 오답 수집 & 패널 -------------------- */
+
+/** ① 교시 → 과목 구간표
+ *  - 네가 준 기준(1교시): 1~16 간, 17~32 심, 33~48 비, 49~64 폐, 65~80 신
+ *  - 나머지 교시는 알고 있는 구간대로 이어서 채우면 됨(예시는 비워둠)
+ */
+const SESSION_SUBJECT_RANGES = {
+  "1교시": [
+    { s: "간", from:  1, to: 16 },
+    { s: "심", from: 17, to: 32 },
+    { s: "비", from: 33, to: 48 },
+    { s: "폐", from: 49, to: 64 },
+    { s: "신", from: 65, to: 80 },
+  ],
+  "2교시": [
+    { s: "상한", from:  1, to: 16 },
+    { s: "사상", from: 17, to: 32 },
+    { s: "침구", from: 33, to: 80 },
+    { s: "법규", from: 80, to: 100 },
+  ],
+     "3교시": [
+    { s: "외과", from:  1, to: 16 },
+    { s: "신경", from: 17, to: 32 },
+    { s: "안이비", from: 33, to: 48 },
+    { s: "부인", from: 49, to: 80 },
+  ],
+     "4교시": [
+    { s: "소아", from:  1, to: 24 },
+    { s: "예방", from: 25, to: 48 },
+    { s: "생리", from: 49, to: 64 },
+    { s: "본초", from: 65, to: 80 },
+  ],
+};
+
+/** ② 교시명 정규화: 다양한 키에서 교시를 추출 ('1교시','2교시' 등으로 통일) */
+function toStdSessionName(name){
+  const k = String(name||"").toLowerCase();
+  if (/(^|[^0-9])1(교시|st|nd|rd|th)?\b/.test(k) || /(first|제?1|첫)/.test(k)) return "1교시";
+  if (/(^|[^0-9])2(교시|st|nd|rd|th)?\b/.test(k) || /(second|제?2)/.test(k)) return "2교시";
+  if (/(^|[^0-9])3(교시|st|nd|rd|th)?\b/.test(k) || /(third|제?3)/.test(k)) return "3교시";
+  if (/(^|[^0-9])4(교시|st|nd|rd|th)?\b/.test(k) || /(fourth|제?4)/.test(k)) return "4교시";
+  if (/(^|[^0-9])5(교시|st|nd|rd|th)?\b/.test(k) || /(fifth|제?5)/.test(k)) return "5교시";
+  return null;
+}
+
+/** ③ 숫자 배열 정규화: [1,2,'3'] 또는 "1, 2  3" → [1,2,3] */
 function toNumArray(v){
   if (Array.isArray(v)) return v.map(n=>+n).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
   if (typeof v === 'string') {
-    const arr = v.split(/[,\s/]+/).map(n=>+n).filter(n=>!isNaN(n));
-    if (arr.length) return arr.sort((a,b)=>a-b);
+    return v.split(/[,\s/]+/).map(n=>+n).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
   }
   return [];
 }
 
+/** ④ 과목 row 안에서 오답 키 추출 (subject_results, group_results, by_class.*.groups.* 용) */
 function extractWrongFromSubjectRow(row){
   const keys = [
     "wrongQuestions","wrong_questions","wrongs","wrong",
@@ -264,14 +310,28 @@ function extractWrongFromSubjectRow(row){
   ];
   for (const k of keys){
     if (k in (row||{})) {
-      const out = toNumArray(row[k]);
-      if (out.length) return out;
+      const arr = toNumArray(row[k]);
+      if (arr.length) return arr;
     }
   }
   return [];
 }
 
-// round(raw or normalized) → {과목표준명:[문항...]}
+/** ⑤ 교시 오답 → 과목 오답으로 맵핑해서 acc에 누적 */
+function mapSessionNumbersToSubjects(sessionLabel, nums, acc){
+  const segs = SESSION_SUBJECT_RANGES[sessionLabel];
+  if (!segs || !nums || !nums.length) return;
+  for (const n of nums){
+    for (const seg of segs){
+      if (n >= seg.from && n <= seg.to){
+        (acc[seg.s] ||= []).push(n);
+        break;
+      }
+    }
+  }
+}
+
+/** ⑥ round(raw 또는 normalized) → {과목:[문항...]} */
 function collectWrongQuestions(roundRawOrNorm){
   const r = (roundRawOrNorm?.by_class || roundRawOrNorm?.subject_results || roundRawOrNorm?.group_results || roundRawOrNorm?.wrong_questions || roundRawOrNorm?.wrongs)
     ? roundRawOrNorm
@@ -279,51 +339,76 @@ function collectWrongQuestions(roundRawOrNorm){
 
   const out = {};
 
-  // A) 최상위 맵 형태 지원
+  // A) 최상위 맵 형태(예: wrong_questions: { '침구':[...], '간':[...], 'acupuncture':[...], ... })
   const topKeys = ["wrong_questions","wrongQuestions","wrongs","incorrect_questions","incorrectQuestions"];
   for (const tk of topKeys){
     if (r && r[tk] && typeof r[tk] === 'object'){
       Object.keys(r[tk]).forEach(rawName=>{
-        const nmStd = toStdSubjectName(rawName) || rawName;
+        // 이 케이스는 과목명이 이미 명시된 형태라 세션 맵핑 불필요
+        const nm = String(rawName).trim();
         const arr = toNumArray(r[tk][rawName]);
-        if (SUBJECT_MAX[nmStd] != null && arr.length) out[nmStd] = arr;
+        if (SUBJECT_MAX[nm] != null && arr.length) (out[nm] ||= []).push(...arr);
       });
     }
   }
 
-  // B) 새 스키마: subject_results
+  // B) 새 스키마: subject_results[*] 안에 오답 키가 있을 때
   if (Array.isArray(r?.subject_results)) {
     r.subject_results.forEach(s=>{
-      const nmStd = toStdSubjectName(s.name);
-      if (!nmStd) return;
+      const nm = String(s?.name||"").trim();
+      if (!nm || SUBJECT_MAX[nm]==null) return;
       const arr = extractWrongFromSubjectRow(s);
-      if (arr.length) out[nmStd] = arr;
+      if (arr.length) (out[nm] ||= []).push(...arr);
     });
   }
 
-  // C) 새 스키마 변형: group_results에 과목명이 들어온 경우
+  // C) 새 스키마 변형: group_results[*] 이름이 과목명일 때
   if (Array.isArray(r?.group_results)) {
     r.group_results.forEach(g=>{
-      const nmStd = toStdSubjectName(g.name);
-      if (!nmStd) return;
+      const nm = String(g?.name||"").trim();
+      if (SUBJECT_MAX[nm]==null) return;
       const arr = extractWrongFromSubjectRow(g);
-      if (arr.length) out[nmStd] = arr;
+      if (arr.length) (out[nm] ||= []).push(...arr);
     });
   }
 
-  // D) 구 스키마: by_class → "종합".groups
+  // D) 구 스키마: by_class → "종합".groups.* 에 오답 키가 있는 경우
   const groups = r?.by_class?.["종합"]?.groups || {};
-  Object.keys(groups).forEach(name=>{
-    const nmStd = toStdSubjectName(name) || name;
-    const row = groups[name] || {};
+  Object.keys(groups).forEach(nm=>{
+    if (SUBJECT_MAX[nm]==null) return;
+    const row = groups[nm] || {};
     const arr = extractWrongFromSubjectRow(row);
-    if (SUBJECT_MAX[nmStd] != null && arr.length) out[nmStd] = arr;
+    if (arr.length) (out[nm] ||= []).push(...arr);
+  });
+
+  // E) 교시(세션) 단위 오답 → 과목으로 변환
+  //   - 1) wrong_by_session 같이 묶인 객체
+  const bySession = r?.wrong_by_session || r?.wrongBySession || r?.wrong_sessions || r?.wrongSessions;
+  if (bySession && typeof bySession === 'object'){
+    Object.entries(bySession).forEach(([sessKey, val])=>{
+      const sess = toStdSessionName(sessKey);
+      if (!sess) return;
+      mapSessionNumbersToSubjects(sess, toNumArray(val), out);
+    });
+  }
+  //   - 2) 개별 키들(예: wrong_1교시, wrong1, wrong_first, wrongSession1 등)
+  Object.keys(r||{}).forEach(k=>{
+    if (!/wrong/i.test(k)) return;                 // wrong이 들어간 키만 확인
+    const sess = toStdSessionName(k);              // 키에서 교시 추출
+    if (!sess) return;
+    mapSessionNumbersToSubjects(sess, toNumArray(r[k]), out);
+  });
+
+  // 정리: 중복 제거 + 정렬
+  Object.keys(out).forEach(nm=>{
+    const set = new Set(out[nm]);
+    out[nm] = Array.from(set).sort((a,b)=>a-b);
   });
 
   return out;
 }
 
-// 뒷면 오답 패널 HTML (17개 과목 버튼: 오답 없어도 모두 표시)
+/** ⑦ 오답 패널 HTML (17개 과목 버튼: 오답 없어도 전부 노출) */
 function buildWrongPanelHTML(roundLabel, roundRawOrNorm){
   const wrongMap = collectWrongQuestions(roundRawOrNorm);
 
@@ -355,6 +440,9 @@ function buildWrongPanelHTML(roundLabel, roundRawOrNorm){
     </div>
   `;
 }
+
+
+
 
 /* -------------------- 8) 플립 카드 -------------------- */
 function makeFlipCard({id, title, frontHTML, backHTML, backCaption}){
