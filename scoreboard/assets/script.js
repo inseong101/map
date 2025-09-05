@@ -396,7 +396,8 @@ function renderRound(hostSel, title, round){
    9) 결과 전체 렌더(상단카드=플립, 회차카드=플립)
 --------------------------- */
 async function renderResultDynamic(sid){
-  const grid = $("#cards-grid");
+  const grid = ensureResultGrid();   // ← 레거시 상단 고정 카드 제거 + 그리드 확보
+  if (!grid) return;
   grid.innerHTML = "";
 
   const school = getSchoolFromSid(sid);
@@ -506,7 +507,26 @@ async function renderResultDynamic(sid){
     installFlipHeightObservers();
   });
 }
+// === 레거시 결과 카드 제거 & 플립 카드 그리드 보장 ===
+function ensureResultGrid(){
+  const view = document.getElementById('view-result');
+  if (!view) return null;
 
+  // (A) view-result 바로 아래 붙은 옛 .card(플립카드 아님) 제거
+  view.querySelectorAll(':scope > .card').forEach(el => {
+    if (!el.closest('.flip-card')) el.remove();
+  });
+
+  // (B) cards-grid 보장 (없으면 만들어서 맨 앞에 추가)
+  let grid = document.getElementById('cards-grid');
+  if (!grid) {
+    grid = document.createElement('div');
+    grid.id = 'cards-grid';
+    grid.className = 'grid';
+    view.prepend(grid);
+  }
+  return grid;
+}
 /* --------------------------
    10) 폼/라우팅
 --------------------------- */
