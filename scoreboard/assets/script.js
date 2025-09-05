@@ -1,10 +1,9 @@
+<script>
 /* =========================================================
-   전졸협 성적 SPA 스크립트 (오답 패널 반영판, 최종)
-   - 상단(맨 위) 카드 앞면: 학수번호/학교 + 회차 배지
-   - 상단 카드 뒷면: 꺾은선(본인/학교/전국) — 존재하는 회차만
-   - 각 회차 카드 앞면: 상세(총점/그룹/과락)
-   - 각 회차 카드 뒷면: 과목별 틀린 문항 목록(wrongQuestions)
-   - 플립 높이: 앞/뒤 중 큰 쪽에 자동 맞춤(동적 추가/캔버스 렌더 후 포함)
+   전졸협 성적 SPA 스크립트 (오답 패널 완전반영 · 상단 SID카드 제거판)
+   - 각 회차 카드: 앞면(총점/그룹/과락) · 뒷면(과목별 오답 리스트)
+   - Firestore에서 오는 다양한 스키마의 오답 키를 폭넓게 수집
+   - 플립 높이: 앞/뒤 큰쪽으로 자동 동기화(동적 추가/캔버스/폰트 로드 이후 포함)
 ========================================================= */
 
 /* -------------------- 0) 과목/그룹 정의 -------------------- */
@@ -28,14 +27,13 @@ const GROUPS = [
 const ALL_SUBJECTS = GROUPS.flatMap(g => g.subjects);
 const TOTAL_MAX = ALL_SUBJECTS.reduce((a,n)=>a+(SUBJECT_MAX[n]||0),0); // 340
 
-// 01~12 → 학교명
+/* (참고: 학교/라운드 라벨) */
 const SCHOOL_MAP = {
   "01":"가천대","02":"경희대","03":"대구한","04":"대전대",
   "05":"동국대","06":"동신대","07":"동의대","08":"부산대",
   "09":"상지대","10":"세명대","11":"우석대","12":"원광대"
 };
 function getSchoolFromSid(sid){ const p2 = String(sid||"").slice(0,2); return SCHOOL_MAP[p2] || "미상"; }
-
 const ROUND_LABELS = ["1차","2차","3차","4차","5차","6차","7차","8차"];
 
 /* -------------------- 1) 평균치(임시) -------------------- */
@@ -78,7 +76,60 @@ function pickKey(obj, candidates){
   return null;
 }
 
-/* -------------------- 4) 정규화 -------------------- */
+/* -------------------- 3-1) 과목명 정규화(별칭 ↔ 표준명) -------------------- */
+/* Firestore에서 과목 키가 영문/축약/다른 라벨로 올 가능성 대비 */
+const SUBJECT_ALIAS = {
+  // 한글 변형
+  "간":"간","간학":"간","간담":"간",
+  "심":"심","심학":"심",
+  "비":"비","비학":"비",
+  "폐":"폐","폐학":"폐",
+  "신":"신","신학":"신",
+  "상한":"상한","상한론":"상한",
+  "사상":"사상","사상의학":"사상",
+
+  "침구":"침구","침구학":"침구","acupuncture":"침구","chimgu":"침구",
+
+  "보건":"보건","공중보건":"보건",
+
+  "외과":"외과","외과학":"외과",
+  "신경":"신경","신경과":"신경",
+  "안이비":"안이비","안이비과":"안이비","안·이비":"안이비","안이비인후":"안이비",
+
+  "부인과":"부인과","부인":"부인과",
+  "소아":"소아","소아과":"소아",
+
+  "예방":"예방","예방의학":"예방",
+  "생리":"생리","생리학":"생리",
+  "본초":"본초","본초학":"본초",
+
+  // 로마자 축약 흔한 키(앱 내부/스프레드시트 등)
+  "gan":"간","sim":"심","bi":"비","pye":"폐","pe":"폐","sin":"신","shin":"신",
+  "sanghan":"상한","sasang":"사상",
+  "chimgu":"침구","jingju":"침구",
+  "bogun":"보건","bogeon":"보건",
+  "oegwa":"외과","oe":"외과",
+  "singyeong":"신경","sin-gyeong":"신경","neuro":"신경",
+  "anibi":"안이비","eyeent":"안이비",
+  "buin":"부인과","obgy":"부인과",
+  "soa":"소아","pedi":"소아",
+  "yebang":"예방","preventive":"예방",
+  "saengri":"생리","physio":"생리",
+  "boncho":"본초","materiamedica":"본초"
+};
+function toStdSubjectName(name){
+  if (!name) return null;
+  const raw = String(name).trim();
+  if (SUBJECT_MAX[raw] != null) return raw;                 // 이미 표준명
+  const key1 = raw.toLowerCase().replace(/\s+/g,'');        // 공백 제거 소문자
+  if (SUBJECT_ALIAS[key1]) return SUBJECT_ALIAS[key1];
+  if (SUBJECT_ALIAS[raw])  return SUBJECT_ALIAS[raw];
+  // 마지막 시도: 괄호/대시 제거 후 재조회
+  const key2 = key1.replace(/[()\[\]\-_.]/g,'');
+  return SUBJECT_ALIAS[key2] || null;
+}
+
+/* -------------------- 4) 점수 정규화 -------------------- */
 function normalizeRound(raw){
   if (!raw || typeof raw !== 'object') return null;
 
@@ -87,15 +138,15 @@ function normalizeRound(raw){
     const groups = {};
     if (Array.isArray(raw.subject_results)){
       raw.subject_results.forEach(s=>{
-        const nm = s.name;
-        groups[nm] = { score: +s.correct||0, max: SUBJECT_MAX[nm] ?? (+s.total||0) };
+        const nmStd = toStdSubjectName(s.name);
+        if (!nmStd) return;
+        groups[nmStd] = { score:+(s.correct||0), max: SUBJECT_MAX[nmStd] ?? +(s.total||0) };
       });
     } else if (Array.isArray(raw.group_results)) {
       raw.group_results.forEach(g=>{
-        const nm = String(g.name);
-        if (nm in SUBJECT_MAX){
-          groups[nm] = { score:+g.correct||0, max: SUBJECT_MAX[nm] ?? (+g.total||0) };
-        }
+        const nmStd = toStdSubjectName(g.name);
+        if (!nmStd) return;
+        groups[nmStd] = { score:+(g.correct||0), max: SUBJECT_MAX[nmStd] ?? +(g.total||0) };
       });
     }
     return { total:{score:0,max:0}, pass:!!(raw.overall_pass ?? raw.round_pass ?? raw.pass), fails:[], by_class:{ "종합":{ total:{score:0,max:0}, groups } } };
@@ -111,8 +162,9 @@ function normalizeRound(raw){
     const groupsRaw = (groupsKey && typeof sec[groupsKey]==='object') ? sec[groupsKey] : {};
     const groups = {};
     Object.keys(groupsRaw).forEach(name=>{
+      const nmStd = toStdSubjectName(name);
       const gi = groupsRaw[name] || {};
-      groups[name] = { score:+gi.score||0, max: SUBJECT_MAX[name] ?? (+gi.max||0) };
+      groups[nmStd || name] = { score:+(gi.score||0), max: (nmStd ? SUBJECT_MAX[nmStd] : +(gi.max||0)) };
     });
     const total = sec.total || sec.sum || { score: sec.score ?? 0, max: sec.max ?? 0 };
     normByClass[cls] = { total, groups };
@@ -139,7 +191,7 @@ function getSubjectScores(round){
   return result;
 }
 
-/* -------------------- 5) 회차 자동 탐색(존재하는 회차만) -------------------- */
+/* -------------------- 5) Firestore 회차 자동 탐색 -------------------- */
 async function discoverRoundsFor(sid){
   const found = [];
   for (const label of ROUND_LABELS){
@@ -158,7 +210,7 @@ async function discoverRoundsFor(sid){
   return found;
 }
 
-/* -------------------- 6) Canvas 차트 -------------------- */
+/* -------------------- 6) (상단 꺾은선만 필요시) -------------------- */
 function drawLineChart(canvas, labels, series, maxValue){
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -213,49 +265,18 @@ function drawLineChart(canvas, labels, series, maxValue){
   });
 }
 
-/* -------------------- 7) 오답 수집 & 패널 -------------------- */
-
-// 다양한 스키마를 지원해 과목별 오답 배열을 뽑아주는 함수
-function collectWrongQuestions(roundRawOrNorm){
-  const r = (roundRawOrNorm?.by_class || roundRawOrNorm?.subject_results || roundRawOrNorm?.group_results)
-    ? roundRawOrNorm
-    : (window.normalizeRound?.(roundRawOrNorm) || roundRawOrNorm);
-
-  const out = {};
-
-  // 1) 새 스키마: subject_results
-  if (Array.isArray(r?.subject_results)) {
-    r.subject_results.forEach(s=>{
-      const nm = s.name;
-      if (!nm) return;
-      const wrongs = extractWrongFromSubjectRow(s);
-      if (wrongs.length) out[nm] = wrongs;
-    });
-    return out;
+/* -------------------- 7) 오답 수집(모든 스키마 지원) -------------------- */
+// 값 → [숫자배열] 로 표준화
+function toNumArray(v){
+  if (Array.isArray(v)) return v.map(n=>+n).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
+  if (typeof v === 'string') {
+    const arr = v.split(/[,\s/]+/).map(n=>+n).filter(n=>!isNaN(n));
+    if (arr.length) return arr.sort((a,b)=>a-b);
   }
-
-  // 2) 새 스키마(폴백): group_results에 과목명이 들어간 경우
-  if (Array.isArray(r?.group_results)) {
-    r.group_results.forEach(g=>{
-      const nm = String(g.name);
-      if (!(nm in SUBJECT_MAX)) return;
-      const wrongs = extractWrongFromSubjectRow(g);
-      if (wrongs.length) out[nm] = wrongs;
-    });
-    return out;
-  }
-
-  // 3) 구 스키마: by_class → "종합".groups
-  const groups = r?.by_class?.["종합"]?.groups || {};
-  Object.keys(groups).forEach(nm=>{
-    const row = groups[nm] || {};
-    const wrongs = extractWrongFromSubjectRow(row);
-    if (wrongs.length) out[nm] = wrongs;
-  });
-  return out;
+  return [];
 }
 
-// 오답 키 추출 유틸
+// 과목 row 안에서 오답 키 추출
 function extractWrongFromSubjectRow(row){
   const keys = [
     "wrongQuestions","wrong_questions","wrongs","wrong",
@@ -264,25 +285,72 @@ function extractWrongFromSubjectRow(row){
   ];
   for (const k of keys){
     if (k in (row||{})) {
-      const v = row[k];
-      if (Array.isArray(v)) return v.map(n=>+n).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
-      if (typeof v === 'string') {
-        return v.split(/[,\s]+/)
-                .map(n=>+n)
-                .filter(n=>!isNaN(n))
-                .sort((a,b)=>a-b);
-      }
+      const out = toNumArray(row[k]);
+      if (out.length) return out;
     }
   }
   return [];
 }
 
-function buildWrongPanelHTML(roundLabel, roundRawOrNorm){
-  const wrongMapRaw = collectWrongQuestions(roundRawOrNorm);
+// round(raw or normalized) → {과목표준명:[문항...]}
+function collectWrongQuestions(roundRawOrNorm){
+  const r = (roundRawOrNorm?.by_class || roundRawOrNorm?.subject_results || roundRawOrNorm?.group_results || roundRawOrNorm?.wrong_questions || roundRawOrNorm?.wrongs)
+    ? roundRawOrNorm
+    : (window.normalizeRound?.(roundRawOrNorm) || roundRawOrNorm);
 
-  // 17개 과목 전부 버튼으로 노출 (오답이 없어도 버튼 생성)
+  const out = {};
+
+  // A) 최상위 맵 형태 지원: wrong_questions / wrongs / incorrect…
+  const topKeys = ["wrong_questions","wrongQuestions","wrongs","incorrect_questions","incorrectQuestions"];
+  for (const tk of topKeys){
+    if (r && r[tk] && typeof r[tk] === 'object'){
+      Object.keys(r[tk]).forEach(rawName=>{
+        const nmStd = toStdSubjectName(rawName) || rawName;
+        const arr = toNumArray(r[tk][rawName]);
+        if (SUBJECT_MAX[nmStd] != null && arr.length) out[nmStd] = arr;
+      });
+      // 병합하지만, 이미 채운 게 있으면 유지
+    }
+  }
+
+  // B) 새 스키마: subject_results
+  if (Array.isArray(r?.subject_results)) {
+    r.subject_results.forEach(s=>{
+      const nmStd = toStdSubjectName(s.name);
+      if (!nmStd) return;
+      const arr = extractWrongFromSubjectRow(s);
+      if (arr.length) out[nmStd] = arr;
+    });
+  }
+
+  // C) 새 스키마 변형: group_results에 과목명이 들어온 경우
+  if (Array.isArray(r?.group_results)) {
+    r.group_results.forEach(g=>{
+      const nmStd = toStdSubjectName(g.name);
+      if (!nmStd) return;
+      const arr = extractWrongFromSubjectRow(g);
+      if (arr.length) out[nmStd] = arr;
+    });
+  }
+
+  // D) 구 스키마: by_class → "종합".groups
+  const groups = r?.by_class?.["종합"]?.groups || {};
+  Object.keys(groups).forEach(name=>{
+    const nmStd = toStdSubjectName(name) || name;
+    const row = groups[name] || {};
+    const arr = extractWrongFromSubjectRow(row);
+    if (SUBJECT_MAX[nmStd] != null && arr.length) out[nmStd] = arr;
+  });
+
+  return out;
+}
+
+// 뒷면 오답 패널 HTML (17개 과목 버튼: 오답 없어도 모두 표시)
+function buildWrongPanelHTML(roundLabel, roundRawOrNorm){
+  const wrongMap = collectWrongQuestions(roundRawOrNorm);
+
   const items = ALL_SUBJECTS.map(sj => {
-    const arr = Array.isArray(wrongMapRaw[sj]) ? wrongMapRaw[sj].slice(0, 999) : [];
+    const arr = Array.isArray(wrongMap[sj]) ? wrongMap[sj] : [];
     const cells = arr.length
       ? arr.map(n => `<div class="qcell bad">${n}</div>`).join('')
       : '<div class="small" style="opacity:.8">오답 없음</div>';
@@ -329,7 +397,7 @@ function makeFlipCard({id, title, frontHTML, backHTML, backCaption}){
   `;
   const card = wrap.querySelector('.flip-card');
   card.addEventListener('click', (e)=>{
-    if (e.target.closest('button')) return; // 아코디언 버튼 클릭 예외
+    if (e.target.closest('button')) return; // 아코디언 버튼 클릭은 뒤집지 않기
     card.classList.toggle('is-flipped');
   });
   return wrap.firstElementChild;
@@ -441,7 +509,7 @@ async function renderResultDynamic(sid){
   const grid = $("#cards-grid");
   grid.innerHTML = "";
 
-  const school = getSchoolFromSid(sid);
+  // (요청 반영) 맨 위 SID 카드 없음 → 바로 회차 카드들 렌더
   const rounds = await discoverRoundsFor(sid);
   if (rounds.length === 0){
     const msg = document.createElement('div');
@@ -450,12 +518,11 @@ async function renderResultDynamic(sid){
     return;
   }
 
-  // 회차 카드들만 렌더 (앞: 상세, 뒤: 오답 패널)
   for (const {label, raw} of rounds){
     const norm = (window.normalizeRound?.(raw)) || raw;
     const hostId = `round-host-${label}`;
 
-    // 뒤면: 과목별 오답 패널 (항상 17개 과목을 버튼으로 노출)
+    // 뒤면: 과목별 오답 패널(17개 과목 버튼, 오답 없으면 "오답 없음")
     const roundBackHTML = buildWrongPanelHTML(label, raw);
 
     const card = makeFlipCard({
@@ -466,7 +533,7 @@ async function renderResultDynamic(sid){
     });
     grid.appendChild(card);
 
-    // 앞면 상세 렌더
+    // 앞면 렌더
     renderRound(`#${hostId}`, label, norm);
   }
 
@@ -476,6 +543,7 @@ async function renderResultDynamic(sid){
     installFlipHeightObservers();
   });
 }
+
 /* -------------------- 11) 폼/라우팅 -------------------- */
 function goHome(){
   $("#view-result")?.classList.add("hidden");
@@ -508,13 +576,13 @@ async function lookupStudent(e){
 
 /* -------------------- 12) 초기화 & 전역 -------------------- */
 function initApp(){
-  // 살짝 간격 추가(박스들 너무 붙지 않게)
+  // (간격 조금 띄우기) — CSS가 이미 있으면 생략 가능
   (function injectMinorSpacing(){
     const css = `
-      #cards-grid { display:grid; gap:14px; }        /* 카드 사이 간격 */
-      .flip-card { margin:0; }                       /* 개별 마진은 0 */
-      .accordion .item { margin-bottom: 6px; }
-      .accordion .acc-btn{ width:100%; display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--line); border-radius:10px; background:var(--surface-1); font-weight:700; }
+      #cards-grid { display:grid; gap:14px; }
+      .flip-card { margin:0; }
+      .accordion .item { margin-bottom:6px; }
+      .accordion .acc-btn{ width:100%; display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--line); border-radius:10px; background:var(--surface-1, #151d36); font-weight:700; }
       .accordion .acc-btn .rotate{ transition:.2s transform ease; }
       .accordion .acc-btn.open .rotate{ transform: rotate(90deg); }
       .accordion .panel{ overflow:hidden; max-height:0; transition:max-height .25s ease; }
@@ -522,13 +590,15 @@ function initApp(){
       .qcell{ padding:3px 8px; border-radius:999px; border:1px solid var(--line); font-weight:700; }
       .qcell.bad{ background:rgba(239,68,68,.12); border-color:rgba(239,68,68,.55); }
       .group-grid{ display:grid; grid-template-columns:repeat(12,1fr); gap:12px; }
-      .group-box{ border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--surface-2) }
+      .group-box{ border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--surface-2, #11172b) }
       .group-box.ok{ background:rgba(34,197,94,.12); border-color:rgba(34,197,94,.55) }
       .group-box.fail{ background:rgba(239,68,68,.12); border-color:rgba(239,68,68,.55) }
       .subj-row{ display:flex; flex-wrap:wrap; gap:6px 10px; margin-top:6px }
       .subj-chip{ padding:4px 8px; border:1px solid var(--line); border-radius:999px; font-weight:800 }
       .subj-chip .muted{ opacity:.7; font-weight:600 }
       .cutline{ left:60% }
+      /* 플립 카드 간격(세로) */
+      .flip-card { margin-bottom:16px; }
     `;
     const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
   })();
@@ -620,3 +690,4 @@ function installFlipHeightObservers(){
     document.fonts.ready.then(()=> syncFlipHeights(grid)).catch(()=>{});
   }
 }
+</script>
