@@ -647,12 +647,10 @@ async function renderResultDynamic(sid){
     return;
   }
 
-  for (const {label, raw} of rounds){
-    const norm = (window.normalizeRound?.(raw)) || raw;
-    const hostId = `round-host-${label}`;
-
-    // 뒤면: 과목별 오답 패널
-    const roundBackHTML = buildWrongPanelHTML(label, raw);
+for (const {label, raw} of rounds){
+  const norm = (window.normalizeRound?.(raw)) || raw;
+  const hostId = `round-host-${label}`;
+  const roundBackHTML = buildWrongPanelHTML(label, raw);
 
     const card = makeFlipCard({
       id: `card-${label}`,
