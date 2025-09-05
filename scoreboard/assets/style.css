@@ -222,3 +222,7 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 
 /* 터치/클릭 시 버튼 제외하고 뒤집기 */
 .flip-card button{position:relative; z-index: 2;}
+/* 플립 카드 간격 (세로) */
+.flip-card {
+  margin-bottom: 16px;   /* 원하는 값: 12px~20px 정도 권장 */
+}
