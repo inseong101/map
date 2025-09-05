@@ -179,3 +179,16 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 .subj-row{display:flex; flex-wrap:wrap; gap:6px 10px; margin-top:6px}
 .subj-chip{padding:4px 8px; border:1px solid var(--line); border-radius:999px; font-weight:800}
 .subj-chip .muted{opacity:.7; font-weight:600}
+
+/* ==== Flip Cards (공용) ==== */
+.flip-card { perspective: 1200px; cursor: pointer; }
+.flip-card .flip-inner {
+  position: relative; width: 100%; height: 100%;
+  transition: transform .6s ease; transform-style: preserve-3d;
+}
+.flip-card.is-flipped .flip-inner { transform: rotateY(180deg); }
+.flip-card .flip-face { position: relative; backface-visibility: hidden; border-radius: 16px; min-height: 220px; }
+.flip-card .flip-back { transform: rotateY(180deg); }
+
+/* 3열 레이아웃(넓은 화면) */
+@media (min-width: 960px){ .col-lg-4 { grid-column: span 4; } }
