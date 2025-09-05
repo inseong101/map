@@ -1,13 +1,8 @@
 /* =========================================================
-   전졸협 성적 SPA 스크립트 (정리본)
-   - 학수번호 입력 → Firestore 결과(우선) 또는 오프라인 SCORE_DATA → 동적 카드 렌더
-   - 규칙:
-     1) 과목별 문항 고정(총 340)
-     2) 그룹별(그룹 총점 기준) 40% 과락
-     3) 전체 60% 미만 평락
-     4) 종합 PASS = [모든 그룹 통과] AND [전체 60% 이상]
-     5) SID 카드 뒤면: 1~8차 본인/학교/전국 꺾은선
-     6) 각 회차 카드 뒤면: 막대(본인/학교/전국)
+   전졸협 성적 SPA 스크립트 (최종 정리본)
+   - 입력 → Firestore(우선) 또는 오프라인 → 플립 카드 렌더
+   - 규칙: 과목340 고정 / 그룹40% 과락 / 전체60% 평락 / 종합PASS=둘다충족
+   - 카드: 상단(종합: 꺾은선), 회차별(막대)
 ========================================================= */
 
 /* --------------------------
@@ -23,7 +18,6 @@ const SUBJECT_MAX = {
   "예방":24, "생리":16, "본초":16
 };
 
-// 전부 한 줄(12칸)로 꽉 차게
 const GROUPS = [
   { id: "그룹1", label: "그룹 1", subjects: ["간","심","비","폐","신","상한","사상"], layoutChunks: [5,2], span: 12 },
   { id: "그룹3", label: "그룹 3", subjects: ["침구"], span: 12 },
@@ -34,7 +28,7 @@ const GROUPS = [
 ];
 
 const ALL_SUBJECTS = GROUPS.flatMap(g => g.subjects);
-const TOTAL_MAX = ALL_SUBJECTS.reduce((a,n)=>a+(SUBJECT_MAX[n]||0),0);  // 340
+const TOTAL_MAX = ALL_SUBJECTS.reduce((a,n)=>a+(SUBJECT_MAX[n]||0),0); // 340
 
 // 01~12 → 학교명
 const SCHOOL_MAP = {
@@ -50,10 +44,9 @@ function getSchoolFromSid(sid){
 const ROUND_LABELS = ["1차","2차","3차","4차","5차","6차","7차","8차"];
 
 /* --------------------------
-   1) 평균치 (임시) — 나중에 Firestore로 교체 가능
+   1) 평균치(임시) — 나중에 Firestore로 교체 가능
 --------------------------- */
 async function getAverages(schoolName, roundLabel){
-  // 필요 시 roundLabel/학교별로 다르게 주입
   return {
     nationalAvg: Math.round(TOTAL_MAX * 0.60),
     schoolAvg:   Math.round(TOTAL_MAX * 0.62)
@@ -61,7 +54,7 @@ async function getAverages(schoolName, roundLabel){
 }
 
 /* --------------------------
-   2) 오프라인 데이터 인덱스 (폴백)
+   2) 오프라인 인덱스(폴백)
 --------------------------- */
 window.SCORE_DATA = window.SCORE_DATA || {};
 (function buildIndex(){
@@ -81,14 +74,11 @@ function getStudentById(id6){
 --------------------------- */
 const $  = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
-
 function fmt(n){ return (n==null || isNaN(Number(n))) ? "-" : Number(n).toLocaleString("ko-KR"); }
 function pct(score, max){ const s=+score||0, m=+max||0; return m<=0 ? 0 : Math.round((s/m)*100); }
 function pill(text, type){ const cls = type==='ok'?'pill green':(type==='warn'?'pill warn':'pill red'); return `<span class="${cls}">${text}</span>`; }
 function showError(msg){ const e=$("#error"); if(!e) return; e.textContent=msg; e.classList.remove("hidden"); }
 function hideError(){ const e=$("#error"); if(!e) return; e.textContent=""; e.classList.add("hidden"); }
-
-// 키 후보 매칭
 function pickKey(obj, candidates){
   if (!obj || typeof obj !== "object") return null;
   for (const key of candidates){ if (key in obj) return key; }
@@ -103,13 +93,12 @@ function pickKey(obj, candidates){
 }
 
 /* --------------------------
-   4) 정규화 (새/구 스키마 모두 수용)
+   4) 정규화 (새/구 스키마 수용)
 --------------------------- */
 function normalizeRound(raw){
   if (!raw || typeof raw !== 'object') return null;
 
-  // 새 스키마: total_questions/total_correct + subject_results
-  if ('total_questions' in raw && 'total_correct' in raw) {
+  if ('total_questions' in raw && 'total_correct' in raw) { // 새 스키마
     const groups = {};
     if (Array.isArray(raw.subject_results)){
       raw.subject_results.forEach(s=>{
@@ -125,7 +114,7 @@ function normalizeRound(raw){
       });
     }
     return {
-      total: { score: 0, max: 0 },  // 과목 합으로 재계산
+      total: { score: 0, max: 0 },
       pass:  !!(raw.overall_pass ?? raw.round_pass ?? raw.pass),
       fails: [],
       by_class: { "종합": { total: {score:0, max:0}, groups } }
@@ -158,7 +147,7 @@ function normalizeRound(raw){
   return { total, pass, fails, by_class: normByClass };
 }
 
-// 과목별 점수 맵 뽑기 (없으면 0), max는 SUBJECT_MAX
+// 과목 점수 맵
 function getSubjectScores(round){
   const byClass = round?.by_class || {};
   const subjMap = (byClass["종합"] && byClass["종합"].groups) ? byClass["종합"].groups : {};
@@ -171,15 +160,14 @@ function getSubjectScores(round){
 }
 
 /* --------------------------
-   5) Firestore 회차 자동 탐색
+   5) Firestore 회차 자동 탐색 (존재하는 회차만)
 --------------------------- */
 async function discoverRoundsFor(sid){
   const found = [];
   for (const label of ROUND_LABELS){
     try {
-      const r = await window.fetchRoundFromFirestore(sid, label);
+      const r = await window.fetchRoundFromFirestore?.(sid, label);
       if (!r) continue;
-      // 존재 판단: (새스키마) total_correct>0 or (정규화 후) 과목합>0
       const ok = (typeof r.total_correct === 'number' && r.total_correct > 0) || (() => {
         const norm = (window.normalizeRound?.(r)) || r;
         const subjects = getSubjectScores(norm);
@@ -189,13 +177,12 @@ async function discoverRoundsFor(sid){
       if (ok) found.push({ label, raw:r });
     } catch (_) {}
   }
-  return found; // [{label, raw}]
+  return found;
 }
 
 /* --------------------------
-   6) 차트 유틸 (Canvas)
+   6) Canvas 차트
 --------------------------- */
-// 막대
 function drawBarChart(canvas, items){
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -223,7 +210,6 @@ function drawBarChart(canvas, items){
   });
 }
 
-// 꺾은선: labels=["1차"...], series=[{name,values:[..]}], maxValue=TOTAL_MAX
 function drawLineChart(canvas, labels, series, maxValue){
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -233,12 +219,10 @@ function drawLineChart(canvas, labels, series, maxValue){
   const padL=40, padR=16, padT=24, padB=34;
   const plotW = W - padL - padR;
   const plotH = H - padT - padB;
-
   const n = labels.length;
   const x = (i)=> padL + (n<=1 ? plotW/2 : (i*(plotW/(n-1))));
   const y = (v)=> padT + (plotH * (1 - (v / Math.max(1, maxValue||1))));
 
-  // 축
   ctx.strokeStyle = 'rgba(255,255,255,.25)';
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -247,15 +231,12 @@ function drawLineChart(canvas, labels, series, maxValue){
   ctx.lineTo(padL+plotW, padT+plotH);
   ctx.stroke();
 
-  // X라벨
   ctx.fillStyle = 'rgba(255,255,255,.8)';
   ctx.font = '12px system-ui';
   ctx.textAlign = 'center';
   labels.forEach((lb,i)=> ctx.fillText(lb, x(i), padT+plotH+18));
 
   const colors = ['#7ea2ff','#4cc9ff','#22c55e'];
-
-  // 시리즈
   series.forEach((s, si)=>{
     const col = colors[si % colors.length];
     ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath();
@@ -284,7 +265,7 @@ function drawLineChart(canvas, labels, series, maxValue){
 }
 
 /* --------------------------
-   7) 카드 생성 & 렌더
+   7) 플립 카드
 --------------------------- */
 function makeFlipCard({id, title, frontHTML}){
   const wrap = document.createElement('div');
@@ -315,6 +296,9 @@ function chunk(arr, sizes){
   return out;
 }
 
+/* --------------------------
+   8) 회차 상세 렌더(앞면)
+--------------------------- */
 function renderRound(hostSel, title, round){
   const host = $(hostSel);
   if(!host) return;
@@ -339,7 +323,7 @@ function renderRound(hostSel, title, round){
   });
   const anyGroupFail = groupSummaries.some(s => !s.pass);
 
-  // 평락
+  // 평락/종합
   const meets60 = (totalScore >= totalMax * 0.6);
   const overallPass = meets60 && !anyGroupFail;
 
@@ -409,38 +393,15 @@ function renderRound(hostSel, title, round){
 }
 
 /* --------------------------
-   8) 결과 전체 렌더 (동적 카드)
+   9) 결과 전체 렌더(상단카드=플립, 회차카드=플립)
 --------------------------- */
 async function renderResultDynamic(sid){
-  $("#res-sid").textContent = sid;
-
   const grid = $("#cards-grid");
   grid.innerHTML = "";
 
   const school = getSchoolFromSid(sid);
 
-  // SID 카드(종합)
-  const sidCard = makeFlipCard({
-    id: 'card-sid',
-    title: '종합',
-    frontHTML: `
-      <div class="flex" style="justify-content:space-between;">
-        <div>
-          <div class="small">학수번호</div>
-          <div class="kpi"><div class="num">${sid}</div></div>
-          <div class="small">${school}</div>
-        </div>
-        <div class="flex" id="res-badges"></div>
-      </div>
-      <hr class="sep" />
-      <div class="small" style="opacity:.8">카드를 클릭하면 학교/전국 평균 비교 꺾은선 그래프가 나옵니다.</div>
-    `
-  });
-  // SID 카드 높이 조금 더
-  grid.appendChild(sidCard);
-   requestAnimationFrame(()=> syncFlipHeights(grid));
-
-  // 회차 자동 탐색
+  // (1) 존재 회차 탐색
   const rounds = await discoverRoundsFor(sid);
   if (rounds.length === 0){
     const msg = document.createElement('div');
@@ -449,8 +410,28 @@ async function renderResultDynamic(sid){
     return;
   }
 
-  // 각 회차 카드 만들고 앞면 렌더
-  const studentTotals = {};  // {'1차': 총점, ...}
+  // (2) 맨 위 플립카드 (앞: sid/학교/배지, 뒤: 꺾은선)
+  const topCard = makeFlipCard({
+    id: 'card-trend',
+    title: '종합 추이',
+    frontHTML: `
+      <div class="flex" style="justify-content:space-between;">
+        <div>
+          <div class="small">학수번호</div>
+          <div class="kpi"><div class="num">${sid}</div></div>
+          <div class="small">${school}</div>
+        </div>
+        <div class="flex" id="trend-badges"></div>
+      </div>
+      <hr class="sep" />
+      <div class="small" style="opacity:.8">카드를 클릭하면 회차별 본인/학교/전국 꺾은선 그래프가 보입니다.</div>
+    `
+  });
+  topCard.querySelector('.flip-inner').style.setProperty('--flip-h','320px');
+  grid.appendChild(topCard);
+
+  // (3) 회차 카드(앞: 상세, 뒤: 막대)
+  const studentTotals = {};  // {'1차': 총점}
   for (const {label, raw} of rounds){
     const norm = (window.normalizeRound?.(raw)) || raw;
 
@@ -464,27 +445,25 @@ async function renderResultDynamic(sid){
 
     renderRound(`#${hostId}`, label, norm);
 
-    // 개인 총점 저장 (뒤면 막대용)
+    // 개인 총점 저장(뒤면 막대)
     const subs = getSubjectScores(norm);
     studentTotals[label] = ALL_SUBJECTS.reduce((a,n)=>a+(subs[n]?.score||0),0);
   }
 
-  // 상단 배지 (1차/2차만 우선)
-  const badgesHost = $('#res-badges');
+  // (4) 맨 위 카드 앞면 배지 — 존재 회차만 표시
+  const badgesHost = $('#trend-badges');
   if (badgesHost){
     badgesHost.innerHTML = '';
-    for (const check of ['1차','2차']){
-      const r = rounds.find(x=>x.label===check);
-      if (!r) continue;
-      const norm = (window.normalizeRound?.(r.raw)) || r.raw;
+    rounds.forEach(({label, raw})=>{
+      const norm = (window.normalizeRound?.(raw)) || raw;
       const subs = getSubjectScores(norm);
       const sc = ALL_SUBJECTS.reduce((a,n)=>a+(subs[n]?.score||0),0);
-      const passOverall = (sc >= TOTAL_MAX*0.6); // (간단표시)
-      badgesHost.innerHTML += `<span class="badge ${passOverall?'pass':'fail'}">${check} ${passOverall?'합격':'불합격'}</span>`;
-    }
+      const passOverall = (sc >= TOTAL_MAX*0.6);
+      badgesHost.innerHTML += `<span class="badge ${passOverall?'pass':'fail'}">${label} ${passOverall?'합격':'불합격'}</span>`;
+    });
   }
 
-  // 회차 카드 뒤면 — 막대 (본인/학교/전국)
+  // (5) 회차 카드 뒤면 — 막대
   for (const {label} of rounds){
     const my = studentTotals[label]||0;
     const { nationalAvg, schoolAvg } = await getAverages(school, label);
@@ -497,9 +476,11 @@ async function renderResultDynamic(sid){
     if (c) c.textContent = `${label} 총점 기준 / 최대 ${TOTAL_MAX}`;
   }
 
-  // SID 카드 뒤면 — 1~8차 꺾은선
-  const labels = ROUND_LABELS;
-  const me  = labels.map(lb => (studentTotals[lb] ?? null));
+  // (6) 맨 위 카드 뒤면 — 존재 회차만 꺾은선
+  const labels = rounds
+    .map(r => r.label)
+    .sort((a,b)=> parseInt(a) - parseInt(b));
+  const me  = labels.map(lb => studentTotals[lb] ?? null);
   const nat = [], sch = [];
   for (const lb of labels){
     const { nationalAvg, schoolAvg } = await getAverages(school, lb);
@@ -507,7 +488,7 @@ async function renderResultDynamic(sid){
     sch.push(schoolAvg   ?? null);
   }
   drawLineChart(
-    document.getElementById('card-sid-canvas'),
+    document.getElementById('card-trend-canvas'),
     labels,
     [
       { name: '본인',     values: me  },
@@ -516,15 +497,18 @@ async function renderResultDynamic(sid){
     ],
     TOTAL_MAX
   );
-  const cap = document.getElementById('card-sid-cap');
+  const cap = document.getElementById('card-trend-cap');
   if (cap) cap.textContent = `회차별 총점 추이 (최대 ${TOTAL_MAX})`;
 
-   syncFlipHeights(document.getElementById('cards-grid'));
-installFlipHeightObservers();
+  // (7) 플립 높이 동기화(앞/뒤 큰쪽)
+  requestAnimationFrame(()=>{
+    syncFlipHeights(grid);
+    installFlipHeightObservers();
+  });
 }
 
 /* --------------------------
-   9) 폼/라우팅
+   10) 폼/라우팅
 --------------------------- */
 function goHome(){
   $("#view-result")?.classList.add("hidden");
@@ -545,7 +529,6 @@ async function lookupStudent(e){
   }
 
   try {
-    // 화면 전환은 동적 카드가 렌더되면
     await renderResultDynamic(id);
     $("#view-home")?.classList.add("hidden");
     $("#view-result")?.classList.remove("hidden");
@@ -557,7 +540,7 @@ async function lookupStudent(e){
 }
 
 /* --------------------------
-   10) 초기화 & 전역
+   11) 초기화 & 전역
 --------------------------- */
 function initApp(){
   const $sid = $("#sid");
@@ -571,7 +554,6 @@ function initApp(){
   const form = $("#lookup-form");
   if (form) form.addEventListener('submit', lookupStudent);
 
-  // ?sid=015001 자동 조회
   const p = new URLSearchParams(location.search);
   const sid = p.get("sid") || p.get("id");
   if (sid && /^\d{6}$/.test(sid)) {
@@ -579,7 +561,6 @@ function initApp(){
     form?.dispatchEvent(new Event("submit", {cancelable:true}));
   }
 }
-
 document.addEventListener('DOMContentLoaded', initApp);
 
 // 전역 노출
@@ -587,18 +568,15 @@ window.goHome = goHome;
 window.initApp = initApp;
 window.normalizeRound = normalizeRound;
 window.renderResultDynamic = renderResultDynamic;
-
-// Firestore 로더가 참조할 전역
 window.__SUBJECT_TOTALS = SUBJECT_MAX;
 window.__GROUPS_DEF     = GROUPS;
 
-
-// ===== Flip 높이 동기화: 앞/뒤 중 더 큰 높이에 맞추기 =====
+/* --------------------------
+   12) Flip 높이 동기화(앞/뒤 중 큰 높이)
+--------------------------- */
 function measureFaceHeight(card, faceEl){
-  // 카드와 동일 너비로 오프스크린에서 자연 높이 측정
   const tmp = document.createElement('div');
-  // face의 스타일(.card 패딩 등) 최대한 유지
-  tmp.className = faceEl.className.replace('flip-face','').trim();
+  tmp.className = faceEl.className.replace('flip-face','').trim(); // .card 스타일 유지
   tmp.style.cssText = `
     position:absolute; visibility:hidden; left:-9999px; top:-9999px;
     width:${card.clientWidth}px;
@@ -618,17 +596,12 @@ function syncFlipHeights(root = document){
     const front = card.querySelector('.flip-front');
     const back  = card.querySelector('.flip-back');
     if (!inner || !front || !back) return;
-
-    // 앞/뒤 자연 높이 측정 → 큰 값 적용
     const hf = measureFaceHeight(card, front);
     const hb = measureFaceHeight(card, back);
-    const H  = Math.max(hf, hb);
-    inner.style.height = H + 'px';
+    inner.style.height = Math.max(hf, hb) + 'px';
   });
 }
 
-
-// 최초 1회: 리사이즈/폰트로드/캔버스그림 끝나고도 재동기화
 let __flipObserverInstalled = false;
 function installFlipHeightObservers(){
   if (__flipObserverInstalled) return;
@@ -636,19 +609,18 @@ function installFlipHeightObservers(){
 
   const grid = document.getElementById('cards-grid');
 
-  // 창 크기 변경 시 재동기화
+  // 창 크기 변경 시
   window.addEventListener('resize', ()=> syncFlipHeights(grid));
 
-  // face 내용/크기 변화를 감지(캔버스 그린 직후 등)
+  // face 크기 변화를 감지(캔버스 렌더 후 포함)
   const ro = new ResizeObserver(()=> syncFlipHeights(grid));
 
-  // 그리드에 동적 카드가 추가될 때 새 face도 관찰 시작
+  // 동적 추가된 카드의 face도 관찰
   const mo = new MutationObserver((mutList)=>{
     mutList.forEach(m=>{
       m.addedNodes.forEach(node=>{
         if (!(node instanceof Element)) return;
         node.querySelectorAll?.('.flip-card .flip-face').forEach(face => ro.observe(face));
-        // 카드가 추가된 다음 프레임에 한 번 측정
         if (node.matches?.('.flip-card') || node.querySelector?.('.flip-card')) {
           requestAnimationFrame(()=> syncFlipHeights(grid));
         }
@@ -657,10 +629,10 @@ function installFlipHeightObservers(){
   });
   mo.observe(grid, { childList:true, subtree:true });
 
-  // 초기에도 이미 있는 face들 관찰 시작
+  // 초기 face 등록
   document.querySelectorAll('.flip-card .flip-face').forEach(el=> ro.observe(el));
 
-  // 폰트 로드 완료 뒤 재동기화(글꼴에 따라 줄바꿈/높이 달라짐)
+  // 폰트 로드 이후 재동기화
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(()=> syncFlipHeights(grid)).catch(()=>{});
   }
