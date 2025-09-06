@@ -5,7 +5,7 @@
   "main": "src/index.js",
   "scripts": {
     "start": "react-scripts start",
-    "build": "DISABLE_ESLINT_PLUGIN=true react-scripts build",
+    "build": "react-scripts build",
     "deploy": "npm run build && firebase deploy"
   },
   "dependencies": {
