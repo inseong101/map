@@ -497,8 +497,6 @@ function findSessionByQuestionNum(questionNum) {
 }
 // functions/index.js에 추가할 Storage 파일 처리 함수
 
-const XLSX = require('xlsx');
-
 /**
  * Firebase Storage에 Excel 파일이 업로드되면 자동으로 처리하는 함수
  */
