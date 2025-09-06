@@ -7,7 +7,7 @@ const logger = require('firebase-functions/logger');
 admin.initializeApp();
 const db = admin.firestore();
 
-// ===== 기존: 엑셀 업로드 처리 =====
+// ===== 엑셀 업로드 처리 =====
 
 /** Storage: 엑셀 업로드 트리거 */
 exports.onExcelUploaded = onObjectFinalized(async (event) => {
@@ -59,27 +59,6 @@ exports.onExcelUploaded = onObjectFinalized(async (event) => {
   // 4) 해당 회차의 평균 자동 재계산
   await calculateRoundAverages(round);
 });
-
-// ===== 새로운: 평균 계산 시스템 =====
-
-/** 스케줄: 매일 새벽 2시 평균 계산 */
-exports.calculateAverages = functions.pubsub
-  .schedule('0 2 * * *') // 매일 새벽 2시 실행
-  .timeZone('Asia/Seoul')
-  .onRun(async (context) => {
-    logger.info('스케줄 평균 계산 시작');
-    
-    const rounds = ['1차', '2차', '3차', '4차', '5차', '6차', '7차', '8차'];
-    
-    for (const round of rounds) {
-      await calculateRoundAverages(round);
-    }
-    
-    logger.info('스케줄 평균 계산 완료');
-    return null;
-  });
-
-// 👆 triggerAverageCalculation 함수를 일단 제거했습니다
 
 // ===== 평균 계산 핵심 로직 =====
 
@@ -216,7 +195,7 @@ async function saveAverages(round, schoolAverages, nationalAverage) {
   logger.info(`${round} 평균 데이터 저장 완료`);
 }
 
-// ===== 기존 엑셀 파싱 헬퍼 함수들 (필요시 구현) =====
+// ===== 엑셀 파싱 헬퍼 함수들 =====
 
 function detectRoundClass(filePath) {
   // 파일 경로에서 회차와 교시 추출
