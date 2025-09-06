@@ -40,6 +40,14 @@ function WrongAnswerPanel({ roundLabel, data }) {
 
   const wrongBySubject = getWrongQuestionsBySubject();
 
+  // 교시별 과목 그룹화
+  const sessionGroups = {
+    "1교시": ["간", "심", "비", "폐", "신"],
+    "2교시": ["상한", "사상", "침구", "보건"],
+    "3교시": ["외과", "신경", "안이비", "부인과"],
+    "4교시": ["소아", "예방", "생리", "본초"]
+  };
+
   const renderQuestionCells = (wrongNumbers) => {
     if (wrongNumbers.length === 0) {
       return <div className="small" style={{ opacity: 0.8 }}>오답 없음</div>;
@@ -50,36 +58,45 @@ function WrongAnswerPanel({ roundLabel, data }) {
     ));
   };
 
-  const renderAccordionItems = () => {
-    return ALL_SUBJECTS.map(subject => {
-      const wrongNumbers = wrongBySubject[subject] || [];
-      const isOpen = openSections[subject];
-
-      return (
-        <div key={subject} className="item">
-          <button
-            type="button"
-            className={`acc-btn ${isOpen ? 'open' : ''}`}
-            onClick={() => toggleSection(subject)}
-          >
-            <span>{subject} 오답 ({wrongNumbers.length}문항)</span>
-            <span className={`rotate ${isOpen ? 'open' : ''}`}>❯</span>
-          </button>
-          
-          <div 
-            className="panel"
-            style={{ 
-              maxHeight: isOpen ? '150px' : '0',
-              overflow: isOpen ? 'auto' : 'hidden'
-            }}
-          >
-            <div className="qgrid" style={{ padding: '6px 0' }}>
-              {renderQuestionCells(wrongNumbers)}
-            </div>
-          </div>
+  const renderSessionGroup = (sessionName, subjects) => {
+    return (
+      <div key={sessionName} className="session-group">
+        <div className="session-header">
+          {sessionName}
         </div>
-      );
-    });
+        <div className="session-content">
+          {subjects.map(subject => {
+            const wrongNumbers = wrongBySubject[subject] || [];
+            const isOpen = openSections[subject];
+
+            return (
+              <div key={subject} className="item">
+                <button
+                  type="button"
+                  className={`acc-btn ${isOpen ? 'open' : ''}`}
+                  onClick={() => toggleSection(subject)}
+                >
+                  <span>{subject} 오답 ({wrongNumbers.length}문항)</span>
+                  <span className={`rotate ${isOpen ? 'open' : ''}`}>❯</span>
+                </button>
+                
+                <div 
+                  className="panel"
+                  style={{ 
+                    maxHeight: isOpen ? '150px' : '0',
+                    overflow: isOpen ? 'auto' : 'hidden'
+                  }}
+                >
+                  <div className="qgrid" style={{ padding: '6px 0' }}>
+                    {renderQuestionCells(wrongNumbers)}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -90,7 +107,9 @@ function WrongAnswerPanel({ roundLabel, data }) {
       </div>
       
       <div className="accordion">
-        {renderAccordionItems()}
+        {Object.entries(sessionGroups).map(([sessionName, subjects]) => 
+          renderSessionGroup(sessionName, subjects)
+        )}
       </div>
     </div>
   );
