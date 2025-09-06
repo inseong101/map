@@ -256,6 +256,34 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 .flip-card .flip-front{ transform: rotateY(0deg); }
 .flip-card .flip-back { transform: rotateY(180deg); }
 
+/* 플립 카드 뒷면 전체 스크롤 기능 추가 */
+.flip-card .flip-back {
+  max-height: 600px; /* 뒷면 최대 높이 제한 */
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* 플립 카드 뒷면 스크롤바 스타일링 */
+.flip-card .flip-back::-webkit-scrollbar {
+  width: 6px;
+}
+
+.flip-card .flip-back::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+}
+
+.flip-card .flip-back::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+}
+
+.flip-card .flip-back::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
 
 /* 회차 그룹 카드 내부 공통 (가독용) */
 .group-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
