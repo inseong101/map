@@ -1,14 +1,38 @@
 // src/components/RoundCard.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { fmt, pct, pill, chunk } from '../utils/helpers';
 import { SUBJECT_MAX } from '../services/dataService';
 import WrongAnswerPanel from './WrongAnswerPanel';
 
 function RoundCard({ label, data, sid }) {
   const [isFlipped, setIsFlipped] = useState(false);
+  const flipCardRef = useRef(null);
+  const frontRef = useRef(null);
 
   const { totalScore, totalMax, overallPass, meets60, anyGroupFail, groupResults } = data;
   const overallRate = pct(totalScore, totalMax);
+
+  // 높이 동기화 함수
+  useEffect(() => {
+    const syncHeight = () => {
+      if (flipCardRef.current && frontRef.current) {
+        const frontHeight = frontRef.current.offsetHeight;
+        flipCardRef.current.style.setProperty('--front-height', `${frontHeight}px`);
+        flipCardRef.current.classList.add('height-synced');
+      }
+    };
+
+    // 컴포넌트 마운트 후 높이 동기화
+    const timer = setTimeout(syncHeight, 100);
+    
+    // 윈도우 리사이즈 시에도 동기화
+    window.addEventListener('resize', syncHeight);
+    
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', syncHeight);
+    };
+  }, []);
 
   const getReasonText = () => {
     if (overallPass) return "통과";
@@ -80,10 +104,14 @@ function RoundCard({ label, data, sid }) {
   };
 
   return (
-    <div className="flip-card" onClick={handleCardClick}>
+    <div 
+      ref={flipCardRef}
+      className="flip-card" 
+      onClick={handleCardClick}
+    >
       <div className={`flip-inner ${isFlipped ? 'is-flipped' : ''}`}>
         {/* 앞면 - 성적 */}
-        <div className="flip-face flip-front card">
+        <div ref={frontRef} className="flip-face flip-front card">
           <div className={`round ${overallPass ? "" : "fail"}`}>
             <div className="flex" style={{ justifyContent: 'space-between' }}>
               <h2 style={{ margin: 0 }}>{label} 총점</h2>
