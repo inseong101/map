@@ -79,36 +79,7 @@ exports.calculateAverages = functions.pubsub
     return null;
   });
 
-/** HTTP: 수동 평균 계산 트리거 */
-exports.triggerAverageCalculation = functions.https.onRequest(async (req, res) => {
-  // CORS 헤더 추가
-  res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'GET, POST');
-  res.set('Access-Control-Allow-Headers', 'Content-Type');
-  
-  if (req.method === 'OPTIONS') {
-    res.status(204).send('');
-    return;
-  }
-
-  const round = req.query.round;
-  
-  try {
-    if (round) {
-      await calculateRoundAverages(round);
-      res.json({ success: true, message: `${round} 평균 계산 완료` });
-    } else {
-      const rounds = ['1차', '2차', '3차', '4차', '5차', '6차', '7차', '8차'];
-      for (const r of rounds) {
-        await calculateRoundAverages(r);
-      }
-      res.json({ success: true, message: '모든 회차 평균 계산 완료' });
-    }
-  } catch (error) {
-    logger.error('평균 계산 오류:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+// 👆 triggerAverageCalculation 함수를 일단 제거했습니다
 
 // ===== 평균 계산 핵심 로직 =====
 
