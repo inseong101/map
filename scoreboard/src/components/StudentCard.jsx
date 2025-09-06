@@ -1,4 +1,4 @@
-// src/components/StudentCard.jsx - 상위% + 응시자 분류 표시
+
 import React from 'react';
 import { TOTAL_MAX } from '../services/dataService';
 import { detectStudentAbsenceStatus } from '../utils/helpers';
