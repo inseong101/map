@@ -175,6 +175,8 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 .flip-card .flip-back { 
   transform: rotateY(180deg);
   position: absolute;
+  /* 뒷면 글자색 앞면과 동일하게 */
+  color: var(--ink);
 }
 
 /* 플립 카드 뒷면 스크롤 */
@@ -200,17 +202,76 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
   border-radius: 6px;
 }
 
-/* Accordion */
-.accordion{border-top:1px solid var(--line); margin-top:8px}
-.accordion .item{border-bottom:1px solid var(--line); margin-bottom: 6px}
-.accordion .acc-btn{ 
-  width:100%; display:flex; justify-content:space-between; align-items:center; 
-  gap:8px; padding:8px 10px; border:1px solid var(--line); border-radius:10px; 
-  background:var(--surface-2); font-weight:700; cursor:pointer;
+/* Accordion - 교시별 그룹화 */
+.accordion {
+  border-top: 1px solid var(--line); 
+  margin-top: 8px;
 }
-.accordion .acc-btn .rotate{ transition:.2s transform ease; }
-.accordion .acc-btn.open .rotate{ transform: rotate(90deg); }
-.accordion .panel{ overflow:hidden; transition:max-height .25s ease; }
+
+.accordion .session-group {
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.accordion .session-header {
+  background: linear-gradient(90deg, var(--primary), #4cc9ff);
+  color: white;
+  padding: 10px 16px;
+  font-weight: 800;
+  font-size: 14px;
+  text-align: center;
+  border-bottom: 1px solid var(--line);
+}
+
+.accordion .session-content {
+  padding: 8px;
+}
+
+.accordion .item { 
+  border-bottom: 1px solid var(--line); 
+  margin-bottom: 6px;
+}
+
+.accordion .item:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.accordion .acc-btn{ 
+  width: 100%; 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  gap: 8px; 
+  padding: 8px 12px; 
+  border: 1px solid var(--line); 
+  border-radius: 8px; 
+  background: var(--surface); 
+  font-weight: 700; 
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.accordion .acc-btn:hover {
+  background: var(--surface-2);
+}
+
+.accordion .acc-btn .rotate{ 
+  transition: .2s transform ease; 
+  color: var(--primary);
+}
+
+.accordion .acc-btn.open .rotate{ 
+  transform: rotate(90deg); 
+}
+
+.accordion .panel{ 
+  overflow: hidden; 
+  transition: max-height .25s ease; 
+}
 
 /* Question grid */
 .qgrid{display:flex; flex-wrap:wrap; gap:6px; max-height: 120px; overflow-y: auto; padding-right: 4px}
