@@ -236,67 +236,15 @@ async function discoverRoundsFor(sid){
       const r = await window.fetchRoundFromFirestore?.(sid, label);
       if (!r) continue;
       const ok = (typeof r.total_correct === 'number' && r.total_correct > 0) || (()=>{
-        const norm = (window.normalizeRound?.(raw)) || raw;
-    const hostId = `round-host-${label}`;
-    const card = makeFlipCard({
-      id: `card-${label}`,
-      title: label,
-      frontHTML: `<div id="${hostId}"></div>`,
-      backHTML: buildWrongPanelHTML(label, raw)
-    });
-    grid.appendChild(card);
-    renderRound(`#${hostId}`, label, norm);
-
-    if (SHOW_TREND_CARD) {
-      const subs = getSubjectScores(norm);
-      const total = ALL_SUBJECTS.reduce((a,n)=>a+(subs[n]?.score||0),0);
-      studentTotalsByRound[label] = total;
-      labelsForTrend.push(label);
-    }
+        const norm = (window.normalizeRound?.(r)) || r;
+        const subjects = getSubjectScores(norm);
+        const sum = ALL_SUBJECTS.reduce((a,n)=>a+(subjects[n]?.score||0),0);
+        return sum > 0;
+      })();
+      if (ok) found.push({ label, raw:r });
+    } catch (_) {}
   }
-
-  if (SHOW_TREND_CARD) {
-    const badgesHost = $('#trend-badges');
-    if (badgesHost){
-      badgesHost.innerHTML = '';
-      rounds.forEach(({label, raw})=>{
-        const norm = (window.normalizeRound?.(raw)) || raw;
-        const subs = getSubjectScores(norm);
-        const sc = ALL_SUBJECTS.reduce((a,n)=>a+(subs[n]?.score||0),0);
-        const passOverall = (sc >= TOTAL_MAX*0.6);
-        badgesHost.innerHTML += `<span class="badge ${passOverall?'pass':'fail'}">${label} ${passOverall?'합격':'불합격'}</span>`;
-      });
-    }
-
-    const trendCanvas = document.createElement('canvas');
-    trendCanvas.id = 'card-trend-canvas';
-    trendCanvas.width = 360; trendCanvas.height = 220;
-    $('#card-trend .flip-back.card')?.appendChild(trendCanvas);
-
-    const labels = labelsForTrend.sort((a,b)=> parseInt(a) - parseInt(b));
-    const meSeries = labels.map(lb => studentTotalsByRound[lb] ?? null);
-
-    const schoolAvgSeries = await Promise.all(labels.map(async lb=>{
-      const { schoolAvg } = await getAverages(school, lb);
-      return schoolAvg;
-    }));
-    const nationalAvgSeries = await Promise.all(labels.map(async lb=>{
-      const { nationalAvg } = await getAverages('all', lb);
-      return nationalAvg;
-    }));
-
-    const maxV = Math.max(...meSeries.filter(v=>v!=null), ...schoolAvgSeries, ...nationalAvgSeries, 1);
-    drawLineChart(trendCanvas, labels, [
-      { name:'본인',   values: meSeries },
-      { name:'학교',   values: schoolAvgSeries },
-      { name:'전국',   values: nationalAvgSeries },
-    ], maxV);
-  }
-
-  requestAnimationFrame(()=>{
-    syncFlipHeights(grid);
-    installFlipHeightObservers();
-  });
+  return found;
 }
 
 /* -------------------- 12) 폼/라우팅 -------------------- */
