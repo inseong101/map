@@ -246,19 +246,20 @@ function getSchoolCodeFromName(schoolName) {
 
 // ✅ 누락된 함수 추가
 export function detectStudentAbsenceStatus(wrongBySession) {
-  // 4교시가 모두 있는지 확인
   const allSessions = ["1교시", "2교시", "3교시", "4교시"];
   const attendedSessions = Object.keys(wrongBySession);
+  const attendedCount = attendedSessions.length;             // 참석한 교시 수
   
-  const isFullAttendance = allSessions.every(session => attendedSessions.includes(session));
-  const isPartialAttendance = attendedSessions.length > 0 && attendedSessions.length < 4;
-  const isNoAttendance = attendedSessions.length === 0;
+  const isFullAttendance = allSessions.every(sess => attendedSessions.includes(sess));
+  const isPartiallyAbsent = attendedCount > 0 && attendedCount < 4;  // 일부 교시만 응시 (중도포기)
+  const isNoAttendance = attendedCount === 0;
   
   return {
     isFullAttendance,
-    isPartialAttendance,
+    isPartiallyAbsent,       // 새 속성: 중도포기 여부
     isNoAttendance,
+    attendedCount,           // 새 속성: 참석한 교시 개수
     attendedSessions,
-    missedSessions: allSessions.filter(session => !attendedSessions.includes(session))
+    missedSessions: allSessions.filter(sess => !attendedSessions.includes(sess))
   };
 }
