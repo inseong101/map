@@ -570,20 +570,20 @@ function extractFileInfo(filePath) {
   const fileName = filePath.split('/').pop(); // 폴더 경로 제거
   console.log('파일명 분석:', fileName);
   
-  // 정규식 수정: 공백과 한글을 더 명확하게 처리
-  const match = fileName.match(/(\d+)차\s+모의고사\s+(\d+)교시/);
-  console.log('정규식 매치 결과:', match);
+  // 파일명에서 모든 숫자 추출
+  const numbers = fileName.match(/\d+/g);
+  console.log('추출된 숫자들:', numbers);
   
-  if (match) {
+  if (numbers && numbers.length >= 2) {
     const result = {
-      roundLabel: `${match[1]}차`,
-      session: `${match[2]}교시`
+      roundLabel: `${numbers[0]}차`,
+      session: `${numbers[1]}교시`
     };
     console.log('추출된 정보:', result);
     return result;
   }
   
-  console.log('정규식 매치 실패 - 파일명:', fileName);
+  console.log('숫자 추출 실패 - 파일명:', fileName);
   return null;
 }
 
