@@ -161,30 +161,31 @@ export async function calculateAttendanceStats(roundLabel) {
           allStudents.add(sid);
           
           if (!attendanceData[sid]) {
-            attendanceData[sid] = 0;
+            attendanceData[sid] = new Set(); // Set으로 중복 방지
           }
-          attendanceData[sid] += 1;
+          attendanceData[sid].add(session); // 해당 교시 응시 표시
         });
       } catch (error) {
         console.warn(`${session} 데이터 조회 실패:`, error);
       }
     }
 
-    // 분류별 카운트
+    // 🎯 정확한 분류 기준 적용
     let totalTargets = allStudents.size;
-    let validAttendees = 0; // 4교시 모두
-    let absentees = 0; // 0교시
-    let dropouts = 0; // 1~3교시
+    let validAttendees = 0; // 4교시 모두 응시
+    let absentees = 0; // 0교시 응시 
+    let dropouts = 0; // 1~3교시 응시
 
     Array.from(allStudents).forEach(sid => {
-      const attendedCount = attendanceData[sid] || 0;
+      const attendedSessionsSet = attendanceData[sid] || new Set();
+      const attendedCount = attendedSessionsSet.size;
 
       if (attendedCount === 0) {
-        absentees++;
+        absentees++; // 미응시자
       } else if (attendedCount === 4) {
-        validAttendees++;
+        validAttendees++; // 유효응시자
       } else {
-        dropouts++;
+        dropouts++; // 중도포기자 (1~3교시)
       }
     });
 
