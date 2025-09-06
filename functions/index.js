@@ -588,57 +588,94 @@ function extractFileInfo(filePath) {
 }
 
 /**
- * Excel 데이터를 Firebase에 저장
+ * Excel 데이터를 Firebase에 저장 - 새로운 구조에 맞게 수정
  */
 async function processExcelData(jsonData, roundLabel, session) {
   try {
     const processedData = [];
     const errors = [];
     
-    if (jsonData.length < 5) {
-      throw new Error('Excel 파일에 충분한 데이터가 없습니다 (최소 5행 필요)');
+    if (jsonData.length < 12) {
+      throw new Error('Excel 파일에 충분한 데이터가 없습니다 (최소 12행 필요)');
     }
     
-    // Excel 구조 분석
-    const questionNumbers = jsonData[0] || []; // 1행: 문항번호
-    const scores = jsonData[1] || [];          // 2행: 배점
-    const answerKey = jsonData[2] || [];       // 3행: 정답
-    // 4행: 빈 행
-    // 5행부터: 학생 데이터
+    // 새로운 Excel 구조 분석
+    const choice1Stats = jsonData[0] || [];        // 1행: 1번 선택 비율(명수)
+    const choice2Stats = jsonData[1] || [];        // 2행: 2번 선택 비율(명수)
+    const choice3Stats = jsonData[2] || [];        // 3행: 3번 선택 비율(명수)
+    const choice4Stats = jsonData[3] || [];        // 4행: 4번 선택 비율(명수)
+    const choice5Stats = jsonData[4] || [];        // 5행: 5번 선택 비율(명수)
+    const subjectNames = jsonData[5] || [];        // 6행: 과목명
+    const correctRates = jsonData[6] || [];        // 7행: 정답률
+    const questionNumbers = jsonData[7] || [];     // 8행: 문항번호 (기존 1행)
+    const scores = jsonData[8] || [];              // 9행: 배점
+    const answerKey = jsonData[9] || [];           // 10행: 정답
+    // 11행: 빈 행
+    // 12행부터: 학생 데이터
     
     console.log('총 컬럼 수:', questionNumbers.length);
+    console.log('과목명 예시:', subjectNames.slice(1, 6));
+    console.log('정답률 예시:', correctRates.slice(1, 6));
     
     // 유효한 문항만 추출 (매 2번째 컬럼마다: B=1, D=2, F=3...)
     const validQuestions = [];
     for (let i = 1; i < questionNumbers.length; i += 2) { // 1, 3, 5, 7... (B, D, F, H...)
       const questionNum = questionNumbers[i];
       const correctAnswer = answerKey[i];
+      const subjectName = subjectNames[i];
+      const correctRate = correctRates[i];
       
       // 문항번호가 숫자이고 정답이 1-5 범위인 경우만 유효
       if (questionNum && !isNaN(questionNum) && correctAnswer >= 1 && correctAnswer <= 5) {
         validQuestions.push({
           columnIndex: i,
           questionNum: parseInt(questionNum),
-          correctAnswer: parseInt(correctAnswer)
+          correctAnswer: parseInt(correctAnswer),
+          subject: subjectName || null,
+          correctRate: correctRate || 0,
+          choiceStats: {
+            1: choice1Stats[i] || 0,
+            2: choice2Stats[i] || 0,
+            3: choice3Stats[i] || 0,
+            4: choice4Stats[i] || 0,
+            5: choice5Stats[i] || 0
+          }
         });
       }
     }
     
     console.log('유효한 문항 수:', validQuestions.length);
     console.log('문항 번호들:', validQuestions.slice(0, 10).map(q => q.questionNum));
+    console.log('과목 정보:', validQuestions.slice(0, 10).map(q => ({ num: q.questionNum, subject: q.subject })));
     
     // 정답지 추출 및 저장
     const answerKeyObj = {};
+    const questionMetadata = {}; // 문항별 메타데이터 저장
+    
     validQuestions.forEach(q => {
       answerKeyObj[q.questionNum] = q.correctAnswer;
+      questionMetadata[q.questionNum] = {
+        subject: q.subject,
+        correctRate: q.correctRate,
+        choiceStats: q.choiceStats
+      };
     });
     
     // 정답지를 Firebase에 저장
     await db.collection('answer_keys').doc(roundLabel).set(answerKeyObj, { merge: true });
     console.log('정답지 저장 완료:', Object.keys(answerKeyObj).length, '문항');
     
-    // 학생 데이터 처리 (5행부터 - 인덱스 4부터)
-    for (let i = 4; i < jsonData.length; i++) {
+    // 문항별 메타데이터도 별도로 저장
+    await db.collection('question_metadata').doc(`${roundLabel}_${session}`).set({
+      roundLabel,
+      session,
+      questions: questionMetadata,
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+    });
+    console.log('문항 메타데이터 저장 완료');
+    
+    // 학생 데이터 처리 (12행부터 - 인덱스 11부터)
+    for (let i = 11; i < jsonData.length; i++) {
       const row = jsonData[i];
       
       try {
@@ -686,99 +723,61 @@ async function processExcelData(jsonData, roundLabel, session) {
     console.log(`처리된 학생 수: ${processedData.length}, 오류 수: ${errors.length}`);
     
     if (processedData.length === 0) {
-      throw new Error('처리할 수 있는 유효한 데이터가 없습니다.');
-    }
-    
-    // Firebase에 일괄 저장 (배치 단위로 나누어 저장)
-    const batchSize = 500; // Firestore 배치 제한
-    const batches = [];
-    
-    for (let i = 0; i < processedData.length; i += batchSize) {
-      const batch = db.batch();
-      const chunk = processedData.slice(i, i + batchSize);
-      
-      chunk.forEach(student => {
-        const docRef = db.collection('scores_raw')
-          .doc(roundLabel)
-          .collection(session)
-          .doc(student.sid);
-        
-        batch.set(docRef, {
-          sid: student.sid,
-          roundLabel,
-          session,
-          responses: student.responses,
-          wrongQuestions: student.wrongQuestions,
-          uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
-          lastUpdated: admin.firestore.FieldValue.serverTimestamp()
-        });
-      });
-      
-      batches.push(batch);
-    }
-    
-    // 모든 배치 실행
-    for (const batch of batches) {
-      await batch.commit();
-    }
-    
-    console.log(`${processedData.length}명의 데이터가 Firebase에 저장되었습니다.`);
-    
-    // 통계 업데이트
-    await updateSessionAnalytics(roundLabel, session);
-    await updateRoundAnalytics(roundLabel);
-    
-    return {
-      processedCount: processedData.length,
-      errorCount: errors.length,
-      errors: errors.slice(0, 10) // 최대 10개 오류만 반환
-    };
-    
-  } catch (error) {
-    console.error('Excel 데이터 처리 실패:', error);
-    throw error;
-  }
+      throw new Error('처리할 수 있는 유효한 학수번호가 없습니다.');
+   }
+   
+   // Firebase에 일괄 저장 (배치 단위로 나누어 저장)
+   const batchSize = 500; // Firestore 배치 제한
+   const batches = [];
+   
+   for (let i = 0; i < processedData.length; i += batchSize) {
+     const batch = db.batch();
+     const chunk = processedData.slice(i, i + batchSize);
+     
+     chunk.forEach(student => {
+       const docRef = db.collection('scores_raw')
+         .doc(roundLabel)
+         .collection(session)
+         .doc(student.sid);
+       
+       batch.set(docRef, {
+         sid: student.sid,
+         roundLabel,
+         session,
+         responses: student.responses,
+         wrongQuestions: student.wrongQuestions,
+         hasResponses: student.hasResponses,
+         status: student.status,
+         uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
+         lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+       });
+     });
+     
+     batches.push(batch);
+   }
+   
+   // 모든 배치 실행
+   for (const batch of batches) {
+     await batch.commit();
+   }
+   
+   console.log(`총 ${totalStudents}명의 응시 대상자 데이터가 Firebase에 저장되었습니다.`);
+   console.log(`(응시: ${attendedStudents}명, 미응시: ${absentStudents}명)`);
+   
+   // 통계 업데이트
+   await updateSessionAnalytics(roundLabel, session);
+   await updateRoundAnalytics(roundLabel);
+   
+   return {
+     processedCount: totalStudents,
+     attendedCount: attendedStudents,
+     absentCount: absentStudents,
+     errorCount: errors.length,
+     errors: errors.slice(0, 10) // 최대 10개 오류만 반환
+   };
+   
+ } catch (error) {
+   console.error('Excel 데이터 처리 실패:', error);
+   throw error;
+ }
 }
-
-/**
- * 업로드 로그 조회 API
- */
-exports.getUploadLogs = functions.https.onRequest(async (req, res) => {
-  res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') {
-    res.status(204).send('');
-    return;
-  }
-
-  try {
-    const logsRef = db.collection('upload_logs')
-      .orderBy('timestamp', 'desc')
-      .limit(50);
-    
-    const snapshot = await logsRef.get();
-    const logs = [];
-    
-    snapshot.forEach(doc => {
-      logs.push({
-        id: doc.id,
-        ...doc.data(),
-        timestamp: doc.data().timestamp?.toDate()
-      });
-    });
-    
-    res.json({
-      success: true,
-      logs
-    });
-    
-  } catch (error) {
-    console.error('업로드 로그 조회 실패:', error);
-    res.status(500).json({
-      error: '로그 조회 중 오류가 발생했습니다.',
-      details: error.message
-    });
-  }
-});
