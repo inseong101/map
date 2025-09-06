@@ -91,6 +91,29 @@ function App() {
                 </button>
               </form>
 
+
+                  {/* ✅ 여기 추가 */}
+    <div style={{ marginTop: 10, textAlign: 'right' }}>
+      <a
+        className="btn secondary"
+        href="/admin"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="성적관리시스템 (관리자만 접근가능)"
+      >
+        성적관리시스템<span className="small" style={{ marginLeft: 6, opacity: .85 }}>(관리자만 접근가능)</span>
+      </a>
+    </div>
+
+    <div className="small" style={{ marginTop: 8, opacity: .85, lineHeight: 1.6, textAlign: 'center' }}>
+      • 숫자만 입력하세요. <b>01~12</b>로 시작하는 6자리입니다.<br/>
+      • 조회 중에는 버튼이 비활성화됩니다.
+    </div>
+  </div>
+)}
+
+            
+              
               <div className="small" style={{ marginTop: 10 }}>
                 • 숫자 6자리만 입력 가능합니다. 예: <code>015001</code>
               </div>
