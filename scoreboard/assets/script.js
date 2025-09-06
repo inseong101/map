@@ -154,6 +154,7 @@ function normalizeRound(raw){
 
   return { total, pass, fails, by_class: normByClass };
 }
+}
 
 // 과목 점수 맵
 function getSubjectScores(round){
