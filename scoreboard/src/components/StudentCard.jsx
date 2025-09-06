@@ -1,11 +1,27 @@
-// src/components/StudentCard.jsx
+// src/components/StudentCard.jsx - 미응시자 배지 추가
 import React from 'react';
 import { TOTAL_MAX } from '../services/dataService';
+import { detectStudentAbsenceStatus } from '../utils/helpers';
 import TrendChart from './TrendChart';
 
 function StudentCard({ sid, school, rounds }) {
   const renderBadges = () => {
     return rounds.map(({ label, data }) => {
+      // 미응시 상태 확인
+      const absenceStatus = detectStudentAbsenceStatus(data);
+      
+      // 일부 미응시자 처리
+      if (absenceStatus.isPartiallyAbsent) {
+        return (
+          <span key={label} className="badge absent">
+            {label} 일부미응시 ({absenceStatus.attendedCount}/4교시)
+          </span>
+        );
+      }
+      
+      // 전체 미응시자는 카드 자체가 표시되지 않으므로 여기서는 처리하지 않음
+      
+      // 정상 응시자 처리
       const passOverall = data.totalScore >= TOTAL_MAX * 0.6;
       const badgeClass = passOverall ? 'badge pass' : 'badge fail';
       const badgeText = passOverall ? '합격' : '불합격';
