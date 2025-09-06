@@ -753,14 +753,19 @@ function measureFaceHeight(card, faceEl){
 function syncFlipHeights(root = document){
   const scope = (root instanceof Element ? root : document);
   const cards = scope.querySelectorAll('.flip-card');
+  
   cards.forEach(card=>{
     const inner = card.querySelector('.flip-inner');
     const front = card.querySelector('.flip-front');
     const back  = card.querySelector('.flip-back');
     if (!inner || !front || !back) return;
-    const hf = measureFaceHeight(card, front);
-    const hb = measureFaceHeight(card, back);
-    inner.style.height = Math.max(hf, hb) + 'px';
+    
+    // 앞면 높이만 측정하여 카드 전체 높이로 설정
+    const frontHeight = measureFaceHeight(card, front);
+    inner.style.height = frontHeight + 'px';
+    
+    // 뒷면은 앞면과 같은 높이로 고정하고 스크롤 처리는 CSS에서
+    // (별도의 높이 설정 불필요 - CSS의 max-height와 overflow로 처리)
   });
 }
 
