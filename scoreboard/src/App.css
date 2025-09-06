@@ -1,4 +1,4 @@
-/* src/App.css - 완성된 전졸협 성적 사이트 스타일 */
+/* src/App.css - 부모카드에 색깔 이식, 자녀카드 간소화 */
 
 /* ===== 전졸협 성적 사이트 기본 테마 ===== */
 :root{
@@ -48,35 +48,104 @@ h2{margin:8px 0; font-size:18px; color:var(--muted); font-weight:700}
   min-height: auto;
 }
 
-/* ✅ 합격/불합격/미응시 카드 배경 & 테두리 & 그림자 */
-.card.card-pass {
+/* 🎯 플립 카드 부모에 색깔 적용 (기존 card 클래스 스타일 + 배경색) */
+.flip-card {
+  perspective: 1200px;
+  margin-bottom: 16px;
+  height: fit-content;
+  /* 기본 카드 스타일 */
+  background: linear-gradient(180deg, rgba(21,29,54,.9), var(--surface));
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.25);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+/* 🎯 부모 카드 상태별 색깔 */
+.flip-card.card-pass {
   background: linear-gradient(180deg, rgba(34,197,94,.15), rgba(34,197,94,.08));
   border-color: rgba(34,197,94,.3);
   box-shadow: 0 10px 30px rgba(34,197,94,.1);
 }
-.card.card-fail {
+
+.flip-card.card-fail {
   background: linear-gradient(180deg, rgba(239,68,68,.15), rgba(239,68,68,.08));
   border-color: rgba(239,68,68,.3);
   box-shadow: 0 10px 30px rgba(239,68,68,.1);
 }
-.card.card-absent {
+
+.flip-card.card-absent {
   background: linear-gradient(180deg, rgba(168,85,247,.16), rgba(168,85,247,.08));
   border-color: rgba(168,85,247,.35);
   box-shadow: 0 10px 30px rgba(168,85,247,.12);
 }
 
-/* 플립 카드 앞/뒤 면에도 동일 톤 적용 */
-.flip-face.card.card-pass { 
-  background: linear-gradient(180deg, rgba(34,197,94,.15), rgba(34,197,94,.08));
-  border-color: rgba(34,197,94,.3);
+/* 🎯 플립 카드 내부 구조 */
+.flip-card .flip-inner{
+  position: relative;
+  width: 100%;
+  transform-style: preserve-3d;
+  transition: transform .6s ease;
+  min-height: fit-content;
 }
-.flip-face.card.card-fail { 
-  background: linear-gradient(180deg, rgba(239,68,68,.15), rgba(239,68,68,.08));
-  border-color: rgba(239,68,68,.3);
+
+.flip-card.is-flipped .flip-inner,
+.flip-inner.is-flipped {
+  transform: rotateY(180deg);
 }
-.flip-face.card.card-absent { 
-  background: linear-gradient(180deg, rgba(168,85,247,.16), rgba(168,85,247,.08));
-  border-color: rgba(168,85,247,.35);
+
+/* 🎯 자녀 카드 - 색깔 제거, 구조만 담당 */
+.flip-card .flip-face{
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  backface-visibility: hidden;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.flip-card .flip-front{
+  transform: rotateY(0deg);
+  position: relative;
+  height: auto;
+}
+
+.flip-card .flip-back {
+  transform: rotateY(180deg);
+  position: absolute;
+  height: 100%;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* 🎯 카드 내용 패딩 */
+.card-content {
+  padding: 16px;
+  height: 100%;
+}
+
+/* 스크롤바 스타일 */
+.flip-card .flip-back::-webkit-scrollbar { width: 6px; }
+.flip-card .flip-back::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+}
+.flip-card .flip-back::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+}
+
+/* 높이 동기화 */
+.flip-card.height-synced .flip-inner {
+  height: var(--front-height);
+}
+.flip-card.height-synced .flip-back {
+  height: var(--front-height);
 }
 
 /* 그룹 박스: 통과/과락 기본 + 미응시(보라) 추가 */
@@ -86,7 +155,7 @@ h2{margin:8px 0; font-size:18px; color:var(--muted); font-weight:700}
 .group-box.absent { background: rgba(168,85,247,.10); border-color: rgba(168,85,247,.45); }
 
 /* 부모가 미응시 카드일 경우, 내부 그룹 박스도 보라톤 */
-.card.card-absent .group-box { background: rgba(168,85,247,.10); }
+.flip-card.card-absent .group-box { background: rgba(168,85,247,.10); }
 
 /* 배지 스타일 */
 .badge{
@@ -106,7 +175,7 @@ h2{margin:8px 0; font-size:18px; color:var(--muted); font-weight:700}
 }
 
 /* 좁은 카드 옵션 */
-.card.narrow { 
+.card.narrow {
   max-width: 480px;
   margin: 0 auto;
 }
@@ -137,6 +206,7 @@ h2{margin:8px 0; font-size:18px; color:var(--muted); font-weight:700}
 /* KPI Numbers */
 .kpi .num{font-size:28px; font-weight:900; line-height:1}
 .kpi .label{font-size:11px; color:var(--muted); margin-top:2px}
+.kpi .sub{font-size:14px; color:var(--muted); margin-top:2px}
 
 /* Pills */
 .pill{
@@ -148,85 +218,44 @@ h2{margin:8px 0; font-size:18px; color:var(--muted); font-weight:700}
 .pill.warn{border-color:rgba(245,158,11,.6); color:#fff4d6}
 .pill.red{border-color:rgba(239,68,68,.7); color:#ffd8d8}
 
-/* Flip Cards */
-.flip-card { 
-  perspective: 1200px; 
-  margin-bottom: 16px; 
-  height: fit-content; 
+/* Progress Bar */
+.progress {
+  position: relative;
+  height: 8px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 4px;
+  overflow: hidden;
 }
 
-.flip-card .flip-inner{
-  position: relative; 
-  width: 100%;
-  transform-style: preserve-3d; 
-  transition: transform .6s ease; 
-  min-height: fit-content;
+.progress .bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), #4ade80);
+  border-radius: 4px;
+  transition: width 0.6s ease;
 }
 
-.flip-card.is-flipped .flip-inner, 
-.flip-inner.is-flipped { 
-  transform: rotateY(180deg); 
-}
-
-.flip-card .flip-face{ 
-  position: absolute; 
-  top: 0; 
-  left: 0; 
-  width: 100%;
-  backface-visibility: hidden; 
-  border-radius: 16px; 
-  overflow: hidden; 
-}
-
-.flip-card .flip-front{ 
-  transform: rotateY(0deg); 
-  position: relative; 
-  height: auto; 
-}
-
-.flip-card .flip-back { 
-  transform: rotateY(180deg); 
-  position: absolute; 
-  color: var(--ink); 
-  height: 100%; 
-  box-sizing: border-box;
-  overflow-y: auto; 
-  overflow-x: hidden; 
-  -webkit-overflow-scrolling: touch; 
-  scroll-behavior: smooth; 
-}
-
-/* 스크롤바 스타일 */
-.flip-card .flip-back::-webkit-scrollbar { width: 6px; }
-.flip-card .flip-back::-webkit-scrollbar-track { 
-  background: rgba(255, 255, 255, 0.05); 
-  border-radius: 6px; 
-}
-.flip-card .flip-back::-webkit-scrollbar-thumb { 
-  background: rgba(255, 255, 255, 0.25); 
-  border-radius: 6px; 
-}
-
-/* 높이 동기화 */
-.flip-card.height-synced .flip-inner { 
-  height: var(--front-height); 
-}
-.flip-card.height-synced .flip-back { 
-  height: var(--front-height); 
+.progress .cutline {
+  position: absolute;
+  top: 0;
+  left: 60%;
+  width: 2px;
+  height: 100%;
+  background: rgba(255,255,255,0.6);
+  box-shadow: 0 0 4px rgba(255,255,255,0.3);
 }
 
 /* WrongAnswerPanel - Accordion */
-.accordion { 
-  border-top: 1px solid var(--line); 
-  margin-top: 8px; 
+.accordion {
+  border-top: 1px solid var(--line);
+  margin-top: 8px;
 }
 
-.accordion .session-group { 
-  margin-bottom: 16px; 
-  border: 1px solid var(--line); 
-  border-radius: 12px; 
-  background: var(--surface-2); 
-  overflow: hidden; 
+.accordion .session-group {
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  overflow: hidden;
 }
 
 .accordion .session-header {
@@ -299,29 +328,29 @@ h2{margin:8px 0; font-size:18px; color:var(--muted); font-weight:700}
     margin: 16px auto;
     padding: 0 12px;
   }
-  
+
   .header {
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .grid {
     gap: 12px;
   }
-  
-  .card {
+
+  .card, .flip-card {
+    margin-bottom: 12px;
+  }
+
+  .card-content {
     padding: 12px;
   }
-  
+
   h1 {
     font-size: 20px;
   }
-  
+
   .kpi .num {
     font-size: 24px;
-  }
-  
-  .flip-card {
-    margin-bottom: 12px;
   }
 }
