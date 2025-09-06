@@ -492,3 +492,364 @@ function findSessionByQuestionNum(questionNum) {
   }
   return null;
 }
+// functions/index.js에 추가할 Storage 파일 처리 함수
+
+const XLSX = require('xlsx');
+
+/**
+ * Firebase Storage에 Excel 파일이 업로드되면 자동으로 처리하는 함수
+ */
+exports.processStorageExcel = functions.storage.object().onFinalize(async (object) => {
+  try {
+    const { name: filePath, bucket } = object;
+    
+    // Excel 파일인지 확인
+    if (!filePath || !filePath.includes('.xlsx')) {
+      console.log('Excel 파일이 아님:', filePath);
+      return null;
+    }
+    
+    // 파일명에서 회차와 교시 정보 추출
+    const fileInfo = extractFileInfo(filePath);
+    if (!fileInfo) {
+      console.log('파일명 형식이 맞지 않음:', filePath);
+      return null;
+    }
+    
+    console.log('Excel 파일 처리 시작:', filePath, fileInfo);
+    
+    // Storage에서 파일 다운로드
+    const storage = admin.storage();
+    const file = storage.bucket(bucket).file(filePath);
+    
+    const [buffer] = await file.download();
+    
+    // Excel 파일 파싱
+    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+    
+    console.log('Excel 데이터 읽기 완료. 행 수:', jsonData.length);
+    
+    // 데이터 처리 및 Firebase에 저장
+    const result = await processExcelData(jsonData, fileInfo.roundLabel, fileInfo.session);
+    
+    console.log('데이터 처리 완료:', result);
+    
+    // 처리 결과를 로그 컬렉션에 저장
+    await db.collection('upload_logs').add({
+      filePath,
+      roundLabel: fileInfo.roundLabel,
+      session: fileInfo.session,
+      processedCount: result.processedCount,
+      errorCount: result.errorCount,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      status: 'completed'
+    });
+    
+    return null;
+    
+  } catch (error) {
+    console.error('Excel 파일 처리 실패:', error);
+    
+    // 오류 로그 저장
+    await db.collection('upload_logs').add({
+      filePath: object.name,
+      error: error.message,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      status: 'failed'
+    });
+    
+    return null;
+  }
+});
+
+/**
+ * 파일명에서 회차와 교시 정보 추출
+ */
+function extractFileInfo(filePath) {
+  // "1차 모의고사 1교시.xlsx" 형태에서 정보 추출
+  const fileName = filePath.split('/').pop(); // 폴더 경로 제거
+  const match = fileName.match(/(\d+)차.*?(\d+)교시/);
+  
+  if (match) {
+    return {
+      roundLabel: `${match[1]}차`,
+      session: `${match[2]}교시`
+    };
+  }
+  
+  return null;
+}
+
+/**
+ * Excel 데이터를 Firebase에 저장
+ */
+async function processExcelData(jsonData, roundLabel, session) {
+  try {
+    const processedData = [];
+    const errors = [];
+    
+    if (jsonData.length < 4) {
+      throw new Error('Excel 파일에 충분한 데이터가 없습니다 (최소 4행 필요)');
+    }
+    
+/**
+ * Excel 데이터를 Firebase에 저장
+ */
+async function processExcelData(jsonData, roundLabel, session) {
+  try {
+    const processedData = [];
+    const errors = [];
+    
+/**
+ * Excel 데이터를 Firebase에 저장
+ */
+async function processExcelData(jsonData, roundLabel, session) {
+  try {
+    const processedData = [];
+    const errors = [];
+    
+    if (jsonData.length < 5) {
+      throw new Error('Excel 파일에 충분한 데이터가 없습니다 (최소 5행 필요)');
+    }
+    
+    // Excel 구조 분석
+    const questionNumbers = jsonData[0] || []; // 1행: 문항번호
+    const scores = jsonData[1] || [];          // 2행: 배점
+    const answerKey = jsonData[2] || [];       // 3행: 정답
+    // 4행: 빈 행
+    // 5행부터: 학생 데이터
+    
+    console.log('총 컬럼 수:', questionNumbers.length);
+    
+    // 유효한 문항만 추출 (매 2번째 컬럼마다: B=1, D=2, F=3...)
+    const validQuestions = [];
+    for (let i = 1; i < questionNumbers.length; i += 2) { // 1, 3, 5, 7... (B, D, F, H...)
+      const questionNum = questionNumbers[i];
+      const correctAnswer = answerKey[i];
+      
+      // 문항번호가 숫자이고 정답이 1-5 범위인 경우만 유효
+      if (questionNum && !isNaN(questionNum) && correctAnswer >= 1 && correctAnswer <= 5) {
+        validQuestions.push({
+          columnIndex: i,
+          questionNum: parseInt(questionNum),
+          correctAnswer: parseInt(correctAnswer)
+        });
+      }
+    }
+    
+    console.log('유효한 문항 수:', validQuestions.length);
+    console.log('문항 번호들:', validQuestions.slice(0, 10).map(q => q.questionNum));
+    
+    // 정답지 추출 및 저장
+    const answerKeyObj = {};
+    validQuestions.forEach(q => {
+      answerKeyObj[q.questionNum] = q.correctAnswer;
+    });
+    
+    // 정답지를 Firebase에 저장
+    await db.collection('answer_keys').doc(roundLabel).set(answerKeyObj, { merge: true });
+    console.log('정답지 저장 완료:', Object.keys(answerKeyObj).length, '문항');
+    
+    // 학생 데이터 처리 (5행부터 - 인덱스 4부터)
+    for (let i = 4; i < jsonData.length; i++) {
+      const row = jsonData[i];
+      
+      try {
+        // 학수번호 추출 (첫 번째 컬럼)
+        const sid = String(row[0] || '').trim();
+        
+        if (!sid || sid.length < 6) {
+          if (sid) { // 빈 행이 아닌 경우만 오류로 기록
+            errors.push(`행 ${i + 1}: 유효하지 않은 학수번호 (${sid})`);
+          }
+          continue;
+        }
+        
+        const responses = {};
+        const wrongQuestions = [];
+        
+        // 유효한 문항들만 처리
+        validQuestions.forEach(q => {
+          const studentAnswer = row[q.columnIndex];
+          
+          if (studentAnswer >= 1 && studentAnswer <= 5) {
+            responses[q.questionNum] = parseInt(studentAnswer);
+            
+            // 정답과 비교하여 오답 문항 확인
+            if (studentAnswer !== q.correctAnswer) {
+              wrongQuestions.push(q.questionNum);
+            }
+          }
+        });
+        
+        // 응답이 있는 경우만 저장
+        if (Object.keys(responses).length > 0) {
+          processedData.push({
+            sid,
+            responses,
+            wrongQuestions: wrongQuestions.sort((a, b) => a - b)
+          });
+        }
+        
+      } catch (rowError) {
+        errors.push(`행 ${i + 1}: ${rowError.message}`);
+      }
+    }
+      const row = jsonData[i];
+      
+      try {
+        // 학수번호 추출 (첫 번째 컬럼)
+        const sid = String(row[0] || '').trim();
+        
+        if (!sid || sid.length < 6) {
+          if (sid) { // 빈 행이 아닌 경우만 오류로 기록
+            errors.push(`행 ${i + 1}: 유효하지 않은 학수번호 (${sid})`);
+          }
+          continue;
+        }
+        
+        const responses = {};
+        const wrongQuestions = [];
+        
+        // 유효한 문항들만 처리
+        validQuestions.forEach(q => {
+          const studentAnswer = row[q.columnIndex];
+          
+          if (studentAnswer >= 1 && studentAnswer <= 5) {
+            responses[q.questionNum] = parseInt(studentAnswer);
+            
+            // 정답과 비교하여 오답 문항 확인
+            if (studentAnswer !== q.correctAnswer) {
+              wrongQuestions.push(q.questionNum);
+            }
+          }
+        });
+        
+        // 응답이 있는 경우만 저장
+        if (Object.keys(responses).length > 0) {
+          processedData.push({
+            sid,
+            responses,
+            wrongQuestions: wrongQuestions.sort((a, b) => a - b)
+          });
+        }
+        
+      } catch (rowError) {
+        errors.push(`행 ${i + 1}: ${rowError.message}`);
+      }
+    }
+    
+    console.log(`처리된 학생 수: ${processedData.length}, 오류 수: ${errors.length}`);
+    
+    if (processedData.length === 0) {
+      throw new Error('처리할 수 있는 유효한 데이터가 없습니다.');
+    }
+    
+    // Firebase에 일괄 저장 (배치 단위로 나누어 저장)
+    const batchSize = 500; // Firestore 배치 제한
+    const batches = [];
+    
+    for (let i = 0; i < processedData.length; i += batchSize) {
+      const batch = db.batch();
+      const chunk = processedData.slice(i, i + batchSize);
+      
+      chunk.forEach(student => {
+        const docRef = db.collection('scores_raw')
+          .doc(roundLabel)
+          .collection(session)
+          .doc(student.sid);
+        
+        batch.set(docRef, {
+          sid: student.sid,
+          roundLabel,
+          session,
+          responses: student.responses,
+          wrongQuestions: student.wrongQuestions,
+          uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
+          lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+        });
+      });
+      
+      batches.push(batch);
+    }
+    
+    // 모든 배치 실행
+    for (const batch of batches) {
+      await batch.commit();
+    }
+    
+    console.log(`${processedData.length}명의 데이터가 Firebase에 저장되었습니다.`);
+    
+    // 통계 업데이트
+    await updateSessionAnalytics(roundLabel, session);
+    await updateRoundAnalytics(roundLabel);
+    
+    return {
+      processedCount: processedData.length,
+      errorCount: errors.length,
+      errors: errors.slice(0, 10) // 최대 10개 오류만 반환
+    };
+    
+  } catch (error) {
+    console.error('Excel 데이터 처리 실패:', error);
+    throw error;
+  }
+}
+
+/**
+ * 교시별 최대 문항 수 반환
+ */
+function getMaxQuestions(session) {
+  switch (session) {
+    case '1교시': return 80;
+    case '2교시': return 100;
+    case '3교시': return 80;
+    case '4교시': return 80;
+    default: return 80;
+  }
+}
+
+/**
+ * 업로드 로그 조회 API
+ */
+exports.getUploadLogs = functions.https.onRequest(async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+
+  try {
+    const logsRef = db.collection('upload_logs')
+      .orderBy('timestamp', 'desc')
+      .limit(50);
+    
+    const snapshot = await logsRef.get();
+    const logs = [];
+    
+    snapshot.forEach(doc => {
+      logs.push({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().timestamp?.toDate()
+      });
+    });
+    
+    res.json({
+      success: true,
+      logs
+    });
+    
+  } catch (error) {
+    console.error('업로드 로그 조회 실패:', error);
+    res.status(500).json({
+      error: '로그 조회 중 오류가 발생했습니다.',
+      details: error.message
+    });
+  }
+});
