@@ -130,7 +130,7 @@ function RoundCard({ label, data, sid, isPartialAbsent = false, attendedCount = 
                 {isPartialAbsent && (
                   <div className="small" style={{ marginTop: '4px', color: 'var(--muted)' }}>
                     <span className="badge absent" style={{ fontSize: '11px' }}>
-                      중도포기 ({attendedCount}/4교시)
+                      중도포기 (빠진 교시: {missedSessions.join(", ")})
                     </span>
                   </div>
                 )}
