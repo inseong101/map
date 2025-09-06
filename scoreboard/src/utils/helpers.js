@@ -1,4 +1,4 @@
-// src/utils/helpers.js - 상위 퍼센트 계산 수정
+// src/utils/helpers.js - 모든 누락 함수 포함
 
 // 숫자 포맷팅
 export function fmt(n) {
@@ -44,11 +44,11 @@ export function drawLineChart(canvas, labels, series, maxValue) {
   const plotH = H - padT - padB;
   const n = labels.length;
   
-  const x = (i) => padL + (n <= 1 ? plotW / 2 : (i / (n - 1)) * plotW);
-  const y = (val) => padT + plotH - (val / maxValue) * plotH;
+  const x = (i) => padL + (n <= 1 ? plotW / 2 : (i * (plotW / (n - 1))));
+  const y = (v) => padT + (plotH * (1 - (v / Math.max(1, maxValue || 1))));
 
   // 축 그리기
-  ctx.strokeStyle = '#333';
+  ctx.strokeStyle = 'rgba(255,255,255,.25)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(padL, padT);
@@ -57,50 +57,81 @@ export function drawLineChart(canvas, labels, series, maxValue) {
   ctx.stroke();
 
   // 라벨
-  ctx.fillStyle = '#666';
-  ctx.font = '12px sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,.8)';
+  ctx.font = '12px system-ui';
   ctx.textAlign = 'center';
-  for (let i = 0; i < labels.length; i++) {
-    ctx.fillText(labels[i], x(i), padT + plotH + 18);
-  }
+  labels.forEach((lb, i) => ctx.fillText(lb, x(i), padT + plotH + 18));
 
-  // 시리즈별 라인
-  const colors = ['#007bff', '#28a745', '#dc3545', '#ffc107'];
-  series.forEach((data, seriesIdx) => {
-    ctx.strokeStyle = colors[seriesIdx % colors.length];
+  // 시리즈 그리기
+  const colors = ['#7ea2ff', '#4cc9ff', '#22c55e'];
+  series.forEach((s, si) => {
+    const col = colors[si % colors.length];
+    
+    // 선 그리기
+    ctx.strokeStyle = col;
     ctx.lineWidth = 2;
     ctx.beginPath();
-    for (let i = 0; i < data.length; i++) {
-      const cx = x(i);
-      const cy = y(data[i]);
-      if (i === 0) ctx.moveTo(cx, cy);
-      else ctx.lineTo(cx, cy);
-    }
+    s.values.forEach((v, i) => {
+      if (v == null) return;
+      const xx = x(i), yy = y(v);
+      if (i === 0 || s.values[i - 1] == null) {
+        ctx.moveTo(xx, yy);
+      } else {
+        ctx.lineTo(xx, yy);
+      }
+    });
     ctx.stroke();
+    
+    // 포인트 그리기
+    ctx.fillStyle = col;
+    s.values.forEach((v, i) => {
+      if (v == null) return;
+      const xx = x(i), yy = y(v);
+      ctx.beginPath();
+      ctx.arc(xx, yy, 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  });
+
+  // 범례
+  const legendX = padL, legendY = 12;
+  series.forEach((s, si) => {
+    const col = colors[si % colors.length];
+    ctx.fillStyle = col;
+    ctx.fillRect(legendX + si * 120, legendY - 8, 10, 10);
+    ctx.fillStyle = '#e8eeff';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText(s.name, legendX + si * 120 + 14, legendY + 1);
   });
 }
 
-// 유효한 학번 체크 (01~12로 시작하는 학번만)
+// 유효한 학수번호인지 확인 (01~12로 시작하는 6자리)
 function isValidStudentId(sid) {
   if (!sid || typeof sid !== 'string') return false;
+  if (sid.length !== 6) return false;
+  
   const schoolCode = sid.slice(0, 2);
   const validCodes = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
   return validCodes.includes(schoolCode);
 }
 
-// 평균 점수 조회
+// 학교별/전국 평균 데이터 조회 (Firestore에서)
 export async function getAverages(schoolName, roundLabel) {
   try {
     const { db } = await import('../services/firebase');
     const { doc, getDoc } = await import('firebase/firestore');
     
-    const nationalRef = doc(db, 'averages', `${roundLabel}_national`);
-    const schoolRef = doc(db, 'averages', `${roundLabel}_${getSchoolCodeFromName(schoolName)}`);
+    // 학교 코드 추출
+    const schoolCode = getSchoolCodeFromName(schoolName);
     
-    const [nationalSnap, schoolSnap] = await Promise.all([
-      getDoc(nationalRef),
-      getDoc(schoolRef)
-    ]);
+    // 전국 평균 조회
+    const nationalRef = doc(db, 'averages', roundLabel, 'data', 'national');
+    const nationalSnap = await getDoc(nationalRef);
+    
+    // 학교 평균 조회
+    const schoolRef = doc(db, 'averages', roundLabel, 'data', `school_${schoolCode}`);
+    const schoolSnap = await getDoc(schoolRef);
     
     const nationalAvg = nationalSnap.exists() ? nationalSnap.data().avg : 204;
     const schoolAvg = schoolSnap.exists() ? schoolSnap.data().avg : 211;
@@ -115,7 +146,7 @@ export async function getAverages(schoolName, roundLabel) {
   }
 }
 
-// ✅ 수정된 상위 퍼센트 계산 함수
+// ✅ 올바른 상위 퍼센트 계산 함수
 export function calculatePercentile(studentScore, allScores) {
   if (!Array.isArray(allScores) || allScores.length === 0) {
     return null;
