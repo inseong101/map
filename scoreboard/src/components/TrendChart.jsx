@@ -4,30 +4,18 @@ import { getAverages } from '../utils/helpers';
 
 function TrendChart({ rounds, school, sid }) {
   const [viewMode, setViewMode] = useState('national'); // 'national' | 'school'
+  const [selectedRound, setSelectedRound] = useState(0);
+  const [hoveredBin, setHoveredBin] = useState(null);
   const canvasRef = useRef(null);
+  const [histogramData, setHistogramData] = useState([]);
 
   useEffect(() => {
-    drawHistogram();
-  }, [rounds, viewMode]);
+    prepareAndDrawHistogram();
+  }, [rounds, viewMode, selectedRound]);
 
-  const drawHistogram = async () => {
-    const canvas = canvasRef.current;
-    if (!canvas || rounds.length === 0) return;
-
-    const ctx = canvas.getContext('2d');
-    const W = canvas.width = 800;
-    const H = canvas.height = 400;
-    ctx.clearRect(0, 0, W, H);
-
-    // 데이터 준비
-    const histogramData = await prepareHistogramData();
-    if (!histogramData || histogramData.length === 0) return;
-
-    // 히스토그램 그리기
-    drawHistogramBars(ctx, histogramData, W, H);
-  };
-
-  const prepareHistogramData = async () => {
+  const prepareAndDrawHistogram = async () => {
+    if (rounds.length === 0) return;
+    
     const data = [];
     
     for (const round of rounds) {
@@ -38,37 +26,43 @@ function TrendChart({ rounds, school, sid }) {
       const averages = await getAverages(school, label);
       const referenceAvg = viewMode === 'national' ? averages.nationalAvg : averages.schoolAvg;
       
-      // 5점 단위로 히스토그램 생성 (200-340점 범위)
-      const bins = createBins(referenceAvg, studentScore);
+      // 실제 점수 분포 시뮬레이션 (나중에 실제 데이터로 교체)
+      const bins = generateScoreDistribution(referenceAvg, studentScore);
       
       data.push({
         label,
         studentScore,
         referenceAvg,
         bins,
-        studentBinIndex: Math.floor((studentScore - 200) / 5)
+        totalStudents: bins.reduce((sum, bin) => sum + bin.count, 0)
       });
     }
     
-    return data;
+    setHistogramData(data);
+    drawHistogram(data);
   };
 
-  const createBins = (referenceAvg, studentScore) => {
+  const generateScoreDistribution = (avg, studentScore) => {
     const bins = [];
-    const minScore = 200;
+    const minScore = 180;
     const maxScore = 340;
     const binSize = 5;
+    const totalStudents = 1000; // 시뮬레이션용
     
-    // 정규분포 근사로 히스토그램 생성
     for (let score = minScore; score < maxScore; score += binSize) {
       const binCenter = score + binSize / 2;
-      const height = calculateNormalDistribution(binCenter, referenceAvg, 30); // 표준편차 30 가정
+      
+      // 정규분포 기반 학생 수 계산
+      const normalValue = calculateNormalDistribution(binCenter, avg, 25);
+      const count = Math.max(1, Math.round(normalValue * totalStudents * 100));
       
       bins.push({
         min: score,
         max: score + binSize,
-        height: height * 100, // 스케일 조정
-        isStudent: score <= studentScore && studentScore < score + binSize
+        center: binCenter,
+        count: count,
+        isStudent: score <= studentScore && studentScore < score + binSize,
+        percentage: ((count / totalStudents) * 100).toFixed(1)
       });
     }
     
@@ -81,155 +75,349 @@ function TrendChart({ rounds, school, sid }) {
     return coefficient * Math.exp(exponent);
   };
 
-  const drawHistogramBars = (ctx, histogramData, W, H) => {
-    const padding = 60;
-    const chartW = W - padding * 2;
-    const chartH = H - padding * 2;
-    const roundCount = histogramData.length;
-    const roundWidth = chartW / roundCount;
+  const drawHistogram = (data) => {
+    const canvas = canvasRef.current;
+    if (!canvas || data.length === 0) return;
+
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
     
-    histogramData.forEach((roundData, roundIndex) => {
-      const x = padding + roundIndex * roundWidth;
-      const y = padding;
-      const w = roundWidth - 20; // 라운드 간 간격
-      const h = chartH - 40;
-      
-      drawSingleHistogram(ctx, roundData, x, y, w, h);
-      
-      // 라운드 라벨
-      ctx.fillStyle = '#e8eeff';
-      ctx.font = 'bold 12px system-ui';
-      ctx.textAlign = 'center';
-      ctx.fillText(roundData.label, x + w/2, H - 10);
-    });
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    
+    const W = rect.width;
+    const H = rect.height;
+    
+    ctx.clearRect(0, 0, W, H);
+
+    const currentData = data[selectedRound];
+    if (!currentData) return;
+
+    const padding = { left: 60, right: 40, top: 40, bottom: 60 };
+    const chartW = W - padding.left - padding.right;
+    const chartH = H - padding.top - padding.bottom;
+    
+    // 축 그리기
+    drawAxes(ctx, padding, chartW, chartH, currentData);
+    
+    // 히스토그램 바 그리기
+    drawBars(ctx, padding, chartW, chartH, currentData);
+    
+    // 204점 컷오프 라인
+    drawCutoffLine(ctx, padding, chartW, chartH);
     
     // 범례
-    drawLegend(ctx, W, padding);
+    drawLegend(ctx, W, H, padding);
   };
 
-  const drawSingleHistogram = (ctx, roundData, x, y, w, h) => {
-    const { bins, studentBinIndex } = roundData;
-    const maxHeight = Math.max(...bins.map(b => b.height));
-    const binWidth = w / bins.length;
+  const drawAxes = (ctx, padding, chartW, chartH, data) => {
+    ctx.strokeStyle = '#213056';
+    ctx.lineWidth = 1;
     
-    bins.forEach((bin, index) => {
-      const binX = x + index * binWidth;
-      const binHeight = (bin.height / maxHeight) * h * 0.8;
-      const binY = y + h - binHeight;
+    // Y축
+    ctx.beginPath();
+    ctx.moveTo(padding.left, padding.top);
+    ctx.lineTo(padding.left, padding.top + chartH);
+    ctx.stroke();
+    
+    // X축
+    ctx.beginPath();
+    ctx.moveTo(padding.left, padding.top + chartH);
+    ctx.lineTo(padding.left + chartW, padding.top + chartH);
+    ctx.stroke();
+    
+    // X축 라벨 (점수)
+    ctx.fillStyle = '#9db0d6';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    
+    const scoreStep = 20;
+    for (let score = 180; score <= 340; score += scoreStep) {
+      const x = padding.left + ((score - 180) / 160) * chartW;
+      ctx.fillText(score.toString(), x, padding.top + chartH + 20);
       
-      // 막대 색상 결정
+      // 격자선
+      if (score > 180 && score < 340) {
+        ctx.strokeStyle = 'rgba(33, 48, 86, 0.3)';
+        ctx.beginPath();
+        ctx.moveTo(x, padding.top);
+        ctx.lineTo(x, padding.top + chartH);
+        ctx.stroke();
+      }
+    }
+    
+    // Y축 라벨 (학생 수)
+    const maxCount = Math.max(...data.bins.map(b => b.count));
+    const yStep = Math.ceil(maxCount / 5);
+    
+    ctx.textAlign = 'right';
+    for (let i = 0; i <= 5; i++) {
+      const count = i * yStep;
+      const y = padding.top + chartH - (i / 5) * chartH;
+      ctx.fillText(count.toString(), padding.left - 10, y + 4);
+      
+      // 격자선
+      if (i > 0) {
+        ctx.strokeStyle = 'rgba(33, 48, 86, 0.3)';
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(padding.left + chartW, y);
+        ctx.stroke();
+      }
+    }
+    
+    // 축 제목
+    ctx.fillStyle = '#e8eeff';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('점수', padding.left + chartW / 2, padding.top + chartH + 45);
+    
+    ctx.save();
+    ctx.translate(15, padding.top + chartH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('학생 수', 0, 0);
+    ctx.restore();
+  };
+
+  const drawBars = (ctx, padding, chartW, chartH, data) => {
+    const binWidth = chartW / data.bins.length;
+    const maxCount = Math.max(...data.bins.map(b => b.count));
+    
+    data.bins.forEach((bin, index) => {
+      const x = padding.left + index * binWidth;
+      const barHeight = (bin.count / maxCount) * chartH;
+      const y = padding.top + chartH - barHeight;
+      
+      // 바 색상
       let fillColor;
       if (bin.isStudent) {
-        fillColor = '#ff6b6b'; // 본인 위치 - 빨간색
+        fillColor = '#ef4444'; // 본인 위치
       } else {
         fillColor = viewMode === 'national' ? 'rgba(126, 162, 255, 0.7)' : 'rgba(34, 197, 94, 0.7)';
       }
       
-      // 막대 그리기
-      ctx.fillStyle = fillColor;
-      ctx.fillRect(binX, binY, binWidth - 1, binHeight);
+      // 호버 효과
+      if (hoveredBin === index) {
+        fillColor = bin.isStudent ? '#dc2626' : (viewMode === 'national' ? '#5b8def' : '#16a34a');
+      }
       
-      // 테두리
+      // 바 그리기
+      ctx.fillStyle = fillColor;
+      ctx.fillRect(x + 1, y, binWidth - 2, barHeight);
+      
+      // 본인 위치 테두리
       if (bin.isStudent) {
-        ctx.strokeStyle = '#ff4757';
+        ctx.strokeStyle = '#b91c1c';
         ctx.lineWidth = 2;
-        ctx.strokeRect(binX, binY, binWidth - 1, binHeight);
+        ctx.strokeRect(x + 1, y, binWidth - 2, barHeight);
+      }
+      
+      // 구간 라벨 (일부만)
+      if (index % 4 === 0) {
+        ctx.fillStyle = '#9db0d6';
+        ctx.font = '9px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${bin.min}-${bin.max}`, x + binWidth/2, padding.top + chartH + 35);
       }
     });
-    
-    // 점수 표시
-    ctx.fillStyle = '#e8eeff';
-    ctx.font = '10px system-ui';
-    ctx.textAlign = 'center';
-    ctx.fillText(`${roundData.studentScore}점`, x + w/2, y - 5);
   };
 
-  const drawLegend = (ctx, W, padding) => {
-    const legendY = 20;
+  const drawCutoffLine = (ctx, padding, chartW, chartH) => {
+    const cutoffScore = 204;
+    const x = padding.left + ((cutoffScore - 180) / 160) * chartW;
     
-    // 전국/내 학교 표시
-    ctx.fillStyle = '#e8eeff';
-    ctx.font = 'bold 12px system-ui';
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([5, 5]);
+    
+    ctx.beginPath();
+    ctx.moveTo(x, padding.top);
+    ctx.lineTo(x, padding.top + chartH);
+    ctx.stroke();
+    
+    ctx.setLineDash([]);
+    
+    // 컷오프 라벨
+    ctx.fillStyle = '#f59e0b';
+    ctx.font = 'bold 11px system-ui';
     ctx.textAlign = 'left';
-    ctx.fillText(`${viewMode === 'national' ? '전국' : '내 학교'} 평균 기준 분포`, padding, legendY);
+    ctx.fillText('합격선 (204점)', x + 5, padding.top + 15);
+  };
+
+  const drawLegend = (ctx, W, H, padding) => {
+    const legendY = padding.top - 20;
     
-    // 색상 범례
+    // 범례 항목
     const legendItems = [
       { color: viewMode === 'national' ? 'rgba(126, 162, 255, 0.7)' : 'rgba(34, 197, 94, 0.7)', label: '다른 학생' },
-      { color: '#ff6b6b', label: '본인 위치' }
+      { color: '#ef4444', label: '본인 위치' },
+      { color: '#f59e0b', label: '합격선' }
     ];
     
+    let legendX = W - 250;
     legendItems.forEach((item, index) => {
-      const x = W - 200 + index * 100;
       ctx.fillStyle = item.color;
-      ctx.fillRect(x, legendY - 8, 12, 12);
+      ctx.fillRect(legendX + index * 80, legendY - 6, 10, 10);
       ctx.fillStyle = '#e8eeff';
       ctx.font = '11px system-ui';
-      ctx.fillText(item.label, x + 16, legendY + 2);
+      ctx.textAlign = 'left';
+      ctx.fillText(item.label, legendX + index * 80 + 14, legendY + 2);
     });
+  };
+
+  const handleCanvasClick = (event) => {
+    const canvas = canvasRef.current;
+    if (!canvas || histogramData.length === 0) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    
+    const padding = { left: 60, right: 40, top: 40, bottom: 60 };
+    const chartW = rect.width - padding.left - padding.right;
+    const binWidth = chartW / histogramData[selectedRound].bins.length;
+    
+    if (x >= padding.left && x <= padding.left + chartW && 
+        y >= padding.top && y <= padding.top + (rect.height - padding.top - padding.bottom)) {
+      
+      const binIndex = Math.floor((x - padding.left) / binWidth);
+      const bin = histogramData[selectedRound].bins[binIndex];
+      
+      if (bin) {
+        alert(`${bin.min}-${bin.max}점 구간\n학생 수: ${bin.count}명\n전체 비율: ${bin.percentage}%`);
+      }
+    }
+  };
+
+  const handleCanvasMouseMove = (event) => {
+    const canvas = canvasRef.current;
+    if (!canvas || histogramData.length === 0) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    
+    const padding = { left: 60, right: 40, top: 40, bottom: 60 };
+    const chartW = rect.width - padding.left - padding.right;
+    const binWidth = chartW / histogramData[selectedRound].bins.length;
+    
+    if (x >= padding.left && x <= padding.left + chartW) {
+      const binIndex = Math.floor((x - padding.left) / binWidth);
+      setHoveredBin(binIndex);
+      canvas.style.cursor = 'pointer';
+    } else {
+      setHoveredBin(null);
+      canvas.style.cursor = 'default';
+    }
   };
 
   return (
     <div>
-      {/* 탭 버튼 */}
+      {/* 회차 선택 + 전국/내학교 탭 */}
       <div style={{ 
         display: 'flex', 
-        justifyContent: 'flex-end', 
-        marginBottom: '12px',
-        gap: '8px'
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        marginBottom: '16px',
+        gap: '16px'
       }}>
-        <button
-          className={`tab-btn ${viewMode === 'national' ? 'active' : ''}`}
-          onClick={() => setViewMode('national')}
-          style={{
-            padding: '6px 12px',
-            borderRadius: '6px',
-            border: '1px solid var(--line)',
-            background: viewMode === 'national' ? 'var(--primary)' : 'transparent',
-            color: viewMode === 'national' ? '#fff' : 'var(--muted)',
-            fontSize: '12px',
-            fontWeight: '600',
-            cursor: 'pointer',
-            transition: 'all 0.2s'
-          }}
-        >
-          전국
-        </button>
-        <button
-          className={`tab-btn ${viewMode === 'school' ? 'active' : ''}`}
-          onClick={() => setViewMode('school')}
-          style={{
-            padding: '6px 12px',
-            borderRadius: '6px',
-            border: '1px solid var(--line)',
-            background: viewMode === 'school' ? 'var(--ok)' : 'transparent',
-            color: viewMode === 'school' ? '#fff' : 'var(--muted)',
-            fontSize: '12px',
-            fontWeight: '600',
-            cursor: 'pointer',
-            transition: 'all 0.2s'
-          }}
-        >
-          내 학교
-        </button>
+        {/* 회차 선택 */}
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          {rounds.map((round, index) => (
+            <button
+              key={index}
+              onClick={() => setSelectedRound(index)}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '6px',
+                border: selectedRound === index ? '2px solid var(--primary)' : '1px solid var(--line)',
+                background: selectedRound === index ? 'var(--primary)' : 'transparent',
+                color: selectedRound === index ? '#fff' : 'var(--muted)',
+                fontSize: '12px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+            >
+              {round.label}
+            </button>
+          ))}
+        </div>
+        
+        {/* 전국/내학교 탭 */}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={() => setViewMode('national')}
+            style={{
+              padding: '6px 16px',
+              borderRadius: '6px',
+              border: '1px solid var(--line)',
+              background: viewMode === 'national' ? 'var(--primary)' : 'transparent',
+              color: viewMode === 'national' ? '#fff' : 'var(--muted)',
+              fontSize: '12px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            전국
+          </button>
+          <button
+            onClick={() => setViewMode('school')}
+            style={{
+              padding: '6px 16px',
+              borderRadius: '6px',
+              border: '1px solid var(--line)',
+              background: viewMode === 'school' ? 'var(--ok)' : 'transparent',
+              color: viewMode === 'school' ? '#fff' : 'var(--muted)',
+              fontSize: '12px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            내 학교
+          </button>
+        </div>
       </div>
+      
+      {/* 현재 선택된 정보 */}
+      {histogramData[selectedRound] && (
+        <div style={{ 
+          marginBottom: '12px', 
+          padding: '8px 12px', 
+          background: 'rgba(21,29,54,0.5)', 
+          borderRadius: '6px',
+          fontSize: '13px',
+          color: 'var(--muted)'
+        }}>
+          <strong style={{ color: 'var(--ink)' }}>{rounds[selectedRound]?.label}</strong> - 
+          본인 점수: <span style={{ color: 'var(--primary)' }}>{histogramData[selectedRound].studentScore}점</span> | 
+          {viewMode === 'national' ? '전국' : '내 학교'} 평균: <span style={{ color: 'var(--ok)' }}>{histogramData[selectedRound].referenceAvg}점</span>
+        </div>
+      )}
       
       {/* 히스토그램 캔버스 */}
       <canvas
         ref={canvasRef}
+        onClick={handleCanvasClick}
+        onMouseMove={handleCanvasMouseMove}
+        onMouseLeave={() => setHoveredBin(null)}
         style={{
           width: '100%',
           height: '400px',
           background: 'rgba(0,0,0,0.1)',
           borderRadius: '8px',
-          border: '1px solid var(--line)'
+          border: '1px solid var(--line)',
+          cursor: 'default'
         }}
       />
       
       {/* 설명 */}
-      <div className="small" style={{ marginTop: '8px', opacity: 0.8 }}>
-        {viewMode === 'national' ? '전국' : '내 학교'} 평균 기준 점수 분포. 
-        빨간색 막대가 본인 위치입니다.
+      <div className="small" style={{ marginTop: '12px', opacity: 0.8 }}>
+        막대를 클릭하면 해당 점수 구간의 학생 수를 확인할 수 있습니다. 
+        노란 선은 합격선(204점)입니다.
       </div>
     </div>
   );
