@@ -30,89 +30,13 @@ export function chunk(arr, sizes) {
   return out;
 }
 
-// 캔버스에 라인 차트 그리기
-export function drawLineChart(canvas, labels, series, maxValue) {
-  if (!canvas) return;
-  
-  const ctx = canvas.getContext('2d');
-  const W = canvas.width;
-  const H = canvas.height;
-  ctx.clearRect(0, 0, W, H);
-
-  const padL = 40, padR = 16, padT = 24, padB = 34;
-  const plotW = W - padL - padR;
-  const plotH = H - padT - padB;
-  const n = labels.length;
-  
-  const x = (i) => padL + (n <= 1 ? plotW / 2 : (i * (plotW / (n - 1))));
-  const y = (v) => padT + (plotH * (1 - (v / Math.max(1, maxValue || 1))));
-
-  // 축 그리기
-  ctx.strokeStyle = 'rgba(255,255,255,.25)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(padL, padT);
-  ctx.lineTo(padL, padT + plotH);
-  ctx.lineTo(padL + plotW, padT + plotH);
-  ctx.stroke();
-
-  // 라벨
-  ctx.fillStyle = 'rgba(255,255,255,.8)';
-  ctx.font = '12px system-ui';
-  ctx.textAlign = 'center';
-  labels.forEach((lb, i) => ctx.fillText(lb, x(i), padT + plotH + 18));
-
-  // 시리즈 그리기
-  const colors = ['#7ea2ff', '#4cc9ff', '#22c55e'];
-  series.forEach((s, si) => {
-    const col = colors[si % colors.length];
-    
-    // 선 그리기
-    ctx.strokeStyle = col;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    s.values.forEach((v, i) => {
-      if (v == null) return;
-      const xx = x(i), yy = y(v);
-      if (i === 0 || s.values[i - 1] == null) {
-        ctx.moveTo(xx, yy);
-      } else {
-        ctx.lineTo(xx, yy);
-      }
-    });
-    ctx.stroke();
-    
-    // 포인트 그리기
-    ctx.fillStyle = col;
-    s.values.forEach((v, i) => {
-      if (v == null) return;
-      const xx = x(i), yy = y(v);
-      ctx.beginPath();
-      ctx.arc(xx, yy, 3, 0, Math.PI * 2);
-      ctx.fill();
-    });
-  });
-
-  // 범례
-  const legendX = padL, legendY = 12;
-  series.forEach((s, si) => {
-    const col = colors[si % colors.length];
-    ctx.fillStyle = col;
-    ctx.fillRect(legendX + si * 120, legendY - 8, 10, 10);
-    ctx.fillStyle = '#e8eeff';
-    ctx.font = 'bold 12px system-ui';
-    ctx.textAlign = 'left';
-    ctx.fillText(s.name, legendX + si * 120 + 14, legendY + 1);
-  });
-}
-
-// 평균 데이터 (Firestore에서 조회)
+// 학교별/전국 평균 데이터 조회 (Firestore에서)
 export async function getAverages(schoolName, roundLabel) {
   try {
     const { db } = await import('../services/firebase');
     const { doc, getDoc } = await import('firebase/firestore');
     
-    // 학교 코드 추출 (학교명 → 코드 변환)
+    // 학교 코드 추출
     const schoolCode = getSchoolCodeFromName(schoolName);
     
     // 전국 평균 조회
@@ -123,16 +47,16 @@ export async function getAverages(schoolName, roundLabel) {
     const schoolRef = doc(db, 'averages', roundLabel, 'data', `school_${schoolCode}`);
     const schoolSnap = await getDoc(schoolRef);
     
-    const nationalAvg = nationalSnap.exists() ? nationalSnap.data().avg : Math.round(340 * 0.60);
-    const schoolAvg = schoolSnap.exists() ? schoolSnap.data().avg : Math.round(340 * 0.62);
+    const nationalAvg = nationalSnap.exists() ? nationalSnap.data().avg : 204; // 340*0.6
+    const schoolAvg = schoolSnap.exists() ? schoolSnap.data().avg : 211; // 340*0.62
     
     return { nationalAvg, schoolAvg };
   } catch (error) {
     console.error('평균 조회 오류:', error);
     // 오류 시 기본값 반환
     return {
-      nationalAvg: Math.round(340 * 0.60), // 204
-      schoolAvg: Math.round(340 * 0.62)    // 211
+      nationalAvg: 204, // 340 * 0.6
+      schoolAvg: 211    // 340 * 0.62
     };
   }
 }
