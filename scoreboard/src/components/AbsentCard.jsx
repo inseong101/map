@@ -19,3 +19,4 @@ function AbsentCard({ label }) {
     </div>
   );
 }
+export default AbsentCard;
