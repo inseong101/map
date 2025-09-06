@@ -1,75 +1,65 @@
 // src/services/dataService.js
+import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
-import { doc, getDoc } from 'firebase/firestore';
 
-// 과목별 최대 점수 설정
-const SUBJECT_MAX = {
-  "간": 16, "심": 16, "비": 16, "폐": 16, "신": 16,
-  "침구": 48, "안이": 16, "부인": 16, "소아": 24, "외과": 16,
-  "한의": 8
+// 과목별 최대 점수
+export const SUBJECT_MAX = {
+  "간":16, "심":16, "비":16, "폐":16, "신":16,
+  "상한":16, "사상":16, "침구":48, "보건":20,
+  "외과":16, "신경":16, "안이비":16, "부인과":32, 
+  "소아":24, "예방":24, "생리":16, "본초":16
 };
 
-// 전체 과목 목록
-const ALL_SUBJECTS = ["간", "심", "비", "폐", "신", "침구", "안이", "부인", "소아", "외과", "한의"];
-
-// 총점
-const TOTAL_MAX = Object.values(SUBJECT_MAX).reduce((sum, val) => sum + val, 0);
-
-// 그룹 설정
-const GROUPS = [
-  {
-    id: "basic",
-    label: "기초과목",
-    subjects: ["간", "심", "비", "폐", "신"],
-    layoutChunks: [[1, "간"], [2, "심"], [3, "비"], [4, "폐"], [5, "신"]]
-  },
-  {
-    id: "clinical",
-    label: "임상과목",
-    subjects: ["침구", "안이", "부인", "소아", "외과"],
-    layoutChunks: [[1, "침구"], [2, "안이"], [3, "부인"], [4, "소아"], [5, "외과"]]
-  },
-  {
-    id: "prevention",
-    label: "예방과목",
-    subjects: ["한의"],
-    layoutChunks: [[1, "한의"]]
-  }
+// 그룹 정의
+export const GROUPS = [
+  { id: "그룹1", label: "그룹 1", subjects: ["간","심","비","폐","신","상한","사상"], layoutChunks: [5,2] },
+  { id: "그룹3", label: "그룹 3", subjects: ["침구"] },
+  { id: "그룹2", label: "그룹 2", subjects: ["보건"] },
+  { id: "그룹4", label: "그룹 4", subjects: ["외과","신경","안이비"] },
+  { id: "그룹5", label: "그룹 5", subjects: ["부인과","소아"] },
+  { id: "그룹6", label: "그룹 6", subjects: ["예방","생리","본초"] }
 ];
 
-// 교시별 과목 범위 설정
-const SESSION_SUBJECT_RANGES = {
+export const ALL_SUBJECTS = GROUPS.flatMap(g => g.subjects);
+export const TOTAL_MAX = ALL_SUBJECTS.reduce((a,n) => a + (SUBJECT_MAX[n] || 0), 0);
+
+// 라운드 레이블
+export const ROUND_LABELS = ["1차","2차","3차","4차","5차","6차","7차","8차"];
+
+// 교시별 문항번호 → 과목 매핑
+export const SESSION_SUBJECT_RANGES = {
   "1교시": [
-    { from: 1, to: 16, s: "간" },
+    { from: 1,  to: 16, s: "간" },
     { from: 17, to: 32, s: "심" },
     { from: 33, to: 48, s: "비" },
     { from: 49, to: 64, s: "폐" },
     { from: 65, to: 80, s: "신" }
   ],
   "2교시": [
-    { from: 1, to: 48, s: "침구" },
-    { from: 49, to: 64, s: "안이" },
-    { from: 65, to: 80, s: "부인" },
-    { from: 81, to: 100, s: "소아" }
+    { from: 1,  to: 16, s: "상한" },
+    { from: 17, to: 32, s: "사상" },
+    { from: 33, to: 80, s: "침구" },
+    { from: 81, to: 100, s: "보건" }
   ],
   "3교시": [
-    { from: 1, to: 16, s: "외과" },
-    { from: 17, to: 80, s: "기타" } // 필요시 추가 과목
+    { from: 1,  to: 16, s: "외과" },
+    { from: 17, to: 32, s: "신경" },
+    { from: 33, to: 48, s: "안이비" },
+    { from: 49, to: 80, s: "부인과" }
   ],
   "4교시": [
-    { from: 1, to: 8, s: "한의" },
-    { from: 9, to: 80, s: "기타" } // 필요시 추가 과목
+    { from: 1,  to: 24, s: "소아" },
+    { from: 25, to: 48, s: "예방" },
+    { from: 49, to: 64, s: "생리" },
+    { from: 65, to: 80, s: "본초" }
   ]
 };
 
-// 회차 라벨
-const ROUND_LABELS = ["1차", "2차", "3차", "4차", "5차"];
-
-// 학교 코드 매핑
+// 학수번호 → 학교명
 const SCHOOL_MAP = {
-  "01": "가천대", "02": "경희대", "03": "대구한", "04": "대전대",
-  "05": "동국대", "06": "동신대", "07": "동의대", "08": "부산대",
-  "09": "상지대", "10": "세명대", "11": "우석대", "12": "원광대"
+  "01":"가천대","02":"경희대","03":"대구한","04":"대전대",
+  "05":"동국대","06":"동신대","07":"동의대","08":"부산대",
+  "09":"상지대","10":"세명대","11":"우석대","12":"원광대"
 };
 
 export function getSchoolFromSid(sid) {
@@ -81,7 +71,8 @@ export function getSchoolFromSid(sid) {
 export async function fetchRoundData(sid, roundLabel) {
   try {
     // scores 컬렉션에서 먼저 시도
-    const scoresRef = doc(db, "scores", sid);
+    const sidStr = String(sid);
+    const scoresRef = doc(db, "scores", sidStr);
     const scoresSnap = await getDoc(scoresRef);
     
     if (scoresSnap.exists()) {
@@ -211,13 +202,3 @@ export async function discoverRoundsFor(sid) {
   
   return found;
 }
-
-// 상수들을 export
-export { 
-  SUBJECT_MAX, 
-  ALL_SUBJECTS, 
-  TOTAL_MAX, 
-  GROUPS, 
-  SESSION_SUBJECT_RANGES, 
-  ROUND_LABELS 
-};
