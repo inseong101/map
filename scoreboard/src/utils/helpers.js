@@ -106,11 +106,43 @@ export function drawLineChart(canvas, labels, series, maxValue) {
   });
 }
 
-// 평균 데이터 (임시)
+// 평균 데이터 (Firestore에서 조회)
 export async function getAverages(schoolName, roundLabel) {
-  // 실제로는 Firestore에서 가져와야 함
-  return {
-    nationalAvg: Math.round(340 * 0.60), // 204
-    schoolAvg: Math.round(340 * 0.62)    // 211
+  try {
+    const { db } = await import('../services/firebase');
+    const { doc, getDoc } = await import('firebase/firestore');
+    
+    // 학교 코드 추출 (학교명 → 코드 변환)
+    const schoolCode = getSchoolCodeFromName(schoolName);
+    
+    // 전국 평균 조회
+    const nationalRef = doc(db, 'averages', roundLabel, 'data', 'national');
+    const nationalSnap = await getDoc(nationalRef);
+    
+    // 학교 평균 조회
+    const schoolRef = doc(db, 'averages', roundLabel, 'data', `school_${schoolCode}`);
+    const schoolSnap = await getDoc(schoolRef);
+    
+    const nationalAvg = nationalSnap.exists() ? nationalSnap.data().avg : Math.round(340 * 0.60);
+    const schoolAvg = schoolSnap.exists() ? schoolSnap.data().avg : Math.round(340 * 0.62);
+    
+    return { nationalAvg, schoolAvg };
+  } catch (error) {
+    console.error('평균 조회 오류:', error);
+    // 오류 시 기본값 반환
+    return {
+      nationalAvg: Math.round(340 * 0.60), // 204
+      schoolAvg: Math.round(340 * 0.62)    // 211
+    };
+  }
+}
+
+// 학교명 → 학교코드 변환
+function getSchoolCodeFromName(schoolName) {
+  const schoolMap = {
+    "가천대": "01", "경희대": "02", "대구한": "03", "대전대": "04",
+    "동국대": "05", "동신대": "06", "동의대": "07", "부산대": "08",
+    "상지대": "09", "세명대": "10", "우석대": "11", "원광대": "12"
   };
+  return schoolMap[schoolName] || "01";
 }
