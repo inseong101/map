@@ -1,4 +1,4 @@
-// src/utils/helpers.js - 정리된 버전
+// src/utils/helpers.js - 상위 퍼센트 계산 수정
 
 // 숫자 포맷팅
 export function fmt(n) {
@@ -44,11 +44,11 @@ export function drawLineChart(canvas, labels, series, maxValue) {
   const plotH = H - padT - padB;
   const n = labels.length;
   
-  const x = (i) => padL + (n <= 1 ? plotW / 2 : (i * (plotW / (n - 1))));
-  const y = (v) => padT + (plotH * (1 - (v / Math.max(1, maxValue || 1))));
+  const x = (i) => padL + (n <= 1 ? plotW / 2 : (i / (n - 1)) * plotW);
+  const y = (val) => padT + plotH - (val / maxValue) * plotH;
 
   // 축 그리기
-  ctx.strokeStyle = 'rgba(255,255,255,.25)';
+  ctx.strokeStyle = '#333';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(padL, padT);
@@ -57,91 +57,50 @@ export function drawLineChart(canvas, labels, series, maxValue) {
   ctx.stroke();
 
   // 라벨
-  ctx.fillStyle = 'rgba(255,255,255,.8)';
-  ctx.font = '12px system-ui';
+  ctx.fillStyle = '#666';
+  ctx.font = '12px sans-serif';
   ctx.textAlign = 'center';
-  labels.forEach((lb, i) => ctx.fillText(lb, x(i), padT + plotH + 18));
+  for (let i = 0; i < labels.length; i++) {
+    ctx.fillText(labels[i], x(i), padT + plotH + 18);
+  }
 
-  // 시리즈 그리기
-  const colors = ['#7ea2ff', '#4cc9ff', '#22c55e'];
-  series.forEach((s, si) => {
-    const col = colors[si % colors.length];
-    
-    // 선 그리기
-    ctx.strokeStyle = col;
+  // 시리즈별 라인
+  const colors = ['#007bff', '#28a745', '#dc3545', '#ffc107'];
+  series.forEach((data, seriesIdx) => {
+    ctx.strokeStyle = colors[seriesIdx % colors.length];
     ctx.lineWidth = 2;
     ctx.beginPath();
-    s.values.forEach((v, i) => {
-      if (v == null) return;
-      const xx = x(i), yy = y(v);
-      if (i === 0 || s.values[i - 1] == null) {
-        ctx.moveTo(xx, yy);
-      } else {
-        ctx.lineTo(xx, yy);
-      }
-    });
+    for (let i = 0; i < data.length; i++) {
+      const cx = x(i);
+      const cy = y(data[i]);
+      if (i === 0) ctx.moveTo(cx, cy);
+      else ctx.lineTo(cx, cy);
+    }
     ctx.stroke();
-    
-    // 포인트 그리기
-    ctx.fillStyle = col;
-    s.values.forEach((v, i) => {
-      if (v == null) return;
-      const xx = x(i), yy = y(v);
-      ctx.beginPath();
-      ctx.arc(xx, yy, 3, 0, Math.PI * 2);
-      ctx.fill();
-    });
-  });
-
-  // 범례
-  const legendX = padL, legendY = 12;
-  series.forEach((s, si) => {
-    const col = colors[si % colors.length];
-    ctx.fillStyle = col;
-    ctx.fillRect(legendX + si * 120, legendY - 8, 10, 10);
-    ctx.fillStyle = '#e8eeff';
-    ctx.font = 'bold 12px system-ui';
-    ctx.textAlign = 'left';
-    ctx.fillText(s.name, legendX + si * 120 + 14, legendY + 1);
   });
 }
 
-// 유효한 학수번호인지 확인 (01~12로 시작하는 6자리)
-export function isValidStudentId(sid) {
+// 유효한 학번 체크 (01~12로 시작하는 학번만)
+function isValidStudentId(sid) {
   if (!sid || typeof sid !== 'string') return false;
-  if (sid.length !== 6) return false;
-  
   const schoolCode = sid.slice(0, 2);
   const validCodes = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
   return validCodes.includes(schoolCode);
 }
 
-// 학교명 → 학교코드 변환
-export function getSchoolCodeFromName(schoolName) {
-  const schoolMap = {
-    "가천대": "01", "경희대": "02", "대구한": "03", "대전대": "04",
-    "동국대": "05", "동신대": "06", "동의대": "07", "부산대": "08",
-    "상지대": "09", "세명대": "10", "우석대": "11", "원광대": "12"
-  };
-  return schoolMap[schoolName] || "01";
-}
-
-// 학교별/전국 평균 데이터 조회 (Firestore에서)
+// 평균 점수 조회
 export async function getAverages(schoolName, roundLabel) {
   try {
     const { db } = await import('../services/firebase');
     const { doc, getDoc } = await import('firebase/firestore');
     
-    // 학교 코드 추출
-    const schoolCode = getSchoolCodeFromName(schoolName);
+    const nationalRef = doc(db, 'averages', `${roundLabel}_national`);
+    const schoolRef = doc(db, 'averages', `${roundLabel}_${getSchoolCodeFromName(schoolName)}`);
     
-    // 전국 평균 조회
-    const nationalRef = doc(db, 'averages', roundLabel, 'data', 'national');
-    const nationalSnap = await getDoc(nationalRef);
-    
-    // 학교 평균 조회
-    const schoolRef = doc(db, 'averages', roundLabel, 'data', `school_${schoolCode}`);
-    const schoolSnap = await getDoc(schoolRef);
+    const [nationalSnap, schoolSnap] = await Promise.all([
+      getDoc(nationalRef),
+      getDoc(schoolRef)
+    ]);
     
     const nationalAvg = nationalSnap.exists() ? nationalSnap.data().avg : 204;
     const schoolAvg = schoolSnap.exists() ? schoolSnap.data().avg : 211;
@@ -154,6 +113,27 @@ export async function getAverages(schoolName, roundLabel) {
       schoolAvg: 211
     };
   }
+}
+
+// ✅ 수정된 상위 퍼센트 계산 함수
+export function calculatePercentile(studentScore, allScores) {
+  if (!Array.isArray(allScores) || allScores.length === 0) {
+    return null;
+  }
+  
+  if (studentScore == null || isNaN(studentScore)) {
+    return null;
+  }
+  
+  // 자신보다 점수가 낮은 사람의 수
+  const lowerCount = allScores.filter(score => score < studentScore).length;
+  
+  // 상위 퍼센트 계산
+  // 점수가 높을수록 1%에 가까워짐 (상위권), 낮을수록 100%에 가까워짐 (하위권)
+  const percentile = Math.round((lowerCount / allScores.length) * 100);
+  
+  // 100 - percentile이 상위 퍼센트
+  return 100 - percentile;
 }
 
 // 실제 점수 분포 데이터 조회
@@ -223,124 +203,12 @@ export async function getRealScoreDistribution(roundLabel) {
   }
 }
 
-// 미응시자 통계 분석 함수
-export async function getAbsenceStatistics(roundLabel) {
-  try {
-    const { db } = await import('../services/firebase');
-    const { collection, getDocs } = await import('firebase/firestore');
-    
-    const sessions = ['1교시', '2교시', '3교시', '4교시'];
-    const studentData = {}; // sid -> { attendedSessions: [], hasValidResponses: boolean }
-    const validStudentIds = new Set(); // 유효한 학수번호 추적
-    
-    // 모든 교시 데이터 수집
-    for (const session of sessions) {
-      const sessionRef = collection(db, 'scores_raw', roundLabel, session);
-      const snapshot = await getDocs(sessionRef);
-      
-      snapshot.forEach(doc => {
-        const sid = doc.id;
-        const data = doc.data();
-        
-        // 유효한 학수번호만 처리
-        if (!isValidStudentId(sid)) return;
-        
-        validStudentIds.add(sid);
-        
-        if (!studentData[sid]) {
-          studentData[sid] = {
-            attendedSessions: [],
-            hasValidResponses: false,
-            totalWrong: 0
-          };
-        }
-        
-        // 응답 데이터 확인
-        const responses = data.responses || {};
-        const wrongQuestions = data.wrongQuestions || data.wrong || [];
-        
-        // 1~5 범위의 유효한 응답이 있는지 확인
-        const validResponses = Object.values(responses).filter(answer => 
-          Number.isInteger(answer) && answer >= 1 && answer <= 5
-        );
-        
-        if (validResponses.length > 0) {
-          studentData[sid].attendedSessions.push(session);
-          studentData[sid].hasValidResponses = true;
-          
-          // 오답 수 누적
-          if (Array.isArray(wrongQuestions)) {
-            studentData[sid].totalWrong += wrongQuestions.length;
-          }
-        }
-      });
-    }
-    
-    // 120명 전체 기준으로 분류
-    const totalExpected = 120; // 시험 대상자 총 120명
-    const totalValidStudents = validStudentIds.size;
-    
-    let fullAttendees = 0;      // 4교시 모두 응시
-    let partialAttendees = 0;   // 1~3교시만 응시
-    let fullAbsentees = 0;      // 전체 미응시
-    
-    // 유효한 학생 데이터 분석
-    Object.values(studentData).forEach(student => {
-      const sessionCount = student.attendedSessions.length;
-      
-      if (sessionCount === 4) {
-        fullAttendees++;
-      } else if (sessionCount > 0) {
-        partialAttendees++;
-      } else {
-        fullAbsentees++;
-      }
-    });
-    
-    // 120명에서 누락된 학생들은 전체 미응시로 간주
-    const missingStudents = totalExpected - totalValidStudents;
-    fullAbsentees += missingStudents;
-    
-    return {
-      totalExpected,           // 120
-      totalValidStudents,      // 실제 데이터 있는 학생 수
-      fullAttendees,          // 4교시 모두 응시
-      partialAttendees,       // 1~3교시만 응시  
-      fullAbsentees,          // 전체 미응시
-      attendees: fullAttendees + partialAttendees, // 총 응시자
-      
-      // 상세 정보
-      studentData
-    };
-    
-  } catch (error) {
-    console.error('미응시자 통계 조회 오류:', error);
-    return {
-      totalExpected: 120,
-      totalValidStudents: 0,
-      fullAttendees: 0,
-      partialAttendees: 0,
-      fullAbsentees: 120,
-      attendees: 0,
-      studentData: {}
-    };
-  }
-}
-
-// 학생 개별 미응시 상태 확인
-export function detectStudentAbsenceStatus(data) {
-  if (!data || !data.wrongBySession) return { isNormal: true };
-  
-  const sessions = ["1교시", "2교시", "3교시", "4교시"];
-  const attendedSessions = sessions.filter(session => 
-    data.wrongBySession[session] && Array.isArray(data.wrongBySession[session])
-  );
-  
-  if (attendedSessions.length === 0) {
-    return { isFullyAbsent: true };
-  } else if (attendedSessions.length < 4) {
-    return { isPartiallyAbsent: true, attendedCount: attendedSessions.length };
-  } else {
-    return { isNormal: true };
-  }
+// 학교명 → 학교코드 변환
+function getSchoolCodeFromName(schoolName) {
+  const schoolMap = {
+    "가천대": "01", "경희대": "02", "대구한": "03", "대전대": "04",
+    "동국대": "05", "동신대": "06", "동의대": "07", "부산대": "08",
+    "상지대": "09", "세명대": "10", "우석대": "11", "원광대": "12"
+  };
+  return schoolMap[schoolName] || "01";
 }
