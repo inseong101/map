@@ -1,6 +1,7 @@
 // src/components/RoundCard.jsx
 import React, { useState } from 'react';
 import { fmt, pct, pill, chunk } from '../utils/helpers';
+import { SUBJECT_MAX } from '../services/dataService';
 import WrongAnswerPanel from './WrongAnswerPanel';
 
 function RoundCard({ label, data, sid }) {
@@ -27,9 +28,7 @@ function RoundCard({ label, data, sid }) {
           <div key={rowIndex} className="subj-row">
             {row.map(subject => {
               const subjectScore = data.subjectScores[subject] || 0;
-              const subjectMax = data.subjectScores ? 
-                Object.keys(data.subjectScores).includes(subject) ? 
-                require('../services/dataService').SUBJECT_MAX[subject] : 0 : 0;
+              const subjectMax = SUBJECT_MAX[subject] || 0;
               
               return (
                 <span key={subject} className="subj-chip">
@@ -44,7 +43,7 @@ function RoundCard({ label, data, sid }) {
           <div className="subj-row">
             {subjects.map(subject => {
               const subjectScore = data.subjectScores[subject] || 0;
-              const subjectMax = require('../services/dataService').SUBJECT_MAX[subject] || 0;
+              const subjectMax = SUBJECT_MAX[subject] || 0;
               
               return (
                 <span key={subject} className="subj-chip">
