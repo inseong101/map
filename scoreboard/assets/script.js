@@ -538,15 +538,25 @@ function renderRound(hostSel, title, round){
 }
 
 /* -------------------- 11) 전체 렌더 -------------------- */
-async function renderResultDynamic(sid){
+async function renderResultDynamicFixed(sid){
   const grid = $("#cards-grid");
+  const resultView = $("#view-result");
+  
+  // 기존 내용 초기화
   grid.innerHTML = "";
-
+  
   const school = getSchoolFromSid(sid);
   const rounds = await discoverRoundsFor(sid);
+  
+  console.log("렌더링 시작:", { sid, school, roundsCount: rounds.length });
+  
   if (rounds.length === 0){
     const msg = document.createElement('div');
-    msg.innerHTML = `<div class="card" style="margin-bottom:12px"><div class="small" style="opacity:.8">조회 가능한 회차 데이터가 없습니다.</div></div>`;
+    msg.innerHTML = `
+      <div class="card" style="margin-bottom:12px">
+        <div class="small" style="opacity:.8">조회 가능한 회차 데이터가 없습니다.</div>
+      </div>
+    `;
     grid.appendChild(msg);
     return;
   }
