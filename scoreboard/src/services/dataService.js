@@ -1,4 +1,4 @@
-// src/services/dataService.js - 기존 로직 거의 그대로, 최소 수정만
+// src/services/dataService.js
 import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -67,7 +67,7 @@ export function getSchoolFromSid(sid) {
   return SCHOOL_MAP[p2] || "미상";
 }
 
-// Firestore 데이터 읽기 - 🎯 기존 로직 100% 보존
+// Firestore 데이터 읽기
 export async function fetchRoundData(sid, roundLabel) {
   try {
     // scores 컬렉션에서 먼저 시도
@@ -111,7 +111,7 @@ export async function fetchRoundData(sid, roundLabel) {
   }
 }
 
-// 오답을 과목별 점수로 변환 - 🎯 기존 로직 100% 보존
+// 오답을 과목별 점수로 변환
 function convertWrongToScores(wrongBySession) {
   const subjectScores = {};
   
@@ -170,7 +170,7 @@ function convertWrongToScores(wrongBySession) {
   };
 }
 
-// 회차 자동 탐색 - 🎯 기존 로직 100% 보존
+// 회차 자동 탐색
 export async function discoverRoundsFor(sid) {
   const found = [];
   

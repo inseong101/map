@@ -30,46 +30,6 @@ export function chunk(arr, sizes) {
   return out;
 }
 
-// 🎯 미응시/중도포기 상태 감지 함수 (정확한 기준 적용)
-export function detectStudentAbsenceStatus(wrongBySession) {
-  if (!wrongBySession || typeof wrongBySession !== 'object') {
-    return {
-      isNoAttendance: true,
-      isPartiallyAbsent: false,
-      missedSessions: ['1교시', '2교시', '3교시', '4교시'],
-      attendedCount: 0
-    };
-  }
-
-  const allSessions = ['1교시', '2교시', '3교시', '4교시'];
-  const attendedSessions = [];
-  const missedSessions = [];
-
-  allSessions.forEach(session => {
-    // 🎯 해당 교시에 데이터가 있으면 응시한 것으로 판단
-    // (빈 배열이어도 응시한 것 - 모든 문제를 다 맞춘 경우)
-    if (wrongBySession.hasOwnProperty(session) && Array.isArray(wrongBySession[session])) {
-      attendedSessions.push(session);
-    } else {
-      missedSessions.push(session);
-    }
-  });
-
-  const attendedCount = attendedSessions.length;
-  
-  // 🎯 정확한 분류 기준
-  const isNoAttendance = attendedCount === 0;        // 모든 교시 데이터 없음
-  const isPartiallyAbsent = attendedCount > 0 && attendedCount < 4; // 일부 교시만 데이터 있음
-  // attendedCount === 4 이면 유효응시자 (개별 문항 누락은 상관없음)
-
-  return {
-    isNoAttendance,
-    isPartiallyAbsent,
-    missedSessions,
-    attendedCount
-  };
-}
-
 // 캔버스에 라인 차트 그리기
 export function drawLineChart(canvas, labels, series, maxValue) {
   if (!canvas) return;
@@ -147,7 +107,7 @@ export function drawLineChart(canvas, labels, series, maxValue) {
 }
 
 // 유효한 학수번호인지 확인 (01~12로 시작하는 6자리)
-export function isValidStudentId(sid) {
+function isValidStudentId(sid) {
   if (!sid || typeof sid !== 'string') return false;
   if (sid.length !== 6) return false;
   
@@ -174,7 +134,7 @@ export async function getAverages(schoolName, roundLabel) {
     const schoolSnap = await getDoc(schoolRef);
     
     const nationalAvg = nationalSnap.exists() ? nationalSnap.data().avg : 204;
-    const schoolAvg = schoolSnap.exists() ? schoolSnap.data().avg : 204;
+    const schoolAvg = schoolSnap.exists() ? schoolSnap.data().avg : 211;
     
     return { nationalAvg, schoolAvg };
   } catch (error) {
