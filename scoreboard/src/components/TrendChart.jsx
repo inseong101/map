@@ -1,6 +1,6 @@
-// src/components/TrendChart.jsx - 모든 기능 복원
+// src/components/TrendChart.jsx - 미응시자 정보 표시 추가
 import React, { useState, useEffect, useRef } from 'react';
-import { getAverages, getRealScoreDistribution } from '../utils/helpers';
+import { getAverages, getRealScoreDistribution, getAbsenceStatistics } from '../utils/helpers';
 
 // 학교명 → 코드 변환 (helpers의 bySchool 키와 일치시켜야 함)
 const nameToCode = (name) => ({
@@ -52,6 +52,10 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
 
         // 실제 분포
         const dist = await getRealScoreDistribution(label);
+        
+        // 미응시자 통계 추가
+        const absenceStats = await getAbsenceStatistics(label);
+        
         const natScores = Array.isArray(dist?.national) ? dist.national : [];
         const schScores = dist?.bySchool && Array.isArray(dist.bySchool[schCode])
           ? dist.bySchool[schCode]
@@ -68,7 +72,8 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
           nationalBins: nat,
           schoolBins: sch,
           totalNational: natScores.length,
-          totalSchool: schScores.length
+          totalSchool: schScores.length,
+          absenceStats // 미응시자 통계 추가
         });
       }
 
@@ -137,9 +142,21 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
     const chartH = H - padding.top - padding.bottom;
 
     // 타이틀/평균
-    const title = isSchoolMode
-      ? `${school} 분포 (총 ${cur.totalSchool}명)`
-      : `전국 분포 (총 ${cur.totalNational}명)`;
+    const createTitle = () => {
+      if (isSchoolMode) {
+        return `${school} 분포 (총 ${cur.totalSchool}명)`;
+      } else {
+        // 전국 모드에서 미응시자 정보 표시
+        const stats = cur.absenceStats;
+        if (stats) {
+          return `전국 분포 (총 ${stats.totalExpected}명, 응시자 ${stats.attendees}명, 미응시자 ${stats.fullAbsentees}명, 일부미응시자 ${stats.partialAttendees}명)`;
+        } else {
+          return `전국 분포 (총 ${cur.totalNational}명)`; // fallback
+        }
+      }
+    };
+
+    const title = createTitle();
     const avg = isSchoolMode ? cur.schoolAvg : cur.nationalAvg;
 
     // 제목
@@ -226,154 +243,104 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
       }
     }
 
-    // 축 제목
-    ctx.textAlign = 'center';
-    ctx.font = '11px system-ui';
-    ctx.fillText('점수', padding.left + chartW / 2, padding.top + chartH + 36);
-
-    ctx.save();
-    ctx.translate(16, padding.top + chartH / 2);
-    ctx.rotate(-Math.PI / 2);
-    ctx.fillText('학생 수', 0, 0);
-    ctx.restore();
-
     return yMax;
   }
 
-  // 보기 좋은(y nice) 스텝 만들기 (1-2-5 스케일)
-  function makeNiceStep(raw) {
-    if (raw <= 1) return 1;
-    const pow = Math.floor(Math.log10(raw));
-    const base = Math.pow(10, pow);
-    const unit = raw / base; // 1~10
-
-    if (unit <= 1) return base * 1;
-    if (unit <= 2) return base * 2;
-    if (unit <= 5) return base * 5;
-    return base * 10;
+  // 예쁜 스텝 계산 (1, 2, 5의 배수로 올림)
+  function makeNiceStep(rawStep) {
+    const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    const normalized = rawStep / magnitude;
+    
+    if (normalized <= 1) return magnitude;
+    if (normalized <= 2) return 2 * magnitude;
+    if (normalized <= 5) return 5 * magnitude;
+    return 10 * magnitude;
   }
 
-  // 막대 + 데이터 레이블 (yMax 공유) - 호버시에만 레이블 표시
-  function drawBarsWithLabels(ctx, padding, chartW, chartH, bins, primaryColor, yMax) {
+  // 막대 + 본인 위치 표시
+  function drawBarsWithLabels(ctx, padding, chartW, chartH, bins, color, yMax) {
     const barCount = bins.length;
-    const binWidth = chartW / barCount;
+    const barWidth = chartW / barCount;
 
-    for (let i = 0; i < barCount; i++) {
-      const b = bins[i];
-      const x = padding.left + i * binWidth;
-      const h = yMax > 0 ? (b.count / yMax) * chartH : 0;
-      const y = padding.top + chartH - h;
+    bins.forEach((bin, i) => {
+      const x = padding.left + i * barWidth;
+      const barHeight = (bin.count / yMax) * chartH;
+      const y = padding.top + chartH - barHeight;
 
-      // 본인 bin 강조: 빨강
-      const fill = b.isStudent ? '#ef4444' : `${primaryColor}CC`;
+      // 막대
+      ctx.fillStyle = bin.isStudent ? '#ef4444' : color;
+      ctx.fillRect(x + 1, y, barWidth - 2, barHeight);
 
-      if (b.count > 0) {
-        ctx.fillStyle = fill;
-        const minH = Math.max(h, 1); // 최소 1px만 보정
-        const drawY = padding.top + chartH - minH;
-        ctx.fillRect(x + 1, drawY, binWidth - 2, minH);
-
-        if (b.isStudent) {
-          ctx.strokeStyle = '#dc2626';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(x + 1, drawY, binWidth - 2, minH);
-        }
+      // 본인 위치 강조 (빨간 테두리)
+      if (bin.isStudent) {
+        ctx.strokeStyle = '#dc2626';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + 1, y, barWidth - 2, barHeight);
       }
-    }
-
-    // 마우스 호버 이벤트 처리 (캔버스에 이벤트 리스너 추가)
-    const canvas = canvasRef.current;
-    if (canvas) {
-      canvas.onmousemove = (e) => {
-        const rect = canvas.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        
-        // 어떤 bin 위에 있는지 계산
-        const binIndex = Math.floor((mouseX - padding.left) / binWidth);
-        
-        if (binIndex >= 0 && binIndex < bins.length) {
-          const b = bins[binIndex];
-          
-          // 기존 캔버스 다시 그리기
-          drawCurrent(bundle);
-          
-          // 호버된 bin의 레이블만 표시
-          if (b.count > 0) {
-            const x = padding.left + binIndex * binWidth;
-            const h = yMax > 0 ? (b.count / yMax) * chartH : 0;
-            const y = padding.top + chartH - h;
-            
-            const pctText = `${b.percentage.toFixed(1)}%`;
-            const cx = x + binWidth / 2;
-            const ty = y - 6;
-
-            ctx.fillStyle = '#d6def7';
-            ctx.font = '10px system-ui';
-            ctx.textAlign = 'center';
-
-            ctx.fillText(`${b.count}명`, cx, ty);
-            ctx.fillText(`(${pctText})`, cx, ty + 12);
-          }
-        }
-      };
-      
-      canvas.onmouseleave = () => {
-        // 마우스가 벗어나면 레이블 제거
-        drawCurrent(bundle);
-      };
-    }
+    });
   }
 
-  // 합격선
-  function drawCutoff(ctx, padding, chartW, chartH, score) {
-    const x = padding.left + ((score - X_MIN) / (X_MAX - X_MIN)) * chartW;
+  // 합격선 (204점) 그리기
+  function drawCutoff(ctx, padding, chartW, chartH, cutoffScore) {
+    const cutoffX = padding.left + ((cutoffScore - X_MIN) / (X_MAX - X_MIN)) * chartW;
+    
     ctx.strokeStyle = '#f59e0b';
     ctx.lineWidth = 2;
-    ctx.setLineDash([4, 4]);
+    ctx.setLineDash([5, 5]);
     ctx.beginPath();
-    ctx.moveTo(x, padding.top);
-    ctx.lineTo(x, padding.top + chartH);
+    ctx.moveTo(cutoffX, padding.top);
+    ctx.lineTo(cutoffX, padding.top + chartH);
     ctx.stroke();
     ctx.setLineDash([]);
+
+    // 라벨
+    ctx.fillStyle = '#f59e0b';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('합격선', cutoffX + 4, padding.top + 14);
   }
 
-  // 우측 상단 컨트롤(회차 + 토글)
+  // 상단 컨트롤
   const TopControls = () => (
     <div style={{
       display: 'flex',
-      justifyContent: 'flex-end',
+      justifyContent: 'space-between',
       alignItems: 'center',
-      gap: '8px',
-      marginBottom: 12,
-      flexWrap: 'wrap'
+      marginBottom: 16,
+      flexWrap: 'wrap',
+      gap: 12
     }}>
+      {/* 회차 선택 */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {rounds.map((round, idx) => (
+        {bundle.map((item, idx) => (
           <button
-            key={round.label ?? idx}
+            key={item.label}
             onClick={() => setSelectedRoundIdx(idx)}
             style={{
-              padding: '8px 12px',
-              borderRadius: 8,
-              border: selectedRoundIdx === idx ? '2px solid var(--primary)' : '1px solid var(--line)',
-              background: selectedRoundIdx === idx ? 'var(--primary)' : 'var(--surface)',
+              padding: '6px 12px',
+              fontSize: 12,
+              border: '1px solid var(--line)',
+              borderRadius: 6,
+              background: selectedRoundIdx === idx ? 'var(--accent)' : 'transparent',
               color: selectedRoundIdx === idx ? '#fff' : 'var(--ink)',
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: 'pointer',
-              minWidth: 56
+              cursor: 'pointer'
             }}
-            title={round.label}
           >
-            {round.label}
+            {item.label}
           </button>
         ))}
       </div>
 
-      {/* 토글: 전국 <-> 학교 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 12 }}>
+      {/* 전국/학교 토글 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ fontSize: 12, color: 'var(--muted)' }}>전국</span>
-        <label style={{ position: 'relative', display: 'inline-block', width: 46, height: 24 }}>
+        <label style={{
+          position: 'relative',
+          display: 'inline-block',
+          width: 44,
+          height: 24,
+          cursor: 'pointer'
+        }}>
           <input
             type="checkbox"
             checked={isSchoolMode}
@@ -383,8 +350,10 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
           <span
             style={{
               position: 'absolute',
-              inset: 0,
-              cursor: 'pointer',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
               backgroundColor: isSchoolMode ? '#22c55e55' : '#7ea2ff55',
               transition: '.2s',
               borderRadius: 24
