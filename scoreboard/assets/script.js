@@ -19,7 +19,7 @@ const GROUPS = [
   { id: "그룹2", label: "그룹 2", subjects: ["보건"], span: 12 },
   { id: "그룹4", label: "그룹 4", subjects: ["외과","신경","안이비"], span: 12 },
   { id: "그룹5", label: "그룹 5", subjects: ["부인과","소아"], span: 12 },
-  { id: "그룹6", label: "그룹 6", subjects: ["예방","생리","본초"], span: 12 },
+  { id: "그룹6", label: "그룹 6", subjects: ["예방","생리","본초"], span: 12 }
 ];
 
 const ALL_SUBJECTS = GROUPS.flatMap(g => g.subjects);
@@ -31,7 +31,12 @@ const SCHOOL_MAP = {
   "05":"동국대","06":"동신대","07":"동의대","08":"부산대",
   "09":"상지대","10":"세명대","11":"우석대","12":"원광대"
 };
-function getSchoolFromSid(sid){ const p2 = String(sid||"").slice(0,2); return SCHOOL_MAP[p2] || "미상"; }
+
+function getSchoolFromSid(sid){ 
+  const p2 = String(sid||"").slice(0,2); 
+  return SCHOOL_MAP[p2] || "미상"; 
+}
+
 const ROUND_LABELS = ["1차","2차","3차","4차","5차","6차","7차","8차"];
 
 // 교시별 문항번호 → 과목 매핑
@@ -47,7 +52,7 @@ const SESSION_SUBJECT_RANGES = {
     { from: 1,  to: 16, s: "상한" },
     { from: 17, to: 32, s: "사상" },
     { from: 33, to: 80, s: "침구" },
-    { from: 81, to: 100, s: "보건" },
+    { from: 81, to: 100, s: "보건" }
   ],
   "3교시": [
     { from: 1,  to: 16, s: "외과" },
@@ -60,7 +65,7 @@ const SESSION_SUBJECT_RANGES = {
     { from: 25, to: 48, s: "예방" },
     { from: 49, to: 64, s: "생리" },
     { from: 65, to: 80, s: "본초" }
-  ],
+  ]
 };
 
 /* -------------------- 1) 평균치(임시 더미) -------------------- */
@@ -73,6 +78,7 @@ const SHOW_TREND_CARD = true;
 
 /* -------------------- 2) 오프라인 인덱스 -------------------- */
 window.SCORE_DATA = window.SCORE_DATA || {};
+
 (function buildIndex(){
   const idx = {};
   for (const k of Object.keys(window.SCORE_DATA)) {
@@ -81,6 +87,7 @@ window.SCORE_DATA = window.SCORE_DATA || {};
   }
   window.__SCORE_INDEX__ = idx;
 })();
+
 function getStudentById(id6){
   return (window.__SCORE_INDEX__ && window.__SCORE_INDEX__[id6]) || window.SCORE_DATA[id6] || null;
 }
@@ -93,11 +100,14 @@ function pct(score, max){ const s=+score||0, m=+max||0; return m<=0 ? 0 : Math.r
 function pill(text, type){ const cls = type==='ok'?'pill green':(type==='warn'?'pill warn':'pill red'); return `<span class="${cls}">${text}</span>`; }
 function showError(msg){ const e=$("#error"); if(!e) return; e.textContent=msg; e.classList.remove("hidden"); }
 function hideError(){ const e=$("#error"); if(!e) return; e.textContent=""; e.classList.add("hidden"); }
+
 function pickKey(obj, candidates){
   if (!obj || typeof obj !== "object") return null;
   for (const key of candidates){ if (key in obj) return key; }
   const map = Object.keys(obj).reduce((acc,k)=>{
-    const norm = String(k).toLowerCase().replace(/[\s_]/g,''); acc[norm] = k; return acc;
+    const norm = String(k).toLowerCase().replace(/[\s_]/g,''); 
+    acc[norm] = k; 
+    return acc;
   }, {});
   for (const key of candidates){
     const norm = String(key).toLowerCase().replace(/[\s_]/g,'');
@@ -171,6 +181,7 @@ function getSubjectScores(round){
 function getDb(){
   return window.firebaseDb || window.db || window.__db || null;
 }
+
 function resolveScoresRootName(){
   if (window.__SCORES_ROOT_NAME__) return window.__SCORES_ROOT_NAME__;
   return 'scores_raw';
@@ -237,165 +248,6 @@ async function discoverRoundsFor(sid){
       if (!r) continue;
       const ok = (typeof r.total_correct === 'number' && r.total_correct > 0) || (()=>{
         const norm = (window.normalizeRound?.(r)) || r;
-        const subjects = getSubjectScores(norm);
-        const sum = ALL_SUBJECTS.reduce((a,n)=>a+(subjects[n]?.score||0),0);
-        return sum > 0;
-      })();
-      if (ok) found.push({ label, raw:r });
-    } catch (_) {}
-  }
-  return found;
-}
-
-/* -------------------- 12) 폼/라우팅 -------------------- */
-function goHome(){
-  $("#view-result")?.classList.add("hidden");
-  $("#view-home")?.classList.remove("hidden");
-  $("#sid")?.focus();
-}
-
-async function lookupStudent(e){
-  e?.preventDefault?.();
-  hideError();
-  const input = $("#sid");
-  const id = (input?.value || "").replace(/\D/g,"").slice(0,6);
-
-  if(id.length !== 6){
-    showError("학수번호는 숫자 6자리여야 합니다.");
-    input?.focus();
-    return false;
-  }
-
-  try {
-    console.log('lookupStudent 호출, renderResultDynamic 존재?', typeof renderResultDynamic);
-    await renderResultDynamic(id);
-    $("#view-home")?.classList.add("hidden");
-    $("#view-result")?.classList.remove("hidden");
-  } catch (err){
-    console.error(err);
-    showError("존재하지 않는 학수번호거나 미응시자입니다.");
-  }
-  return false;
-}
-
-/* -------------------- 13) 초기화 & 전역 -------------------- */
-function initApp(){
-  (function injectMinorSpacing(){
-    const css = `
-      #cards-grid { display:grid; gap:14px; }
-      .flip-card { margin:0; }
-      .accordion .item { margin-bottom: 6px; }
-      .accordion .acc-btn{ width:100%; display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--line); border-radius:10px; background:var(--surface-1); font-weight:700; }
-      .accordion .acc-btn .rotate{ transition:.2s transform ease; }
-      .accordion .acc-btn.open .rotate{ transform: rotate(90deg); }
-      .accordion .panel{ overflow:hidden; max-height:0; transition:max-height .25s ease; }
-      .qgrid{ display:flex; flex-wrap:wrap; gap:6px; }
-      .qcell{ padding:3px 8px; border-radius:999px; border:1px solid var(--line); font-weight:700; }
-      .qcell.bad{ background:rgba(239,68,68,.12); border-color:rgba(239,68,68,.55); }
-      .group-grid{ display:grid; grid-template-columns:repeat(12,1fr); gap:12px; }
-      .group-box{ border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--surface-2) }
-      .group-box.ok{ background:rgba(34,197,94,.12); border-color:rgba(34,197,94,.55) }
-      .group-box.fail{ background:rgba(239,68,68,.12); border-color:rgba(239,68,68,.55) }
-      .subj-row{ display:flex; flex-wrap:wrap; gap:6px 10px; margin-top:6px }
-      .subj-chip{ padding:4px 8px; border:1px solid var(--line); border-radius:999px; font-weight:800 }
-      .subj-chip .muted{ opacity:.7; font-weight:600 }
-      .cutline{ left:60% }
-    `;
-    const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
-  })();
-
-  const $sid = $("#sid");
-  if ($sid) {
-    $sid.addEventListener('input', () => {
-      $sid.value = ($sid.value || '').replace(/\D/g, '').slice(0, 6);
-    });
-    $sid.setAttribute('enterkeyhint', 'done');
-  }
-
-  const form = $("#lookup-form");
-  if (form) form.addEventListener('submit', lookupStudent);
-
-  const p = new URLSearchParams(location.search);
-  const sid = p.get("sid") || p.get("id");
-  if (sid && /^\d{6}$/.test(sid)) {
-    if ($sid) $sid.value = sid;
-    form?.dispatchEvent(new Event("submit", {cancelable:true}));
-  }
-}
-
-document.addEventListener('DOMContentLoaded', initApp);
-
-// 전역 노출
-window.goHome = goHome;
-window.initApp = initApp;
-window.normalizeRound = normalizeRound;
-window.renderResultDynamic = renderResultDynamic;
-window.__SUBJECT_TOTALS = SUBJECT_MAX;
-window.__GROUPS_DEF = GROUPS;
-
-/* -------------------- 14) Flip 높이 동기화 (앞면 기준) -------------------- */
-function measureFaceHeight(card, faceEl){
-  const tmp = document.createElement('div');
-  tmp.className = faceEl.className.replace('flip-face','').trim();
-  tmp.style.cssText = `
-    position:absolute; visibility:hidden; left:-9999px; top:-9999px;
-    width:${card.clientWidth}px;
-  `;
-  tmp.innerHTML = faceEl.innerHTML;
-  document.body.appendChild(tmp);
-  const h = Math.ceil(tmp.scrollHeight);
-  document.body.removeChild(tmp);
-  return h;
-}
-
-function syncFlipHeights(root = document){
-  const scope = (root instanceof Element ? root : document);
-  const cards = scope.querySelectorAll('.flip-card');
-  
-  cards.forEach(card=>{
-    const inner = card.querySelector('.flip-inner');
-    const front = card.querySelector('.flip-front');
-    const back  = card.querySelector('.flip-back');
-    if (!inner || !front || !back) return;
-    
-    // 앞면 높이만 측정하여 카드 전체 높이로 설정
-    const frontHeight = measureFaceHeight(card, front);
-    inner.style.height = frontHeight + 'px';
-    
-    // 뒷면은 앞면과 같은 높이로 고정하고 스크롤 처리는 CSS에서
-    // (별도의 높이 설정 불필요 - CSS의 overflow로 처리)
-  });
-}
-
-let __flipObserverInstalled = false;
-function installFlipHeightObservers(){
-  if (__flipObserverInstalled) return;
-  __flipObserverInstalled = true;
-
-  const grid = document.getElementById('cards-grid');
-
-  window.addEventListener('resize', ()=> syncFlipHeights(grid));
-
-  const ro = new ResizeObserver(()=> syncFlipHeights(grid));
-  const mo = new MutationObserver((mutList)=>{
-    mutList.forEach(m=>{
-      m.addedNodes.forEach(node=>{
-        if (!(node instanceof Element)) return;
-        node.querySelectorAll?.('.flip-card .flip-face').forEach(face => ro.observe(face));
-        if (node.matches?.('.flip-card') || node.querySelector?.('.flip-card')) {
-          requestAnimationFrame(()=> syncFlipHeights(grid));
-        }
-      });
-    });
-  });
-  if (grid) mo.observe(grid, { childList:true, subtree:true });
-
-  document.querySelectorAll('.flip-card .flip-face').forEach(el=> ro.observe(el));
-
-  if (document.fonts && document.fonts.ready) {
-    document.fonts.ready.then(()=> syncFlipHeights(grid)).catch(()=>{});
-  }
-}ound?.(r)) || r;
         const subjects = getSubjectScores(norm);
         const sum = ALL_SUBJECTS.reduce((a,n)=>a+(subjects[n]?.score||0),0);
         return sum > 0;
@@ -605,8 +457,12 @@ function makeFlipCard({id, title, frontHTML, backHTML, backCaption}){
 }
 
 function chunk(arr, sizes){
-  const out = []; let i=0;
-  for (const s of sizes){ out.push(arr.slice(i, i+s)); i+=s; }
+  const out = []; 
+  let i=0;
+  for (const s of sizes){ 
+    out.push(arr.slice(i, i+s)); 
+    i+=s; 
+  }
   if (i < arr.length) out.push(arr.slice(i));
   return out;
 }
@@ -752,4 +608,218 @@ async function renderResultDynamic(sid){
       }
     }catch(e){ /* no-op */ }
 
-    const norm = (window.normalizeR
+    const norm = (window.normalizeRound?.(raw)) || raw;
+    const hostId = `round-host-${label}`;
+    const card = makeFlipCard({
+      id: `card-${label}`,
+      title: label,
+      frontHTML: `<div id="${hostId}"></div>`,
+      backHTML: buildWrongPanelHTML(label, raw)
+    });
+    grid.appendChild(card);
+    renderRound(`#${hostId}`, label, norm);
+
+    if (SHOW_TREND_CARD) {
+      const subs = getSubjectScores(norm);
+      const total = ALL_SUBJECTS.reduce((a,n)=>a+(subs[n]?.score||0),0);
+      studentTotalsByRound[label] = total;
+      labelsForTrend.push(label);
+    }
+  }
+
+  if (SHOW_TREND_CARD) {
+    const badgesHost = $('#trend-badges');
+    if (badgesHost){
+      badgesHost.innerHTML = '';
+      rounds.forEach(({label, raw})=>{
+        const norm = (window.normalizeRound?.(raw)) || raw;
+        const subs = getSubjectScores(norm);
+        const sc = ALL_SUBJECTS.reduce((a,n)=>a+(subs[n]?.score||0),0);
+        const passOverall = (sc >= TOTAL_MAX*0.6);
+        badgesHost.innerHTML += `<span class="badge ${passOverall?'pass':'fail'}">${label} ${passOverall?'합격':'불합격'}</span>`;
+      });
+    }
+
+    const trendCanvas = document.createElement('canvas');
+    trendCanvas.id = 'card-trend-canvas';
+    trendCanvas.width = 360; 
+    trendCanvas.height = 220;
+    $('#card-trend .flip-back.card')?.appendChild(trendCanvas);
+
+    const labels = labelsForTrend.sort((a,b)=> parseInt(a) - parseInt(b));
+    const meSeries = labels.map(lb => studentTotalsByRound[lb] ?? null);
+
+    const schoolAvgSeries = await Promise.all(labels.map(async lb=>{
+      const { schoolAvg } = await getAverages(school, lb);
+      return schoolAvg;
+    }));
+    const nationalAvgSeries = await Promise.all(labels.map(async lb=>{
+      const { nationalAvg } = await getAverages('all', lb);
+      return nationalAvg;
+    }));
+
+    const maxV = Math.max(...meSeries.filter(v=>v!=null), ...schoolAvgSeries, ...nationalAvgSeries, 1);
+    drawLineChart(trendCanvas, labels, [
+      { name:'본인',   values: meSeries },
+      { name:'학교',   values: schoolAvgSeries },
+      { name:'전국',   values: nationalAvgSeries },
+    ], maxV);
+  }
+
+  requestAnimationFrame(()=>{
+    syncFlipHeights(grid);
+    installFlipHeightObservers();
+  });
+}
+
+/* -------------------- 12) 폼/라우팅 -------------------- */
+function goHome(){
+  $("#view-result")?.classList.add("hidden");
+  $("#view-home")?.classList.remove("hidden");
+  $("#sid")?.focus();
+}
+
+async function lookupStudent(e){
+  e?.preventDefault?.();
+  hideError();
+  const input = $("#sid");
+  const id = (input?.value || "").replace(/\D/g,"").slice(0,6);
+
+  if(id.length !== 6){
+    showError("학수번호는 숫자 6자리여야 합니다.");
+    input?.focus();
+    return false;
+  }
+
+  try {
+    console.log('lookupStudent 호출, renderResultDynamic 존재?', typeof renderResultDynamic);
+    await renderResultDynamic(id);
+    $("#view-home")?.classList.add("hidden");
+    $("#view-result")?.classList.remove("hidden");
+  } catch (err){
+    console.error(err);
+    showError("존재하지 않는 학수번호거나 미응시자입니다.");
+  }
+  return false;
+}
+
+/* -------------------- 13) 초기화 & 전역 -------------------- */
+function initApp(){
+  (function injectMinorSpacing(){
+    const css = `
+      #cards-grid { display:grid; gap:14px; }
+      .flip-card { margin:0; }
+      .accordion .item { margin-bottom: 6px; }
+      .accordion .acc-btn{ width:100%; display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--line); border-radius:10px; background:var(--surface-1); font-weight:700; }
+      .accordion .acc-btn .rotate{ transition:.2s transform ease; }
+      .accordion .acc-btn.open .rotate{ transform: rotate(90deg); }
+      .accordion .panel{ overflow:hidden; max-height:0; transition:max-height .25s ease; }
+      .qgrid{ display:flex; flex-wrap:wrap; gap:6px; }
+      .qcell{ padding:3px 8px; border-radius:999px; border:1px solid var(--line); font-weight:700; }
+      .qcell.bad{ background:rgba(239,68,68,.12); border-color:rgba(239,68,68,.55); }
+      .group-grid{ display:grid; grid-template-columns:repeat(12,1fr); gap:12px; }
+      .group-box{ border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--surface-2) }
+      .group-box.ok{ background:rgba(34,197,94,.12); border-color:rgba(34,197,94,.55) }
+      .group-box.fail{ background:rgba(239,68,68,.12); border-color:rgba(239,68,68,.55) }
+      .subj-row{ display:flex; flex-wrap:wrap; gap:6px 10px; margin-top:6px }
+      .subj-chip{ padding:4px 8px; border:1px solid var(--line); border-radius:999px; font-weight:800 }
+      .subj-chip .muted{ opacity:.7; font-weight:600 }
+      .cutline{ left:60% }
+    `;
+    const st = document.createElement('style'); 
+    st.textContent = css; 
+    document.head.appendChild(st);
+  })();
+
+  const $sid = $("#sid");
+  if ($sid) {
+    $sid.addEventListener('input', () => {
+      $sid.value = ($sid.value || '').replace(/\D/g, '').slice(0, 6);
+    });
+    $sid.setAttribute('enterkeyhint', 'done');
+  }
+
+  const form = $("#lookup-form");
+  if (form) form.addEventListener('submit', lookupStudent);
+
+  const p = new URLSearchParams(location.search);
+  const sid = p.get("sid") || p.get("id");
+  if (sid && /^\d{6}$/.test(sid)) {
+    if ($sid) $sid.value = sid;
+    form?.dispatchEvent(new Event("submit", {cancelable:true}));
+  }
+}
+
+document.addEventListener('DOMContentLoaded', initApp);
+
+// 전역 노출
+window.goHome = goHome;
+window.initApp = initApp;
+window.normalizeRound = normalizeRound;
+window.renderResultDynamic = renderResultDynamic;
+window.__SUBJECT_TOTALS = SUBJECT_MAX;
+window.__GROUPS_DEF = GROUPS;
+
+/* -------------------- 14) Flip 높이 동기화 (앞면 기준) -------------------- */
+function measureFaceHeight(card, faceEl){
+  const tmp = document.createElement('div');
+  tmp.className = faceEl.className.replace('flip-face','').trim();
+  tmp.style.cssText = `
+    position:absolute; visibility:hidden; left:-9999px; top:-9999px;
+    width:${card.clientWidth}px;
+  `;
+  tmp.innerHTML = faceEl.innerHTML;
+  document.body.appendChild(tmp);
+  const h = Math.ceil(tmp.scrollHeight);
+  document.body.removeChild(tmp);
+  return h;
+}
+
+function syncFlipHeights(root = document){
+  const scope = (root instanceof Element ? root : document);
+  const cards = scope.querySelectorAll('.flip-card');
+  
+  cards.forEach(card=>{
+    const inner = card.querySelector('.flip-inner');
+    const front = card.querySelector('.flip-front');
+    const back  = card.querySelector('.flip-back');
+    if (!inner || !front || !back) return;
+    
+    // 앞면 높이만 측정하여 카드 전체 높이로 설정
+    const frontHeight = measureFaceHeight(card, front);
+    inner.style.height = frontHeight + 'px';
+    
+    // 뒷면은 앞면과 같은 높이로 고정하고 스크롤 처리는 CSS에서
+    // (별도의 높이 설정 불필요 - CSS의 overflow로 처리)
+  });
+}
+
+let __flipObserverInstalled = false;
+function installFlipHeightObservers(){
+  if (__flipObserverInstalled) return;
+  __flipObserverInstalled = true;
+
+  const grid = document.getElementById('cards-grid');
+
+  window.addEventListener('resize', ()=> syncFlipHeights(grid));
+
+  const ro = new ResizeObserver(()=> syncFlipHeights(grid));
+  const mo = new MutationObserver((mutList)=>{
+    mutList.forEach(m=>{
+      m.addedNodes.forEach(node=>{
+        if (!(node instanceof Element)) return;
+        node.querySelectorAll?.('.flip-card .flip-face').forEach(face => ro.observe(face));
+        if (node.matches?.('.flip-card') || node.querySelector?.('.flip-card')) {
+          requestAnimationFrame(()=> syncFlipHeights(grid));
+        }
+      });
+    });
+  });
+  if (grid) mo.observe(grid, { childList:true, subtree:true });
+
+  document.querySelectorAll('.flip-card .flip-face').forEach(el=> ro.observe(el));
+
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(()=> syncFlipHeights(grid)).catch(()=>{});
+  }
+}
