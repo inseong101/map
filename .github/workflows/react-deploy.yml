@@ -1,26 +1,30 @@
 name: Build and Deploy React App
 on:
-  push:
-    branches: [ main ]
-    paths: ['scoreboard/**', 'functions/**']  # functions 경로도 추가
+ push:
+   branches: [ main ]
+   paths: ['scoreboard/**', 'functions/**']
 jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Install and Build React
-        run: |
-          cd scoreboard
-          npm install
-          npm run build
-          cp -r build/* ../
-      - name: Deploy to Firebase
-        run: |
-          npm install -g firebase-tools
-          firebase deploy --project jeonjolhyup
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JEONJOLHYUP }}
+ deploy:
+   runs-on: ubuntu-latest
+   steps:
+     - uses: actions/checkout@v4
+     - name: Setup Node.js
+       uses: actions/setup-node@v4
+       with:
+         node-version: '20'
+     - name: Install and Build React
+       run: |
+         cd scoreboard
+         npm install
+         npm run build
+         cp -r build/* ../
+     - name: Install Functions Dependencies
+       run: |
+         cd functions
+         npm install
+     - uses: FirebaseExtended/action-hosting-deploy@v0
+       with:
+         repoToken: ${{ secrets.GITHUB_TOKEN }}
+         firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JEONJOLHYUP }}
+         channelId: live
+         projectId: jeonjolhyup
