@@ -1,228 +1,407 @@
-// src/components/RoundCard.jsx - 중도포기자도 보라색 표시
-import React, { useState, useEffect, useRef } from 'react';
-import { fmt, pct, pill, chunk, detectStudentAbsenceStatus } from '../utils/helpers';
-import { SUBJECT_MAX } from '../services/dataService';
-import WrongAnswerPanel from './WrongAnswerPanel';
+// src/services/dataService.js - 기존 구조 유지하면서 필요한 기능만 추가
+import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
+import { db } from './firebase';
+import { detectStudentAbsenceStatus } from '../utils/helpers'; // 🎯 추가
 
-function RoundCard({ label, data, sid }) {
-  const [isFlipped, setIsFlipped] = useState(false);
-  const flipCardRef = useRef(null);
-  const frontRef = useRef(null);
+// 과목별 최대 점수
+export const SUBJECT_MAX = {
+  "간":16, "심":16, "비":16, "폐":16, "신":16,
+  "상한":16, "사상":16, "침구":48, "보건":20,
+  "외과":16, "신경":16, "안이비":16, "부인과":32, 
+  "소아":24, "예방":24, "생리":16, "본초":16
+};
 
-  // 기존 코드 구조 유지하되 미응시 감지 추가
-  const { totalScore, totalMax, overallPass, meets60, anyGroupFail, groupResults, wrongBySession, percentile, rank } = data;
-  const overallRate = pct(totalScore, totalMax);
+// 그룹 정의
+export const GROUPS = [
+  { id: "그룹1", label: "그룹 1", subjects: ["간","심","비","폐","신","상한","사상"], layoutChunks: [5,2] },
+  { id: "그룹3", label: "그룹 3", subjects: ["침구"] },
+  { id: "그룹2", label: "그룹 2", subjects: ["보건"] },
+  { id: "그룹4", label: "그룹 4", subjects: ["외과","신경","안이비"] },
+  { id: "그룹5", label: "그룹 5", subjects: ["부인과","소아"] },
+  { id: "그룹6", label: "그룹 6", subjects: ["예방","생리","본초"] }
+];
 
-  // 🎯 미응시/중도포기 상태 감지
-  const absence = detectStudentAbsenceStatus(wrongBySession || {});
-  const isNoAttendance = !!absence?.isNoAttendance;
-  const isPartiallyAbsent = !!absence?.isPartiallyAbsent;
-  const missedSessions = absence?.missedSessions || [];
+export const ALL_SUBJECTS = GROUPS.flatMap(g => g.subjects);
+export const TOTAL_MAX = ALL_SUBJECTS.reduce((a,n) => a + (SUBJECT_MAX[n] || 0), 0);
 
-  // 🎯 전체 카드 클래스 결정 (부모 카드에 색깔 적용)
-  // 중도포기자도 보라색으로 표시
-  const getCardClass = () => {
-    let baseClass = 'flip-card';
-    
-    if (isNoAttendance || isPartiallyAbsent) {
-      // 🎯 미응시자 + 중도포기자 모두 보라색
-      return `${baseClass} card-absent`;
-    } else if (overallPass) {
-      return `${baseClass} card-pass`;
-    } else {
-      return `${baseClass} card-fail`;
-    }
-  };
+// 라운드 레이블 - 🎯 기존 번호형에서 한글형으로 변경
+export const ROUND_LABELS = ["제1회", "제2회", "제3회"]; // 🎯 수정
 
-  // 높이 동기화 함수 (기존 코드 유지)
-  useEffect(() => {
-    const syncHeight = () => {
-      if (flipCardRef.current && frontRef.current) {
-        const frontHeight = frontRef.current.offsetHeight;
-        flipCardRef.current.style.setProperty('--front-height', `${frontHeight}px`);
-        flipCardRef.current.classList.add('height-synced');
-      }
-    };
+// 교시별 문항번호 → 과목 매핑
+export const SESSION_SUBJECT_RANGES = {
+  "1교시": [
+    { from: 1,  to: 16, s: "간" },
+    { from: 17, to: 32, s: "심" },
+    { from: 33, to: 48, s: "비" },
+    { from: 49, to: 64, s: "폐" },
+    { from: 65, to: 80, s: "신" }
+  ],
+  "2교시": [
+    { from: 1,  to: 16, s: "상한" },
+    { from: 17, to: 32, s: "사상" },
+    { from: 33, to: 80, s: "침구" },
+    { from: 81, to: 100, s: "보건" }
+  ],
+  "3교시": [
+    { from: 1,  to: 16, s: "외과" },
+    { from: 17, to: 32, s: "신경" },
+    { from: 33, to: 48, s: "안이비" },
+    { from: 49, to: 80, s: "부인과" }
+  ],
+  "4교시": [
+    { from: 1,  to: 24, s: "소아" },
+    { from: 25, to: 48, s: "예방" },
+    { from: 49, to: 64, s: "생리" },
+    { from: 65, to: 80, s: "본초" }
+  ]
+};
 
-    const timer = setTimeout(syncHeight, 100);
-    window.addEventListener('resize', syncHeight);
-    
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('resize', syncHeight);
-    };
-  }, []);
+// 학수번호 → 학교명
+const SCHOOL_MAP = {
+  "01":"가천대","02":"경희대","03":"대구한","04":"대전대",
+  "05":"동국대","06":"동신대","07":"동의대","08":"부산대",
+  "09":"상지대","10":"세명대","11":"우석대","12":"원광대"
+};
 
-  const getReasonText = () => {
-    if (isNoAttendance) return '전체 미응시';
-    if (isPartiallyAbsent) return `중도포기 (빠진 교시: ${missedSessions.join(', ')})`;
-    if (overallPass) return "통과";
-    if (!meets60 && anyGroupFail) return "과락 및 평락으로 인한 불합격";
-    if (!meets60) return "평락으로 인한 불합격";
-    return "과락으로 인한 불합격";
-  };
-
-  const renderGroupBoxes = () => {
-    if (!groupResults || groupResults.length === 0) {
-      return (
-        <div className="small" style={{ textAlign: 'center', opacity: 0.7, padding: 20 }}>
-          {isNoAttendance ? '미응시로 인해 과목별 데이터가 없습니다.' : 
-           isPartiallyAbsent ? '중도포기로 인해 일부 과목 데이터가 없습니다.' : 
-           '과목별 데이터를 불러오는 중입니다...'}
-        </div>
-      );
-    }
-
-    return groupResults.map((group) => {
-      const { label: groupLabel, subjects, layoutChunks, score, max, rate, pass } = group;
-      
-      let chipsHtml = "";
-      if (layoutChunks && layoutChunks.length) {
-        const rows = chunk(subjects, layoutChunks);
-        chipsHtml = rows.map((row, rowIndex) => (
-          <div key={rowIndex} className="subj-row">
-            {row.map(subject => {
-              const subjectScore = data.subjectScores?.[subject] || 0;
-              const subjectMax = SUBJECT_MAX[subject] || 0;
-              
-              return (
-                <span key={subject} className="subj-chip">
-                  {subject} <span className="muted">{fmt(subjectScore)}/{fmt(subjectMax)}</span>
-                </span>
-              );
-            })}
-          </div>
-        ));
-      } else {
-        chipsHtml = (
-          <div className="subj-row">
-            {(subjects || []).map(subject => {
-              const subjectScore = data.subjectScores?.[subject] || 0;
-              const subjectMax = SUBJECT_MAX[subject] || 0;
-              
-              return (
-                <span key={subject} className="subj-chip">
-                  {subject} <span className="muted">{fmt(subjectScore)}/{fmt(subjectMax)}</span>
-                </span>
-              );
-            })}
-          </div>
-        );
-      }
-
-      // 🎯 단순히 과락/통과만 표시 (초록/빨강)
-      return (
-        <div key={group.name || groupLabel} className={`group-box ${pass ? 'ok' : 'fail'} span-12`}>
-          <div className="group-head">
-            <div className="group-grid" style={{ marginTop: 12 }}>
-              {renderGroupBoxes()}
-            </div>
-          </div>
-        </div>
-
-        {/* 🎯 뒷면 - 자녀카드에서 card 클래스 제거, 색깔은 부모가 담당 */}
-        <div className="flip-face flip-back">
-          <div className="card-content">
-            <WrongAnswerPanel roundLabel={label} data={data} />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+export function getSchoolFromSid(sid) {
+  const p2 = String(sid || "").slice(0, 2);
+  return SCHOOL_MAP[p2] || "미상";
 }
 
-export default RoundCard; className="name" style={{ fontWeight: 800 }}>{groupLabel}</div>
-            <div className="small">
-              소계 {fmt(score)}/{fmt(max)} · 정답률 {rate}%{' '}
-              {pass ? 
-                <span dangerouslySetInnerHTML={{__html: pill("통과", "ok")}} /> : 
-                <span dangerouslySetInnerHTML={{__html: pill("과락", "red")}} />
-              }
-            </div>
-          </div>
-          {chipsHtml}
-        </div>
-      );
+// 🎯 상위 퍼센트 계산 함수 추가
+export async function calculateRankPercentile(studentScore, roundLabel, validOnly = false) {
+  try {
+    const sessions = ['1교시', '2교시', '3교시', '4교시'];
+    const sessionMaxScores = { '1교시': 80, '2교시': 100, '3교시': 80, '4교시': 80 };
+    const studentScores = {}; // sid -> { totalScore, attendedSessions }
+
+    // 모든 학생의 교시별 데이터 수집
+    for (const session of sessions) {
+      try {
+        const sessionRef = collection(db, 'scores_raw', roundLabel, session);
+        const snapshot = await getDocs(sessionRef);
+        
+        snapshot.forEach(doc => {
+          const sid = doc.id;
+          const data = doc.data();
+          const wrongQuestions = data.wrongQuestions || [];
+          
+          if (!studentScores[sid]) {
+            studentScores[sid] = { totalScore: 0, attendedSessions: 0 };
+          }
+          
+          // 실제 응시한 교시만 점수 추가
+          const sessionMax = sessionMaxScores[session] || 80;
+          const sessionScore = Math.max(0, sessionMax - wrongQuestions.length);
+          studentScores[sid].totalScore += sessionScore;
+          studentScores[sid].attendedSessions += 1;
+        });
+      } catch (error) {
+        console.warn(`${session} 데이터 조회 실패:`, error);
+      }
+    }
+
+    // 🎯 validOnly가 true면 완전 응시자만, false면 모든 응시자 포함
+    const validScores = [];
+    
+    Object.entries(studentScores).forEach(([sid, data]) => {
+      if (validOnly) {
+        // 완전 응시자만 (4교시 모두 응시)
+        if (data.attendedSessions === 4) {
+          validScores.push(data.totalScore);
+        }
+      } else {
+        // 모든 응시자 (1교시 이상 응시)
+        if (data.attendedSessions > 0) {
+          validScores.push(data.totalScore);
+        }
+      }
     });
-  };
+    
+    if (validScores.length === 0) {
+      return { percentile: null, totalStudents: 0, rank: null };
+    }
 
-  const handleCardClick = (e) => {
-    // 버튼 클릭은 무시
-    if (e.target.closest('button')) return;
-    setIsFlipped(!isFlipped);
-  };
+    // 내림차순 정렬
+    validScores.sort((a, b) => b - a);
+    
+    // 본인보다 높은 점수 개수 계산
+    const higherCount = validScores.filter(score => score > studentScore).length;
+    
+    // 상위 퍼센트 계산 (1등이 1%, 꼴등이 100%)
+    const percentile = Math.ceil(((higherCount + 1) / validScores.length) * 100);
+    
+    return {
+      percentile,
+      totalStudents: validScores.length,
+      rank: higherCount + 1
+    };
+    
+  } catch (error) {
+    console.error('상위 퍼센트 계산 오류:', error);
+    return { percentile: null, totalStudents: 0, rank: null };
+  }
+}
 
-  return (
-    <div 
-      ref={flipCardRef}
-      className={getCardClass()}
-      onClick={handleCardClick}
-      style={{ cursor: 'pointer' }}
-    >
-      <div className={`flip-inner ${isFlipped ? 'is-flipped' : ''}`}>
-        {/* 🎯 앞면 - 자녀카드에서 card 클래스 제거, 색깔은 부모가 담당 */}
-        <div ref={frontRef} className="flip-face flip-front">
-          <div className="card-content">
-            <div className={`round ${overallPass ? "" : "fail"}`}>
-              <div className="flex" style={{ justifyContent: 'space-between' }}>
-                <div>
-                  <h2 style={{ margin: 0 }}>{label} 총점</h2>
-                  {/* 🎯 미응시/중도포기 안내 */}
-                  {isNoAttendance && (
-                    <div className="small" style={{ marginTop: 4, color: 'var(--muted)' }}>
-                      <span className="badge absent" style={{ fontSize: 11 }}>
-                        전체 미응시
-                      </span>
-                    </div>
-                  )}
-                  {(!isNoAttendance && isPartiallyAbsent) && (
-                    <div className="small" style={{ marginTop: 4, color: 'var(--muted)' }}>
-                      <span className="badge absent" style={{ fontSize: 11 }}>
-                        중도포기 (빠진 교시: {missedSessions.join(', ')})
-                      </span>
-                    </div>
-                  )}
-                </div>
-                
-                <div style={{ textAlign: 'right' }}>
-                  <div className="kpi">
-                    <div className="num">{fmt(totalScore)}</div>
-                    <div className="sub">/ {fmt(totalMax)}</div>
-                  </div>
-                  {/* 🎯 상위 퍼센트 표시 */}
-                  {percentile && !isNoAttendance && (
-                    <div className="small" style={{ marginTop: 4, color: 'var(--primary)' }}>
-                      상위 {percentile}%
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              <div className="progress" style={{ margin: '8px 0 2px 0' }}>
-                <div className="bar" style={{ width: `${actualRate}%` }}></div>
-                <div className="cutline"></div>
-              </div>
-              
-              <div className="small" style={{ marginTop: 10 }}>
-                {/* 🎯 응시한 교시 기준으로 정답률 표시 */}
-                정답률 {actualRate}% 
-                {attendedSessions < 4 && (
-                  <span style={{ color: 'var(--muted)' }}>
-                    ({attendedSessions}/4교시 응시)
-                  </span>
-                )}
-                {attendedSessions === 4 && ' (컷 60%: 204/340)'} ·{' '}
-                {isNoAttendance
-                  ? <span className="badge absent">미응시</span>
-                  : (isPartiallyAbsent
-                      ? <span className="badge absent">중도포기</span>
-                      : (overallPass
-                          ? <span dangerouslySetInnerHTML={{ __html: pill('통과', 'ok') }} />
-                          : <span dangerouslySetInnerHTML={{ __html: pill('불합격', 'red') }} />))}
-                <div className="small" style={{ marginTop: '6px', opacity: 0.9 }}>
-                  {getReasonText()}
-                </div>
-              </div>
-            </div>
+// 🎯 응시자 분류 통계 계산 추가
+export async function calculateAttendanceStats(roundLabel) {
+  try {
+    const sessions = ['1교시', '2교시', '3교시', '4교시'];
+    const allStudents = new Set();
+    const attendanceData = {}; // sid -> attendedSessions
+
+    // 모든 교시 데이터 수집
+    for (const session of sessions) {
+      try {
+        const sessionRef = collection(db, 'scores_raw', roundLabel, session);
+        const snapshot = await getDocs(sessionRef);
+        
+        snapshot.forEach(doc => {
+          const sid = doc.id;
+          allStudents.add(sid);
+          
+          if (!attendanceData[sid]) {
+            attendanceData[sid] = 0;
+          }
+          attendanceData[sid] += 1;
+        });
+      } catch (error) {
+        console.warn(`${session} 데이터 조회 실패:`, error);
+      }
+    }
+
+    // 분류별 카운트
+    let totalTargets = allStudents.size;
+    let validAttendees = 0; // 4교시 모두
+    let absentees = 0; // 0교시
+    let dropouts = 0; // 1~3교시
+
+    Array.from(allStudents).forEach(sid => {
+      const attendedCount = attendanceData[sid] || 0;
+
+      if (attendedCount === 0) {
+        absentees++;
+      } else if (attendedCount === 4) {
+        validAttendees++;
+      } else {
+        dropouts++;
+      }
+    });
+
+    return {
+      totalTargets,
+      validAttendees,
+      absentees,
+      dropouts
+    };
+
+  } catch (error) {
+    console.error('응시자 분류 통계 계산 오류:', error);
+    return {
+      totalTargets: 0,
+      validAttendees: 0,
+      absentees: 0,
+      dropouts: 0
+    };
+  }
+}
+
+// Firestore 데이터 읽기 - 🎯 수정된 점수 계산 로직 적용
+export async function fetchRoundData(sid, roundLabel) {
+  try {
+    // scores 컬렉션에서 먼저 시도
+    const sidStr = String(sid);
+    const scoresRef = doc(db, "scores", sidStr);
+    const scoresSnap = await getDoc(scoresRef);
+    
+    if (scoresSnap.exists()) {
+      const data = scoresSnap.data();
+      if (data.rounds && data.rounds[roundLabel]) {
+        return data.rounds[roundLabel];
+      }
+    }
+
+    // scores_raw에서 교시별 데이터 수집
+    const wrongBySession = {};
+    const sessions = ["1교시", "2교시", "3교시", "4교시"];
+    const sessionMaxScores = { '1교시': 80, '2교시': 100, '3교시': 80, '4교시': 80 };
+    
+    let attendedSessions = 0;
+    let totalScore = 0; // 🎯 0점에서 시작
+    
+    for (const session of sessions) {
+      try {
+        const docRef = doc(db, "scores_raw", roundLabel, session, sid);
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          const wrong = data.wrongQuestions || data.wrong || [];
+          
+          if (Array.isArray(wrong)) {
+            wrongBySession[session] = wrong.map(n => Number(n)).filter(n => !isNaN(n));
+            attendedSessions++;
             
-            <div
+            // 🎯 응시한 교시만 점수 추가
+            const sessionMax = sessionMaxScores[session] || 80;
+            const sessionScore = Math.max(0, sessionMax - wrong.length);
+            totalScore += sessionScore;
+          }
+        }
+      } catch (error) {
+        console.warn(`${session} 데이터 조회 실패:`, error);
+      }
+    }
+
+    // 오답을 과목별 점수로 변환 (기존 로직 유지)
+    if (Object.keys(wrongBySession).length > 0) {
+      const result = convertWrongToScores(wrongBySession);
+      
+      // 🎯 수정된 점수와 추가 정보 반영
+      result.totalScore = totalScore;
+      result.attendedSessions = attendedSessions;
+      
+      // 🎯 완전 응시자만 합격 가능
+      result.overallPass = attendedSessions === 4 && totalScore >= TOTAL_MAX * 0.6;
+      result.meets60 = attendedSessions === 4 && totalScore >= TOTAL_MAX * 0.6;
+      result.anyGroupFail = attendedSessions < 4;
+      
+      // 🎯 상위 퍼센트 계산 (완전 응시자만)
+      const absence = detectStudentAbsenceStatus(wrongBySession);
+      if (!absence.isNoAttendance && !absence.isPartiallyAbsent) {
+        const rankData = await calculateRankPercentile(totalScore, roundLabel, true);
+        result.percentile = rankData.percentile;
+        result.rank = rankData.rank;
+        result.totalStudents = rankData.totalStudents;
+      }
+      
+      // 🎯 응시자 분류 통계 추가
+      result.attendanceStats = await calculateAttendanceStats(roundLabel);
+      
+      return result;
+    }
+
+    return null;
+  } catch (error) {
+    console.error('데이터 fetch 오류:', error);
+    return null;
+  }
+}
+
+// 오답을 과목별 점수로 변환 (기존 함수 유지)
+function convertWrongToScores(wrongBySession) {
+  const subjectScores = {};
+  
+  // 모든 과목을 만점으로 초기화
+  ALL_SUBJECTS.forEach(subject => {
+    subjectScores[subject] = SUBJECT_MAX[subject];
+  });
+
+  // 교시별 오답을 과목별로 차감
+  Object.entries(wrongBySession).forEach(([session, wrongList]) => {
+    const ranges = SESSION_SUBJECT_RANGES[session] || [];
+    
+    wrongList.forEach(questionNum => {
+      const range = ranges.find(r => questionNum >= r.from && questionNum <= r.to);
+      if (range && range.s in subjectScores) {
+        subjectScores[range.s] = Math.max(0, subjectScores[range.s] - 1);
+      }
+    });
+  });
+
+  // 그룹별 결과 계산
+  const groupResults = GROUPS.map(group => {
+    const groupScore = group.subjects.reduce((sum, subject) => sum + (subjectScores[subject] || 0), 0);
+    const groupMax = group.subjects.reduce((sum, subject) => sum + (SUBJECT_MAX[subject] || 0), 0);
+    const cutoff = Math.ceil(groupMax * 0.4);
+    const pass = groupScore >= cutoff;
+
+    return {
+      name: group.id,
+      label: group.label,
+      subjects: group.subjects,
+      layoutChunks: group.layoutChunks,
+      score: groupScore,
+      max: groupMax,
+      rate: Math.round((groupScore / groupMax) * 100),
+      pass,
+      cutoff
+    };
+  });
+
+  const totalScore = ALL_SUBJECTS.reduce((sum, subject) => sum + (subjectScores[subject] || 0), 0);
+  const overallCutoff = Math.ceil(TOTAL_MAX * 0.6);
+  const meets60 = totalScore >= overallCutoff;
+  const anyGroupFail = groupResults.some(g => !g.pass);
+  const overallPass = meets60 && !anyGroupFail;
+
+  return {
+    totalScore,
+    totalMax: TOTAL_MAX,
+    overallPass,
+    meets60,
+    anyGroupFail,
+    groupResults,
+    subjectScores,
+    wrongBySession
+  };
+}
+
+// 회차 자동 탐색 - 🎯 모든 회차 포함하도록 수정
+export async function discoverRoundsFor(sid) {
+  const found = [];
+  
+  for (const label of ROUND_LABELS) {
+    try {
+      const data = await fetchRoundData(sid, label);
+      
+      // 🎯 데이터가 없어도 빈 데이터로라도 포함
+      if (data) {
+        found.push({ label, data });
+      } else {
+        // 미응시자도 카드 표시를 위해 빈 데이터 추가
+        found.push({
+          label,
+          data: {
+            totalScore: 0,
+            totalMax: TOTAL_MAX,
+            overallPass: false,
+            meets60: false,
+            anyGroupFail: true,
+            groupResults: [],
+            subjectScores: {},
+            wrongBySession: {},
+            attendedSessions: 0,
+            percentile: null,
+            rank: null,
+            totalStudents: 0,
+            attendanceStats: await calculateAttendanceStats(label)
+          }
+        });
+      }
+    } catch (error) {
+      console.error(`${label} 데이터 로딩 실패:`, error);
+      // 오류가 있어도 빈 데이터로 추가
+      found.push({
+        label,
+        data: {
+          totalScore: 0,
+          totalMax: TOTAL_MAX,
+          overallPass: false,
+          meets60: false,
+          anyGroupFail: true,
+          groupResults: [],
+          subjectScores: {},
+          wrongBySession: {},
+          attendedSessions: 0,
+          percentile: null,
+          rank: null,
+          totalStudents: 0,
+          attendanceStats: { totalTargets: 0, validAttendees: 0, absentees: 0, dropouts: 0 }
+        }
+      });
+    }
+  }
+  
+  return found;
+}
