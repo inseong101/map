@@ -29,10 +29,19 @@ jobs:
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
       
-      - name: Deploy to Firebase (Hosting + Functions)
+      # Hosting 먼저 배포
+      - name: Deploy Hosting
         run: |
           echo "$FIREBASE_SERVICE_ACCOUNT" > firebase-service-account.json
           export GOOGLE_APPLICATION_CREDENTIALS=firebase-service-account.json
-          firebase deploy --project jeonjolhyup --non-interactive
+          firebase deploy --only hosting --project jeonjolhyup --non-interactive
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JEONJOLHYUP }}
+      
+      # Functions 별도 배포 (Extensions 체크 없이)
+      - name: Deploy Functions Only
+        run: |
+          export GOOGLE_APPLICATION_CREDENTIALS=firebase-service-account.json
+          firebase deploy --only functions --project jeonjolhyup --non-interactive --force
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JEONJOLHYUP }}
