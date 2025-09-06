@@ -8,7 +8,7 @@ const SUBJECT_MAX = {
   "상한":16, "사상":16,
   "침구":48,
   "보건":20,
-  "외과":16, "신경":16, "안이비":16,
+  "외과":16, "신경":16, "안이비":16, 
   "부인과":32, "소아":24,
   "예방":24, "생리":16, "본초":16
 };
@@ -178,17 +178,15 @@ function resolveScoresRootName(){
 
 async function readDocMaybe(db, root, roundLabel, session, sid){
   try{
-    if (window.firebase && db && typeof db.collection === 'function'){ // v8
-      const snap = await db.collection(root).doc(roundLabel).collection(session).doc(sid).get();
-      return snap.exists ? (snap.data()||null) : null;
-    } else if (window.firebase && window.firebase.firestore && typeof window.firebase.firestore === 'function') {
-      const snap = await window.firebase.firestore().collection(root).doc(roundLabel).collection(session).doc(sid).get();
-      return snap.exists ? (snap.data()||null) : null;
-    } else if (window['firebase-firestore'] || window.getFirestore){
-      return null;
-    }
-  }catch(e){ console.warn('[scores_raw readDocMaybe]', e); }
-  return null;
+    // 모던 Firebase v9 방식 사용
+    const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const dref = doc(db, root, roundLabel, session, sid);
+    const snap = await getDoc(dref);
+    return snap.exists() ? (snap.data() || null) : null;
+  }catch(e){ 
+    console.warn('[scores_raw readDocMaybe]', e); 
+    return null;
+  }
 }
 
 async function fetchScoresRawAllSessions(sid, roundLabel){
