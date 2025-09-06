@@ -1,6 +1,9 @@
 // functions/index.js - 완전한 통계 분석 함수들
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
+const XLSX = require('xlsx');
+
+
 
 admin.initializeApp();
 const db = admin.firestore();
