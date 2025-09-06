@@ -1,9 +1,7 @@
-// functions/index.js - 완전한 통계 분석 함수들
+// functions/index.js - 정리된 완전한 통계 분석 함수들
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const XLSX = require('xlsx');
-
-
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -495,7 +493,6 @@ function findSessionByQuestionNum(questionNum) {
   }
   return null;
 }
-// functions/index.js에 추가할 Storage 파일 처리 함수
 
 /**
  * Firebase Storage에 Excel 파일이 업로드되면 자동으로 처리하는 함수
@@ -583,26 +580,6 @@ function extractFileInfo(filePath) {
   return null;
 }
 
-/**
- * Excel 데이터를 Firebase에 저장
- */
-async function processExcelData(jsonData, roundLabel, session) {
-  try {
-    const processedData = [];
-    const errors = [];
-    
-    if (jsonData.length < 4) {
-      throw new Error('Excel 파일에 충분한 데이터가 없습니다 (최소 4행 필요)');
-    }
-    
-/**
- * Excel 데이터를 Firebase에 저장
- */
-async function processExcelData(jsonData, roundLabel, session) {
-  try {
-    const processedData = [];
-    const errors = [];
-    
 /**
  * Excel 데이터를 Firebase에 저장
  */
@@ -753,19 +730,6 @@ async function processExcelData(jsonData, roundLabel, session) {
   } catch (error) {
     console.error('Excel 데이터 처리 실패:', error);
     throw error;
-  }
-}
-
-/**
- * 교시별 최대 문항 수 반환
- */
-function getMaxQuestions(session) {
-  switch (session) {
-    case '1교시': return 80;
-    case '2교시': return 100;
-    case '3교시': return 80;
-    case '4교시': return 80;
-    default: return 80;
   }
 }
 
