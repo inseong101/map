@@ -8,19 +8,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '18'
+      
       - name: Install and Build React
         run: |
           cd scoreboard
           npm install
           npm run build
           cp -r build/* ../
-      - uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JEONJOLHYUP }}
-          channelId: live
-          projectId: jeonjolhyup
+      
+      - name: Install Functions Dependencies
+        run: |
+          cd functions
+          npm install
+      
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+      
+      - name: Deploy to Firebase (Hosting + Functions)
+        run: |
+          echo "$FIREBASE_SERVICE_ACCOUNT" > firebase-service-account.json
+          export GOOGLE_APPLICATION_CREDENTIALS=firebase-service-account.json
+          firebase deploy --project jeonjolhyup --non-interactive
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JEONJOLHYUP }}
