@@ -26,7 +26,6 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
 
   useEffect(() => {
     prepareAndDraw();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rounds, selectedRound, isSchoolMode]);
 
   const prepareAndDraw = async () => {
@@ -72,7 +71,7 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
 
   const createBins = (_scores, studentScore) => {
     const scores = Array.isArray(_scores) ? _scores : [];
-    const bins = [];
+    the bins = [];
     const binSize = 5;
 
     for (let s = X_MIN; s < X_MAX; s += binSize) {
@@ -167,7 +166,7 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
     ctx.lineTo(padding.left + chartW, padding.top + chartH);
     ctx.stroke();
 
-    // X축 라벨 (0~340, 20 혹은 40단위로 눈금)
+    // X축 라벨 (0~340)
     ctx.fillStyle = '#9db0d6';
     ctx.font = '10px system-ui';
     ctx.textAlign = 'center';
@@ -236,7 +235,11 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
 
       // 데이터 레이블: "N명↵(p%)"
       if (bin.count > 0) {
-        const pct = bin.percentage.toFixed ? bin.percentage.toFixed(1) : (Math.round(bin.percentage * 10) / 10).toFixed(1);
+        const pct = typeof bin.percentage === 'number'
+          ? bin.percentage
+          : Number(bin.percentage) || 0;
+        const ptxt = `${pct.toFixed(1)}%`;
+
         const cx = x + binWidth / 2;
         const ty = y - 6;
 
@@ -244,10 +247,8 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
         ctx.font = '10px system-ui';
         ctx.textAlign = 'center';
 
-        const lines = [`${bin.count}명`, `(${pct}%)`];
-        lines.forEach((line, idx) => {
-          ctx.fillText(line, cx, ty + idx * 12);
-        });
+        ctx.fillText(`${bin.count}명`, cx, ty);
+        ctx.fillText(`(${ptxt})`, cx, ty + 12);
       }
     });
   };
@@ -285,7 +286,6 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
         const lx = x0 + 8;
         const ly = y - 6;
         const lw = 18;
-        const ctxSave = ctx.getTransform();
 
         ctx.strokeStyle = it.color;
         ctx.lineWidth = 2;
@@ -295,7 +295,6 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
         ctx.lineTo(lx + lw, ly + 8);
         ctx.stroke();
         ctx.setLineDash([]);
-        ctx.setTransform(ctxSave);
       } else {
         // 색상 박스
         ctx.fillStyle = it.color;
@@ -315,7 +314,7 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
     ctx.fillText(`표시: ${isSchoolMode ? '학교' : '전국'}`, W - 12, y0 + items.length * lineH + 6);
   };
 
-  // 선택된 라운드 카드 (상단 우측 정렬 + 토글)
+  // 상단 컨트롤(우측 정렬 + 토글)
   const TopControls = () => (
     <div style={{
       display: 'flex',
