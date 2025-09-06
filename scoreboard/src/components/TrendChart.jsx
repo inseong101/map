@@ -1,10 +1,9 @@
 // src/components/TrendChart.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { getAverages } from '../utils/helpers';
+import { getAverages, getRealScoreDistribution } from '../utils/helpers';
 
 function TrendChart({ rounds, school, sid }) {
   const [selectedRound, setSelectedRound] = useState(0);
-  const [hoveredBin, setHoveredBin] = useState({ chart: null, bin: null });
   const nationalCanvasRef = useRef(null);
   const schoolCanvasRef = useRef(null);
   const [histogramData, setHistogramData] = useState([]);
@@ -25,9 +24,12 @@ function TrendChart({ rounds, school, sid }) {
       // 평균 데이터 가져오기
       const averages = await getAverages(school, label);
       
-      // 전국과 학교 각각의 분포 생성
-      const nationalBins = generateScoreDistribution(averages.nationalAvg, studentScore);
-      const schoolBins = generateScoreDistribution(averages.schoolAvg, studentScore);
+      // 실제 점수 분포 데이터 가져오기
+      const scoreDistribution = await getRealScoreDistribution(label);
+      
+      // 전국과 학교 각각의 실제 분포 생성
+      const nationalBins = createRealBins(scoreDistribution.national, studentScore);
+      const schoolBins = createRealBins(scoreDistribution.school, studentScore);
       
       data.push({
         label,
@@ -35,7 +37,9 @@ function TrendChart({ rounds, school, sid }) {
         nationalAvg: averages.nationalAvg,
         schoolAvg: averages.schoolAvg,
         nationalBins,
-        schoolBins
+        schoolBins,
+        totalNational: scoreDistribution.national.length,
+        totalSchool: scoreDistribution.school.length
       });
     }
     
@@ -43,45 +47,47 @@ function TrendChart({ rounds, school, sid }) {
     drawBothHistograms(data);
   };
 
-  const generateScoreDistribution = (avg, studentScore) => {
+  const createRealBins = (scores, studentScore) => {
     const bins = [];
     const minScore = 180;
     const maxScore = 340;
     const binSize = 5;
-    const totalStudents = 1000; // 시뮬레이션용
     
+    // 5점 단위로 구간 생성
     for (let score = minScore; score < maxScore; score += binSize) {
-      const binCenter = score + binSize / 2;
-      
-      // 정규분포 기반 학생 수 계산
-      const normalValue = calculateNormalDistribution(binCenter, avg, 25);
-      const count = Math.max(1, Math.round(normalValue * totalStudents * 100));
+      const count = scores.filter(s => s >= score && s < score + binSize).length;
       
       bins.push({
         min: score,
         max: score + binSize,
-        center: binCenter,
         count: count,
         isStudent: score <= studentScore && studentScore < score + binSize,
-        percentage: ((count / totalStudents) * 100).toFixed(1)
+        percentage: scores.length > 0 ? ((count / scores.length) * 100).toFixed(1) : '0.0'
       });
     }
     
     return bins;
   };
 
-  const calculateNormalDistribution = (x, mean, stdDev) => {
-    const coefficient = 1 / (stdDev * Math.sqrt(2 * Math.PI));
-    const exponent = -0.5 * Math.pow((x - mean) / stdDev, 2);
-    return coefficient * Math.exp(exponent);
-  };
-
   const drawBothHistograms = (data) => {
     const currentData = data[selectedRound];
     if (!currentData) return;
 
-    drawSingleHistogram(nationalCanvasRef.current, currentData.nationalBins, currentData.nationalAvg, '전국 평균', '#7ea2ff');
-    drawSingleHistogram(schoolCanvasRef.current, currentData.schoolBins, currentData.schoolAvg, '내 학교 평균', '#22c55e');
+    drawSingleHistogram(
+      nationalCanvasRef.current, 
+      currentData.nationalBins, 
+      currentData.nationalAvg, 
+      `전국 평균 (총 ${currentData.totalNational}명)`, 
+      '#7ea2ff'
+    );
+    
+    drawSingleHistogram(
+      schoolCanvasRef.current, 
+      currentData.schoolBins, 
+      currentData.schoolAvg, 
+      `${school} 평균 (총 ${currentData.totalSchool}명)`, 
+      '#22c55e'
+    );
   };
 
   const drawSingleHistogram = (canvas, bins, average, title, primaryColor) => {
@@ -139,7 +145,7 @@ function TrendChart({ rounds, school, sid }) {
     ctx.lineTo(padding.left + chartW, padding.top + chartH);
     ctx.stroke();
     
-    // X축 라벨 (점수) - 간격 조정
+    // X축 라벨 (점수)
     ctx.fillStyle = '#9db0d6';
     ctx.font = '10px system-ui';
     ctx.textAlign = 'center';
@@ -159,9 +165,9 @@ function TrendChart({ rounds, school, sid }) {
       }
     }
     
-    // Y축 라벨 (학생 수)
+    // Y축 라벨 (학생 수) - 실제 최대값 기준
     const maxCount = Math.max(...bins.map(b => b.count));
-    const yStep = Math.ceil(maxCount / 4);
+    const yStep = Math.max(1, Math.ceil(maxCount / 4));
     
     ctx.textAlign = 'right';
     for (let i = 0; i <= 4; i++) {
@@ -185,11 +191,11 @@ function TrendChart({ rounds, school, sid }) {
 
   const drawBars = (ctx, padding, chartW, chartH, bins, primaryColor) => {
     const binWidth = chartW / bins.length;
-    const maxCount = Math.max(...bins.map(b => b.count));
+    const maxCount = Math.max(1, Math.max(...bins.map(b => b.count))); // 0으로 나누기 방지
     
     bins.forEach((bin, index) => {
       const x = padding.left + index * binWidth;
-      const barHeight = (bin.count / maxCount) * chartH;
+      const barHeight = maxCount > 0 ? (bin.count / maxCount) * chartH : 0;
       const y = padding.top + chartH - barHeight;
       
       // 바 색상
@@ -200,15 +206,18 @@ function TrendChart({ rounds, school, sid }) {
         fillColor = primaryColor + '80'; // 투명도 추가
       }
       
-      // 바 그리기
-      ctx.fillStyle = fillColor;
-      ctx.fillRect(x + 1, y, binWidth - 2, barHeight);
-      
-      // 본인 위치 테두리
-      if (bin.isStudent) {
-        ctx.strokeStyle = '#dc2626';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x + 1, y, binWidth - 2, barHeight);
+      // 바 그리기 (학생 수가 0이어도 최소 높이 표시)
+      const minHeight = bin.count > 0 ? Math.max(barHeight, 2) : 0;
+      if (minHeight > 0) {
+        ctx.fillStyle = fillColor;
+        ctx.fillRect(x + 1, y, binWidth - 2, minHeight);
+        
+        // 본인 위치 테두리
+        if (bin.isStudent) {
+          ctx.strokeStyle = '#dc2626';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x + 1, y, binWidth - 2, minHeight);
+        }
       }
       
       // 구간 라벨 (선택적으로)
@@ -258,7 +267,8 @@ function TrendChart({ rounds, school, sid }) {
       const bin = bins[binIndex];
       
       if (bin) {
-        alert(`${bin.min}-${bin.max}점 구간\n학생 수: ${bin.count}명\n전체 비율: ${bin.percentage}%`);
+        const chartName = chartType === 'national' ? '전국' : school;
+        alert(`${chartName} - ${bin.min}-${bin.max}점 구간\n학생 수: ${bin.count}명\n비율: ${bin.percentage}%`);
       }
     }
   };
@@ -396,7 +406,7 @@ function TrendChart({ rounds, school, sid }) {
       
       {/* 설명 */}
       <div className="small" style={{ textAlign: 'center', opacity: 0.8 }}>
-        막대를 클릭하면 해당 점수 구간의 학생 수를 확인할 수 있습니다.
+        막대를 클릭하면 해당 점수 구간의 실제 학생 수를 확인할 수 있습니다.
       </div>
     </div>
   );
