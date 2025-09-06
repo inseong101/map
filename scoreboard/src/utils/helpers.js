@@ -107,7 +107,7 @@ export function drawLineChart(canvas, labels, series, maxValue) {
 }
 
 // 유효한 학수번호인지 확인 (01~12로 시작하는 6자리)
-function isValidStudentId(sid) {
+export function isValidStudentId(sid) {
   if (!sid || typeof sid !== 'string') return false;
   if (sid.length !== 6) return false;
   
@@ -214,7 +214,7 @@ export async function getRealScoreDistribution(roundLabel) {
 }
 
 // 학교명 → 학교코드 변환
-function getSchoolCodeFromName(schoolName) {
+export function getSchoolCodeFromName(schoolName) {
   const schoolMap = {
     "가천대": "01", "경희대": "02", "대구한": "03", "대전대": "04",
     "동국대": "05", "동신대": "06", "동의대": "07", "부산대": "08",
@@ -226,7 +226,7 @@ function getSchoolCodeFromName(schoolName) {
 // src/utils/helpers.js 파일 맨 끝에 추가할 코드
 
 // 유효한 학수번호인지 확인 (01~12로 시작하는 6자리)
-function isValidStudentId(sid) {
+export function isValidStudentId(sid) {
   if (!sid || typeof sid !== 'string') return false;
   if (sid.length !== 6) return false;
   
