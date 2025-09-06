@@ -71,7 +71,8 @@ export function getSchoolFromSid(sid) {
 export async function fetchRoundData(sid, roundLabel) {
   try {
     // scores 컬렉션에서 먼저 시도
-    const scoresRef = doc(db, "scores", sid);
+    const sidStr = String(sid);
+    const scoresRef = doc(db, "scores", sidStr);
     const scoresSnap = await getDoc(scoresRef);
     
     if (scoresSnap.exists()) {
