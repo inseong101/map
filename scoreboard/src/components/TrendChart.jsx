@@ -71,7 +71,7 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
 
   const createBins = (_scores, studentScore) => {
     const scores = Array.isArray(_scores) ? _scores : [];
-    the bins = [];
+    const bins = [];
     const binSize = 5;
 
     for (let s = X_MIN; s < X_MAX; s += binSize) {
@@ -127,6 +127,7 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
       : `전국 분포 (총 ${cur.totalNational}명)`;
     const avg = isSchoolMode ? cur.schoolAvg : cur.nationalAvg;
 
+    // 제목
     ctx.fillStyle = '#e8eeff';
     ctx.font = 'bold 14px system-ui';
     ctx.textAlign = 'center';
@@ -147,7 +148,7 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
     drawCutoff(ctx, padding, chartW, chartH, CUTOFF_SCORE);
 
     // 레전드 (우측 상단)
-    drawLegend(ctx, W, padding);
+    drawLegend(ctx, W);
   };
 
   const drawAxes = (ctx, padding, chartW, chartH, bins) => {
@@ -265,7 +266,7 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
     ctx.setLineDash([]);
   };
 
-  const drawLegend = (ctx, W, padding) => {
+  const drawLegend = (ctx, W) => {
     // 우측 상단 레전드 박스
     const items = [
       { color: '#7ea2ff', label: '전국 분포' },
