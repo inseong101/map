@@ -1,309 +1,807 @@
-/* ===== 전졸협 성적 사이트 기본 테마 ===== */
-:root{
-  --bg: #0b1020;
-  --surface: #11172b;
-  --surface-2:#151d36;
-  --line: #213056;
-  --ink: #e8eeff;
-  --muted:#9db0d6;
-  --primary:#7ea2ff;
-  --ok:#22c55e;
-  --warn:#f59e0b;
-  --bad:#ef4444;
+/* =========================================================
+   전졸협 성적 SPA 스크립트 (오답 패널 반영판, scores_raw 연동)
+========================================================= */
+
+/* -------------------- 0) 과목/그룹 정의 -------------------- */
+const SUBJECT_MAX = {
+  "간":16, "심":16, "비":16, "폐":16, "신":16,
+  "상한":16, "사상":16,
+  "침구":48,
+  "보건":20,
+  "외과":16, "신경":16, "안이비":16,
+  "부인과":32, "소아":24,
+  "예방":24, "생리":16, "본초":16
+};
+
+const GROUPS = [
+  { id: "그룹1", label: "그룹 1", subjects: ["간","심","비","폐","신","상한","사상"], layoutChunks: [5,2], span: 12 },
+  { id: "그룹3", label: "그룹 3", subjects: ["침구"], span: 12 },
+  { id: "그룹2", label: "그룹 2", subjects: ["보건"], span: 12 },
+  { id: "그룹4", label: "그룹 4", subjects: ["외과","신경","안이비"], span: 12 },
+  { id: "그룹5", label: "그룹 5", subjects: ["부인과","소아"], span: 12 },
+  { id: "그룹6", label: "그룹 6", subjects: ["예방","생리","본초"], span: 12 },
+];
+
+const ALL_SUBJECTS = GROUPS.flatMap(g => g.subjects);
+const TOTAL_MAX = ALL_SUBJECTS.reduce((a,n)=>a+(SUBJECT_MAX[n]||0),0); // 340
+
+/* -------------------- 0-2) 학수번호 → 학교명 -------------------- */
+const SCHOOL_MAP = {
+  "01":"가천대","02":"경희대","03":"대구한","04":"대전대",
+  "05":"동국대","06":"동신대","07":"동의대","08":"부산대",
+  "09":"상지대","10":"세명대","11":"우석대","12":"원광대"
+};
+function getSchoolFromSid(sid){ const p2 = String(sid||"").slice(0,2); return SCHOOL_MAP[p2] || "미상"; }
+const ROUND_LABELS = ["1차","2차","3차","4차","5차","6차","7차","8차"];
+
+// 교시별 문항번호 → 과목 매핑
+const SESSION_SUBJECT_RANGES = {
+  "1교시": [
+    { from: 1,  to: 16, s: "간" },
+    { from: 17, to: 32, s: "심" },
+    { from: 33, to: 48, s: "비" },
+    { from: 49, to: 64, s: "폐" },
+    { from: 65, to: 80, s: "신" }
+  ],
+  "2교시": [
+    { from: 1,  to: 16, s: "상한" },
+    { from: 17, to: 32, s: "사상" },
+    { from: 33, to: 80, s: "침구" },
+    { from: 81, to: 100, s: "보건" },
+  ],
+  "3교시": [
+    { from: 1,  to: 16, s: "외과" },
+    { from: 17, to: 32, s: "신경" },
+    { from: 33, to: 48, s: "안이비" },
+    { from: 49, to: 80, s: "부인과" }
+  ],
+  "4교시": [
+    { from: 1,  to: 24, s: "소아" },
+    { from: 25, to: 48, s: "예방" },
+    { from: 49, to: 64, s: "생리" },
+    { from: 65, to: 80, s: "본초" }
+  ],
+};
+
+/* -------------------- 1) 평균치(임시 더미) -------------------- */
+async function getAverages(_schoolName, _roundLabel){
+  return { nationalAvg: Math.round(TOTAL_MAX * 0.60), schoolAvg: Math.round(TOTAL_MAX * 0.62) };
 }
 
-*{box-sizing:border-box}
-html,body{
-  margin:0; padding:0;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", Roboto, "Helvetica Neue", Arial;
-  background:var(--bg); color:var(--ink);
-  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
-}
-a{color:var(--primary); text-decoration:none}
-img{max-width:100%; display:block}
+/* 맨 위 트렌드(학수번호) 카드 표시 여부 */
+const SHOW_TREND_CARD = true;
 
-/* Layout */
-.container{max-width:1100px; margin:24px auto; padding:0 16px}
-.header{display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap}
-h1{margin:0 0 6px 0; font-size:24px; font-weight:800}
-h2{margin:8px 0; font-size:18px; color:var(--muted); font-weight:700}
-.small{color:var(--muted); font-size:12px}
-
-/* Grid */
-.grid{display:grid; grid-template-columns:repeat(12,1fr); gap:16px}
-.col-12{grid-column:span 12}
-.col-6{grid-column:span 6}
-@media (max-width: 860px){ .col-6{grid-column:span 12} }
-
-/* Card */
-.card{
-  background:linear-gradient(180deg, rgba(21,29,54,.9), var(--surface));
-  border:1px solid var(--line);
-  border-radius:16px;
-  padding:16px;
-  box-shadow:0 10px 30px rgba(0,0,0,.25);
+/* -------------------- 2) 오프라인 인덱스 -------------------- */
+window.SCORE_DATA = window.SCORE_DATA || {};
+(function buildIndex(){
+  const idx = {};
+  for (const k of Object.keys(window.SCORE_DATA)) {
+    const six = String(k).replace(/\D/g,'').padStart(6,'0');
+    idx[six] = window.SCORE_DATA[k];
+  }
+  window.__SCORE_INDEX__ = idx;
+})();
+function getStudentById(id6){
+  return (window.__SCORE_INDEX__ && window.__SCORE_INDEX__[id6]) || window.SCORE_DATA[id6] || null;
 }
 
-/* Flex utils */
-.flex{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
-
-/* KPI / Numbers */
-.kpi{display:flex; align-items:baseline; gap:10px}
-.kpi .num{font-size:28px; font-weight:800; letter-spacing:.2px}
-.kpi .sub{color:var(--muted); font-size:13px}
-
-/* Badges */
-.badge{
-  display:inline-block; padding:6px 10px; border-radius:999px;
-  font-weight:700; letter-spacing:.2px; border:1px solid transparent;
-}
-.badge.pass{background:rgba(34,197,94,.18); border-color:rgba(34,197,94,.55)}
-.badge.fail{background:rgba(239,68,68,.18); border-color:rgba(239,68,68,.55)}
-
-/* Buttons */
-.btn{
-  appearance:none; border:1px solid var(--line);
-  background:var(--surface-2); color:var(--ink);
-  padding:8px 12px; border-radius:10px; cursor:pointer;
-  font-weight:700;
-}
-.btn:hover{background:#0f1526}
-
-/* Separators */
-hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
-
-/* Progress */
-.progress{
-  position:relative;               /* 컷라인 배치용 */
-  width:100%; height:10px;
-  background:#1b2542; border-radius:999px; overflow:hidden
-}
-.progress > div{height:100%; background:linear-gradient(90deg, #7ea2ff, #4cc9ff); transition:width .25s ease}
-
-/* 60% 컷 라인 */
-.progress .cutline{
-  position:absolute; top:0; bottom:0;
-  left:60%; width:2px;
-  background:rgba(255,255,255,.55);
-  pointer-events:none;
+/* -------------------- 3) 유틸 -------------------- */
+const $  = (sel, root=document) => root.querySelector(sel);
+const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+function fmt(n){ return (n==null || isNaN(Number(n))) ? "-" : Number(n).toLocaleString("ko-KR"); }
+function pct(score, max){ const s=+score||0, m=+max||0; return m<=0 ? 0 : Math.round((s/m)*100); }
+function pill(text, type){ const cls = type==='ok'?'pill green':(type==='warn'?'pill warn':'pill red'); return `<span class="${cls}">${text}</span>`; }
+function showError(msg){ const e=$("#error"); if(!e) return; e.textContent=msg; e.classList.remove("hidden"); }
+function hideError(){ const e=$("#error"); if(!e) return; e.textContent=""; e.classList.add("hidden"); }
+function pickKey(obj, candidates){
+  if (!obj || typeof obj !== "object") return null;
+  for (const key of candidates){ if (key in obj) return key; }
+  const map = Object.keys(obj).reduce((acc,k)=>{
+    const norm = String(k).toLowerCase().replace(/[\s_]/g,''); acc[norm] = k; return acc;
+  }, {});
+  for (const key of candidates){
+    const norm = String(key).toLowerCase().replace(/[\s_]/g,'');
+    if (norm in map) return map[norm];
+  }
+  return null;
 }
 
-/* 라운드가 평락(불합격)이면 막대 색을 빨간 계열로 */
-.round.fail .progress > .bar{
-  background:linear-gradient(90deg, var(--bad), #ff6b6b);
+/* -------------------- 4) 정규화 -------------------- */
+function normalizeRound(raw){
+  if (!raw || typeof raw !== 'object') return null;
+
+  // 새 스키마
+  if ('total_questions' in raw && 'total_correct' in raw) {
+    const groups = {};
+    if (Array.isArray(raw.subject_results)){
+      raw.subject_results.forEach(s=>{
+        const nm = s.name;
+        groups[nm] = { score: +s.correct||0, max: SUBJECT_MAX[nm] ?? (+s.total||0) };
+      });
+    } else if (Array.isArray(raw.group_results)) {
+      raw.group_results.forEach(g=>{
+        const nm = String(g.name);
+        if (nm in SUBJECT_MAX){
+          groups[nm] = { score:+g.correct||0, max: SUBJECT_MAX[nm] ?? (+g.total||0) };
+        }
+      });
+    }
+    return { total:{score:0,max:0}, pass:!!(raw.overall_pass ?? raw.round_pass ?? raw.pass), fails:[], by_class:{ "종합":{ total:{score:0,max:0}, groups } } };
+  }
+
+  // 구 스키마
+  const byClassKey = pickKey(raw, ["by_class","byClass","classes","sections"]);
+  const byClassRaw = (byClassKey && typeof raw[byClassKey]==='object') ? raw[byClassKey] : {};
+  const normByClass = {};
+  Object.keys(byClassRaw).forEach(cls=>{
+    const sec = byClassRaw[cls] || {};
+    const groupsKey = pickKey(sec, ["groups","by_group","byGroup","sections","parts"]);
+    const groupsRaw = (groupsKey && typeof sec[groupsKey]==='object') ? sec[groupsKey] : {};
+    const groups = {};
+    Object.keys(groupsRaw).forEach(name=>{
+      const gi = groupsRaw[name] || {};
+      groups[name] = { score:+gi.score||0, max: SUBJECT_MAX[name] ?? (+gi.max||0) };
+    });
+    const total = sec.total || sec.sum || { score: sec.score ?? 0, max: sec.max ?? 0 };
+    normByClass[cls] = { total, groups };
+  });
+
+  const total = raw.total || raw.sum || { score: raw.score ?? 0, max: raw.max ?? 0 };
+  const passKey = pickKey(raw, ["pass","passed","is_pass","합격"]);
+  const pass = !!(passKey ? raw[passKey] : raw.pass);
+  const failsKey = pickKey(raw, ["fails","fail","fails_list","과락","과락목록"]);
+  const fails = Array.isArray(raw[failsKey]) ? raw[failsKey] : [];
+
+  return { total, pass, fails, by_class: normByClass };
 }
 
-/* 바 아래 캡션 여백 */
-.progress-caption{ margin-top:10px; }
-
-/* Group rows */
-.group{
-  display:flex; align-items:center; justify-content:space-between; gap:12px;
-  padding:10px 0; border-top:1px dashed #2a355d;
-}
-.group:first-child{border-top:none}
-.group .name{font-weight:800}
-.pill{padding:3px 8px; border-radius:999px; font-size:12px; border:1px solid #33416f; color:var(--muted)}
-.pill.green{border-color:rgba(34,197,94,.6); color:#d9ffe7}
-.pill.warn{border-color:rgba(245,158,11,.6); color:#fff4d6}
-.pill.red{border-color:rgba(239,68,68,.7); color:#ffd8d8}
-
-/* Accordion */
-.accordion{border-top:1px solid var(--line); margin-top:8px}
-.accordion .item{border-bottom:1px solid var(--line)}
-.accordion button{
-  width:100%; text-align:left; background:none; border:none; color:var(--ink);
-  font-weight:800; padding:12px 0; cursor:pointer; display:flex; align-items:center; justify-content:space-between
-}
-.rotate{transition:transform .2s ease; transform:rotate(90deg)}
-.rotate.open{transform:rotate(-90deg)}
-.panel{overflow:hidden; max-height:0; transition:max-height .25s ease}
-
-/* 아코디언 패널에 스크롤 기능 추가 */
-.accordion .acc-btn.open + .panel {
-  max-height: 150px; /* 개별 패널 최대 높이 */
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-  scroll-behavior: smooth;
+// 과목 점수 맵
+function getSubjectScores(round){
+  const byClass = round?.by_class || {};
+  const subjMap = (byClass["종합"] && byClass["종합"].groups) ? byClass["종합"].groups : {};
+  const result = {};
+  ALL_SUBJECTS.forEach(name=>{
+    const row = subjMap[name] || {};
+    result[name] = { score: +row.score||0, max: SUBJECT_MAX[name] };
+  });
+  return result;
 }
 
-/* 아코디언 패널 스크롤바 스타일링 */
-.accordion .panel::-webkit-scrollbar {
-  width: 4px;
+/* -------------------- 5) Firestore scores_raw(s) 로더 -------------------- */
+function getDb(){
+  return window.firebaseDb || window.db || window.__db || null;
+}
+function resolveScoresRootName(){
+  if (window.__SCORES_ROOT_NAME__) return window.__SCORES_ROOT_NAME__;
+  return 'scores_raw';
 }
 
-.accordion .panel::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 4px;
+async function readDocMaybe(db, root, roundLabel, session, sid){
+  try{
+    // firestore-loader.js와 동일한 방식 사용 (모던 Firebase v9 방식)
+    const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const dref = doc(db, root, roundLabel, session, sid);
+    const snap = await getDoc(dref);
+    return snap.exists() ? (snap.data() || null) : null;
+  }catch(e){ 
+    console.warn('[scores_raw readDocMaybe]', e); 
+    return null;
+  }
 }
 
-.accordion .panel::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
+async function fetchScoresRawAllSessions(sid, roundLabel){
+  const db = getDb();
+  if (!db) return {};
+  const root = resolveScoresRootName();
+  const sessions = ["1교시","2교시","3교시","4교시"];
+  const out = {};
+  
+  console.log(`[fetchScoresRaw] 시작: ${sid} / ${roundLabel}`);
+  
+  for (const sess of sessions){
+    try {
+      const data = await readDocMaybe(db, root, roundLabel, sess, sid);
+      if (!data) {
+        console.log(`[fetchScoresRaw] ${sess} - 데이터 없음`);
+        continue;
+      }
+      
+      console.log(`[fetchScoresRaw] ${sess} 원본 데이터:`, data);
+      
+      let v = data.wrongQuestions ?? data.wrong_questions ?? data.wrong ?? data.wrongNumbers ?? data.wrong_numbers ?? data.wrongs;
+      
+      console.log(`[fetchScoresRaw] ${sess} wrongQuestions 필드:`, v);
+      
+      if (Array.isArray(v)) {
+        out[sess] = v.map(n=>+n).filter(n=>!isNaN(n));
+      } else if (typeof v === 'string') {
+        out[sess] = v.split(/[,\s]+/).map(n=>+n).filter(n=>!isNaN(n));
+      }
+      
+      console.log(`[fetchScoresRaw] ${sess} 파싱 결과:`, out[sess]);
+    } catch (e) {
+      console.error(`[fetchScoresRaw] ${sess} 에러:`, e);
+    }
+  }
+  
+  console.log(`[fetchScoresRaw] 최종 결과:`, out);
+  return out;
 }
 
-.accordion .panel::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+/* -------------------- 6) 회차 자동 탐색 -------------------- */
+async function discoverRoundsFor(sid){
+  const found = [];
+  for (const label of ROUND_LABELS){
+    try {
+      const r = await window.fetchRoundFromFirestore?.(sid, label);
+      if (!r) continue;
+      const ok = (typeof r.total_correct === 'number' && r.total_correct > 0) || (()=>{
+        const norm = (window.normalizeRound?.(raw)) || raw;
+    const hostId = `round-host-${label}`;
+    const card = makeFlipCard({
+      id: `card-${label}`,
+      title: label,
+      frontHTML: `<div id="${hostId}"></div>`,
+      backHTML: buildWrongPanelHTML(label, raw)
+    });
+    grid.appendChild(card);
+    renderRound(`#${hostId}`, label, norm);
+
+    if (SHOW_TREND_CARD) {
+      const subs = getSubjectScores(norm);
+      const total = ALL_SUBJECTS.reduce((a,n)=>a+(subs[n]?.score||0),0);
+      studentTotalsByRound[label] = total;
+      labelsForTrend.push(label);
+    }
+  }
+
+  if (SHOW_TREND_CARD) {
+    const badgesHost = $('#trend-badges');
+    if (badgesHost){
+      badgesHost.innerHTML = '';
+      rounds.forEach(({label, raw})=>{
+        const norm = (window.normalizeRound?.(raw)) || raw;
+        const subs = getSubjectScores(norm);
+        const sc = ALL_SUBJECTS.reduce((a,n)=>a+(subs[n]?.score||0),0);
+        const passOverall = (sc >= TOTAL_MAX*0.6);
+        badgesHost.innerHTML += `<span class="badge ${passOverall?'pass':'fail'}">${label} ${passOverall?'합격':'불합격'}</span>`;
+      });
+    }
+
+    const trendCanvas = document.createElement('canvas');
+    trendCanvas.id = 'card-trend-canvas';
+    trendCanvas.width = 360; trendCanvas.height = 220;
+    $('#card-trend .flip-back.card')?.appendChild(trendCanvas);
+
+    const labels = labelsForTrend.sort((a,b)=> parseInt(a) - parseInt(b));
+    const meSeries = labels.map(lb => studentTotalsByRound[lb] ?? null);
+
+    const schoolAvgSeries = await Promise.all(labels.map(async lb=>{
+      const { schoolAvg } = await getAverages(school, lb);
+      return schoolAvg;
+    }));
+    const nationalAvgSeries = await Promise.all(labels.map(async lb=>{
+      const { nationalAvg } = await getAverages('all', lb);
+      return nationalAvg;
+    }));
+
+    const maxV = Math.max(...meSeries.filter(v=>v!=null), ...schoolAvgSeries, ...nationalAvgSeries, 1);
+    drawLineChart(trendCanvas, labels, [
+      { name:'본인',   values: meSeries },
+      { name:'학교',   values: schoolAvgSeries },
+      { name:'전국',   values: nationalAvgSeries },
+    ], maxV);
+  }
+
+  requestAnimationFrame(()=>{
+    syncFlipHeights(grid);
+    installFlipHeightObservers();
+  });
 }
 
-/* Question grid */
-.qgrid{display:grid; grid-template-columns:repeat(6,1fr); gap:8px}
-@media (max-width:600px){ .qgrid{grid-template-columns:repeat(4,1fr)} }
-.qcell{
-  text-align:center; font-weight:800; border-radius:8px; padding:6px 6px;
-  background:#1a2240; border:1px solid #2a355d
-}
-.qcell.good{background:rgba(34,197,94,.17); border-color:rgba(34,197,94,.5)}
-.qcell.bad{background:rgba(239,68,68,.17); border-color:rgba(239,68,68,.5)}
-
-/* qgrid 스크롤 기능 (오답 문항이 많을 때) */
-.qgrid {
-  max-height: 120px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding-right: 4px; /* 스크롤바 공간 확보 */
+/* -------------------- 12) 폼/라우팅 -------------------- */
+function goHome(){
+  $("#view-result")?.classList.add("hidden");
+  $("#view-home")?.classList.remove("hidden");
+  $("#sid")?.focus();
 }
 
-.qgrid::-webkit-scrollbar {
-  width: 4px;
+async function lookupStudent(e){
+  e?.preventDefault?.();
+  hideError();
+  const input = $("#sid");
+  const id = (input?.value || "").replace(/\D/g,"").slice(0,6);
+
+  if(id.length !== 6){
+    showError("학수번호는 숫자 6자리여야 합니다.");
+    input?.focus();
+    return false;
+  }
+
+  try {
+    console.log('lookupStudent 호출, renderResultDynamic 존재?', typeof renderResultDynamic);
+    await renderResultDynamic(id);
+    $("#view-home")?.classList.add("hidden");
+    $("#view-result")?.classList.remove("hidden");
+  } catch (err){
+    console.error(err);
+    showError("존재하지 않는 학수번호거나 미응시자입니다.");
+  }
+  return false;
 }
 
-.qgrid::-webkit-scrollbar-track {
-  background: transparent;
+/* -------------------- 13) 초기화 & 전역 -------------------- */
+function initApp(){
+  (function injectMinorSpacing(){
+    const css = `
+      #cards-grid { display:grid; gap:14px; }
+      .flip-card { margin:0; }
+      .accordion .item { margin-bottom: 6px; }
+      .accordion .acc-btn{ width:100%; display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--line); border-radius:10px; background:var(--surface-1); font-weight:700; }
+      .accordion .acc-btn .rotate{ transition:.2s transform ease; }
+      .accordion .acc-btn.open .rotate{ transform: rotate(90deg); }
+      .accordion .panel{ overflow:hidden; max-height:0; transition:max-height .25s ease; }
+      .qgrid{ display:flex; flex-wrap:wrap; gap:6px; }
+      .qcell{ padding:3px 8px; border-radius:999px; border:1px solid var(--line); font-weight:700; }
+      .qcell.bad{ background:rgba(239,68,68,.12); border-color:rgba(239,68,68,.55); }
+      .group-grid{ display:grid; grid-template-columns:repeat(12,1fr); gap:12px; }
+      .group-box{ border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--surface-2) }
+      .group-box.ok{ background:rgba(34,197,94,.12); border-color:rgba(34,197,94,.55) }
+      .group-box.fail{ background:rgba(239,68,68,.12); border-color:rgba(239,68,68,.55) }
+      .subj-row{ display:flex; flex-wrap:wrap; gap:6px 10px; margin-top:6px }
+      .subj-chip{ padding:4px 8px; border:1px solid var(--line); border-radius:999px; font-weight:800 }
+      .subj-chip .muted{ opacity:.7; font-weight:600 }
+      .cutline{ left:60% }
+    `;
+    const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
+  })();
+
+  const $sid = $("#sid");
+  if ($sid) {
+    $sid.addEventListener('input', () => {
+      $sid.value = ($sid.value || '').replace(/\D/g, '').slice(0, 6);
+    });
+    $sid.setAttribute('enterkeyhint', 'done');
+  }
+
+  const form = $("#lookup-form");
+  if (form) form.addEventListener('submit', lookupStudent);
+
+  const p = new URLSearchParams(location.search);
+  const sid = p.get("sid") || p.get("id");
+  if (sid && /^\d{6}$/.test(sid)) {
+    if ($sid) $sid.value = sid;
+    form?.dispatchEvent(new Event("submit", {cancelable:true}));
+  }
 }
 
-.qgrid::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
+document.addEventListener('DOMContentLoaded', initApp);
+
+// 전역 노출
+window.goHome = goHome;
+window.initApp = initApp;
+window.normalizeRound = normalizeRound;
+window.renderResultDynamic = renderResultDynamic;
+window.__SUBJECT_TOTALS = SUBJECT_MAX;
+window.__GROUPS_DEF = GROUPS;
+
+/* -------------------- 14) Flip 높이 동기화 (앞면 기준) -------------------- */
+function measureFaceHeight(card, faceEl){
+  const tmp = document.createElement('div');
+  tmp.className = faceEl.className.replace('flip-face','').trim();
+  tmp.style.cssText = `
+    position:absolute; visibility:hidden; left:-9999px; top:-9999px;
+    width:${card.clientWidth}px;
+  `;
+  tmp.innerHTML = faceEl.innerHTML;
+  document.body.appendChild(tmp);
+  const h = Math.ceil(tmp.scrollHeight);
+  document.body.removeChild(tmp);
+  return h;
 }
 
-.qgrid::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+function syncFlipHeights(root = document){
+  const scope = (root instanceof Element ? root : document);
+  const cards = scope.querySelectorAll('.flip-card');
+  
+  cards.forEach(card=>{
+    const inner = card.querySelector('.flip-inner');
+    const front = card.querySelector('.flip-front');
+    const back  = card.querySelector('.flip-back');
+    if (!inner || !front || !back) return;
+    
+    // 앞면 높이만 측정하여 카드 전체 높이로 설정
+    const frontHeight = measureFaceHeight(card, front);
+    inner.style.height = frontHeight + 'px';
+    
+    // 뒷면은 앞면과 같은 높이로 고정하고 스크롤 처리는 CSS에서
+    // (별도의 높이 설정 불필요 - CSS의 overflow로 처리)
+  });
 }
 
-/* Footer */
-.footer{color:var(--muted); text-align:center; padding:24px 0 40px}
+let __flipObserverInstalled = false;
+function installFlipHeightObservers(){
+  if (__flipObserverInstalled) return;
+  __flipObserverInstalled = true;
 
-/* Print */
-@media print{
-  :root{--bg:#ffffff; --ink:#000; --muted:#444}
-  body{background:#fff; color:#000}
-  .btn, .header a[href]{display:none !important}
-  .card{box-shadow:none; border-color:#ddd; background:#fff}
-  .badge{border-color:#999}
+  const grid = document.getElementById('cards-grid');
+
+  window.addEventListener('resize', ()=> syncFlipHeights(grid));
+
+  const ro = new ResizeObserver(()=> syncFlipHeights(grid));
+  const mo = new MutationObserver((mutList)=>{
+    mutList.forEach(m=>{
+      m.addedNodes.forEach(node=>{
+        if (!(node instanceof Element)) return;
+        node.querySelectorAll?.('.flip-card .flip-face').forEach(face => ro.observe(face));
+        if (node.matches?.('.flip-card') || node.querySelector?.('.flip-card')) {
+          requestAnimationFrame(()=> syncFlipHeights(grid));
+        }
+      });
+    });
+  });
+  if (grid) mo.observe(grid, { childList:true, subtree:true });
+
+  document.querySelectorAll('.flip-card .flip-face').forEach(el=> ro.observe(el));
+
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(()=> syncFlipHeights(grid)).catch(()=>{});
+  }
+}ound?.(r)) || r;
+        const subjects = getSubjectScores(norm);
+        const sum = ALL_SUBJECTS.reduce((a,n)=>a+(subjects[n]?.score||0),0);
+        return sum > 0;
+      })();
+      if (ok) found.push({ label, raw:r });
+    } catch (_) {}
+  }
+  return found;
 }
 
-/* 폼 인풋 (기본값만 유지) */
-.input{
-  flex:1 1 220px;
-  min-width:220px;
-  background:var(--surface-2);
-  color:var(--ink);
-  border:1px solid var(--line);
-  border-radius:10px;
-  padding:10px 12px;
-  font-weight:700;
-  letter-spacing:.2px;
-  outline:none;
-}
-.input:focus{border-color:var(--primary)}
+/* -------------------- 7) Canvas 꺾은선 -------------------- */
+function drawLineChart(canvas, labels, series, maxValue){
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
 
-/* 알림/에러 */
-.alert{
-  margin-top:10px;
-  padding:10px 12px;
-  border-radius:10px;
-  border:1px solid rgba(239,68,68,.55);
-  background:rgba(239,68,68,.14);
-  color:#ffd8d8;
-  font-weight:700;
-}
-.hidden{display:none}
+  const padL=40, padR=16, padT=24, padB=34;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const n = labels.length;
+  const x = (i)=> padL + (n<=1 ? plotW/2 : (i*(plotW/(n-1))));
+  const y = (v)=> padT + (plotH * (1 - (v / Math.max(1, maxValue||1))));
 
-/* ==== 결과(그룹 박스)용 보조 스타일 ==== */
-.group-grid{display:grid; grid-template-columns:repeat(12,1fr); gap:12px}
-.group-box{border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--surface-2)}
-.group-box.ok{background:rgba(34,197,94,.12); border-color:rgba(34,197,94,.55)}
-.group-box.fail{background:rgba(239,68,68,.12); border-color:rgba(239,68,68,.55)}
-.span-12{grid-column:span 12}.span-6{grid-column:span 12}
-@media(min-width:860px){.span-6{grid-column:span 6}}
-.group-head{display:flex; align-items:center; justify-content:space-between; gap:10px}
-.subj-row{display:flex; flex-wrap:wrap; gap:6px 10px; margin-top:6px}
-.subj-chip{padding:4px 8px; border:1px solid var(--line); border-radius:999px; font-weight:800}
-.subj-chip .muted{opacity:.7; font-weight:600}
+  ctx.strokeStyle = 'rgba(255,255,255,.25)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padL, padT);
+  ctx.lineTo(padL, padT+plotH);
+  ctx.lineTo(padL+plotW, padT+plotH);
+  ctx.stroke();
 
-/* ==== Flip Cards (공용) ==== */
-/* === Flip 카드 === */
-.flip-card { perspective: 1200px; }
-.flip-card .flip-inner{
-  position: relative;
-  width: 100%;
-  /* height: var(--flip-h, 280px);  ← 이 줄 삭제 */
-  height: auto;                      /* 콘텐츠 기준 */
-  transform-style: preserve-3d;
-  transition: transform .6s ease;
-}
-.flip-card.is-flipped .flip-inner{ transform: rotateY(180deg); }
+  ctx.fillStyle = 'rgba(255,255,255,.8)';
+  ctx.font = '12px system-ui';
+  ctx.textAlign = 'center';
+  labels.forEach((lb,i)=> ctx.fillText(lb, x(i), padT+plotH+18));
 
-.flip-card .flip-face{
-  position: absolute;
-  inset: 0;
-  backface-visibility: hidden;
-  border-radius: 16px;
-  overflow: hidden;
-}
-.flip-card .flip-front{ transform: rotateY(0deg); }
-.flip-card .flip-back { transform: rotateY(180deg); }
+  const colors = ['#7ea2ff','#4cc9ff','#22c55e'];
+  series.forEach((s, si)=>{
+    const col = colors[si % colors.length];
+    ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath();
+    s.values.forEach((v,i)=>{
+      if (v == null) return;
+      const xx=x(i), yy=y(v);
+      if (i===0 || s.values[i-1]==null) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy);
+    });
+    ctx.stroke();
+    ctx.fillStyle = col;
+    s.values.forEach((v,i)=>{
+      if (v == null) return;
+      const xx=x(i), yy=y(v);
+      ctx.beginPath(); ctx.arc(xx,yy,3,0,Math.PI*2); ctx.fill();
+    });
+  });
 
-/* 플립 카드 뒷면 전체 스크롤 기능 추가 */
-.flip-card .flip-back {
-  /* max-height 제거 - 앞면과 같은 높이로 고정 */
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-  scroll-behavior: smooth;
+  // 범례
+  const legendX = padL, legendY = 12;
+  series.forEach((s, si)=>{
+    const col = colors[si % colors.length];
+    ctx.fillStyle = col; ctx.fillRect(legendX + si*120, legendY-8, 10, 10);
+    ctx.fillStyle = '#e8eeff'; ctx.font = 'bold 12px system-ui'; ctx.textAlign='left';
+    ctx.fillText(s.name, legendX + si*120 + 14, legendY+1);
+  });
 }
 
-/* 플립 카드 뒷면 스크롤바 스타일링 */
-.flip-card .flip-back::-webkit-scrollbar {
-  width: 6px;
+/* -------------------- 8) 오답 수집/매핑 -------------------- */
+function extractWrongFromSubjectRow(row){
+  const keys = [
+    "wrongQuestions","wrong_questions","wrongs","wrong",
+    "incorrectQuestions","incorrect_questions","incorrect",
+    "오답","틀린문항"
+  ];
+  for (const k of keys){
+    if (k in (row||{})) {
+      const v = row[k];
+      if (Array.isArray(v)) return v.map(n=>+n).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
+      if (typeof v === 'string') {
+        return v.split(/[,\s]+/)
+                .map(n=>+n)
+                .filter(n=>!isNaN(n))
+                .sort((a,b)=>a-b);
+      }
+    }
+  }
+  return [];
 }
 
-.flip-card .flip-back::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 6px;
+function mapWrongBySessionToSubjects(wrong_by_session){
+  const result = {};
+  ALL_SUBJECTS.forEach(s => result[s] = []);
+
+  Object.entries(wrong_by_session||{}).forEach(([sess, arr])=>{
+    const ranges = SESSION_SUBJECT_RANGES[sess] || [];
+    (arr||[]).forEach(num=>{
+      const r = ranges.find(rg => num >= rg.from && num <= rg.to);
+      if (r && result[r.s]) result[r.s].push(num);
+    });
+  });
+
+  Object.keys(result).forEach(k=>{
+    const uniq = Array.from(new Set(result[k]||[])).sort((a,b)=>a-b);
+    result[k] = uniq;
+  });
+  return result;
 }
 
-.flip-card .flip-back::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.25);
-  border-radius: 6px;
+function collectWrongQuestions(roundRawOrNorm){
+  const r = (roundRawOrNorm?.by_class || roundRawOrNorm?.subject_results || roundRawOrNorm?.group_results || roundRawOrNorm?.wrong_by_session)
+    ? roundRawOrNorm
+    : (window.normalizeRound?.(roundRawOrNorm) || roundRawOrNorm);
+
+  if (r.wrong_by_session && Object.keys(r.wrong_by_session).length){
+    return mapWrongBySessionToSubjects(r.wrong_by_session);
+  }
+
+  const out = {};
+
+  if (Array.isArray(r?.subject_results)) {
+    r.subject_results.forEach(s=>{
+      const nm = s.name;
+      if (!nm) return;
+      const wrongs = extractWrongFromSubjectRow(s);
+      if (wrongs.length) out[nm] = wrongs;
+    });
+    return out;
+  }
+
+  if (Array.isArray(r?.group_results)) {
+    r.group_results.forEach(g=>{
+      const nm = String(g.name);
+      if (!(nm in SUBJECT_MAX)) return;
+      const wrongs = extractWrongFromSubjectRow(g);
+      if (wrongs.length) out[nm] = wrongs;
+    });
+    return out;
+  }
+
+  const groups = r?.by_class?.["종합"]?.groups || {};
+  Object.keys(groups).forEach(nm=>{
+    const row = groups[nm] || {};
+    const wrongs = extractWrongFromSubjectRow(row);
+    if (wrongs.length) out[nm] = wrongs;
+  });
+  return out;
 }
 
-.flip-card .flip-back::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.4);
+function buildWrongPanelHTML(roundLabel, roundRawOrNorm){
+  const wrongMapRaw = collectWrongQuestions(roundRawOrNorm);
+  
+  console.log(`[buildWrongPanel] ${roundLabel} - collectWrongQuestions 결과:`, wrongMapRaw);
+
+  const items = ALL_SUBJECTS.map(sj => {
+    const arr = Array.isArray(wrongMapRaw[sj]) ? wrongMapRaw[sj].slice(0, 999) : [];
+    
+    console.log(`[buildWrongPanel] ${roundLabel} - ${sj} 오답:`, arr);
+    
+    const cells = arr.length
+      ? arr.map(n => `<div class="qcell bad">${n}</div>`).join('')
+      : '<div class="small" style="opacity:.8">오답 없음</div>';
+
+    return `
+      <div class="item">
+        <button type="button" class="acc-btn"
+          onclick="this.classList.toggle('open'); const p=this.nextElementSibling; p.style.maxHeight = p.style.maxHeight ? '' : p.scrollHeight + 'px';">
+          <span>${sj} 오답 (${arr.length}문항)</span>
+          <span class="rotate">❯</span>
+        </button>
+        <div class="panel">
+          <div class="qgrid" style="padding:6px 0">${cells}</div>
+        </div>
+      </div>
+    `;
+  });
+
+  return `
+    <h2 style="margin-top:0">${roundLabel} 오답 피드백</h2>
+    <div class="small" style="opacity:.8; margin-bottom:6px">과목명을 클릭하면 틀린 문항이 펼쳐집니다.</div>
+    <div class="accordion">
+      ${items.join('')}
+    </div>
+  `;
 }
 
-
-/* 회차 그룹 카드 내부 공통 (가독용) */
-.group-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
-.group-box{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--surface-2)}
-.group-box.ok{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.55)}
-.group-box.fail{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.55)}
-.span-12{grid-column:span 12}
-.group-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.subj-row{display:flex;flex-wrap:wrap;gap:6px 10px;margin-top:6px}
-.subj-chip{padding:4px 8px;border:1px solid var(--line);border-radius:999px;font-weight:800}
-.subj-chip .muted{opacity:.7;font-weight:600}
-
-/* 진행도 바(60% 컷 라인) */
-.progress{position:relative;width:100%;height:10px;background:#1b2542;border-radius:999px;overflow:hidden}
-.progress > .bar{height:100%;background:linear-gradient(90deg,#7ea2ff,#4cc9ff)}
-.progress .cutline{position:absolute;top:0;bottom:0;left:60%;width:2px;background:rgba(255,255,255,.55);pointer-events:none}
-
-/* 터치/클릭 시 버튼 제외하고 뒤집기 */
-.flip-card button{position:relative; z-index: 2;}
-/* 플립 카드 간격 (세로) */
-.flip-card {
-  margin-bottom: 16px;   /* 원하는 값: 12px~20px 정도 권장 */
+/* -------------------- 9) 플립 카드 -------------------- */
+function makeFlipCard({id, title, frontHTML, backHTML, backCaption}){
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <div id="${id}" class="flip-card">
+      <div class="flip-inner">
+        <div class="flip-face flip-front card">${frontHTML}</div>
+        <div class="flip-face flip-back card">
+          ${backHTML ?? `
+            <h2 style="margin-top:0">${title} 평균 비교</h2>
+            <canvas id="${id}-canvas" width="360" height="200"></canvas>
+            <div class="small" id="${id}-cap" style="margin-top:8px; opacity:.8">${backCaption||''}</div>
+          `}
+        </div>
+      </div>
+    </div>
+  `;
+  const card = wrap.querySelector('.flip-card');
+  card.addEventListener('click', (e)=>{
+    if (e.target.closest('button')) return;
+    card.classList.toggle('is-flipped');
+  });
+  return wrap.firstElementChild;
 }
+
+function chunk(arr, sizes){
+  const out = []; let i=0;
+  for (const s of sizes){ out.push(arr.slice(i, i+s)); i+=s; }
+  if (i < arr.length) out.push(arr.slice(i));
+  return out;
+}
+
+/* -------------------- 10) 회차 상세(앞면) -------------------- */
+function renderRound(hostSel, title, round){
+  const host = $(hostSel);
+  if(!host) return;
+
+  if(!round){
+    host.innerHTML = `<div class="small" style="opacity:.7">${title} 데이터가 없습니다.</div>`;
+    return;
+  }
+
+  const subjects = getSubjectScores(round);
+  const totalScore = ALL_SUBJECTS.reduce((a,n)=>a+(subjects[n]?.score||0), 0);
+  const totalMax   = TOTAL_MAX;
+  const overallRate = pct(totalScore, totalMax);
+
+  const groupSummaries = GROUPS.map(g => {
+    const gScore = g.subjects.reduce((a,n)=>a+(subjects[n]?.score||0), 0);
+    const gMax   = g.subjects.reduce((a,n)=>a+(subjects[n]?.max||0),   0);
+    const gRate  = pct(gScore, gMax);
+    const gPass  = gScore >= Math.ceil(gMax * 0.4);
+    return { def:g, score:gScore, max:gMax, rate:gRate, pass:gPass };
+  });
+  const anyGroupFail = groupSummaries.some(s => !s.pass);
+
+  const meets60 = (totalScore >= totalMax * 0.6);
+  const overallPass = meets60 && !anyGroupFail;
+
+  let reasonText = "통과";
+  if (!overallPass){
+    if (!meets60 && anyGroupFail) reasonText = "과락 및 평락으로 인한 불합격";
+    else if (!meets60)            reasonText = "평락으로 인한 불합격";
+    else                          reasonText = "과락으로 인한 불합격";
+  }
+
+  let html = `
+    <div class="round ${overallPass ? "" : "fail"}">
+      <div class="flex" style="justify-content:space-between;">
+        <h2 style="margin:0">${title} 총점</h2>
+        <div class="kpi"><div class="num">${fmt(totalScore)}</div><div class="sub">/ ${fmt(totalMax)}</div></div>
+      </div>
+      <div class="progress" style="margin:8px 0 2px 0">
+        <div class="bar" style="width:${overallRate}%"></div>
+        <div class="cutline"></div>
+      </div>
+      <div class="small" style="margin-top:10px">
+        정답률 ${overallRate}% (컷 60%: 204/340) · ${overallPass ? pill("통과","ok") : pill("불합격","red")}
+        <div class="small" style="margin-top:6px; opacity:.9">${reasonText}</div>
+      </div>
+    </div>
+    <div class="group-grid" style="margin-top:12px">
+  `;
+
+  groupSummaries.forEach(({def, score, max, rate, pass})=>{
+    let chipsHtml = "";
+    const names = def.subjects;
+    if (def.layoutChunks?.length){
+      const rows = chunk(names, def.layoutChunks);
+      rows.forEach(row=>{
+        chipsHtml += `<div class="subj-row">` + row.map(n=>{
+          const s = subjects[n]||{score:0,max:SUBJECT_MAX[n]||0};
+          return `<span class="subj-chip">${n} <span class="muted">${fmt(s.score)}/${fmt(s.max)}</span></span>`;
+        }).join("") + `</div>`;
+      });
+    } else {
+      chipsHtml = `<div class="subj-row">` + names.map(n=>{
+        const s = subjects[n]||{score:0,max:SUBJECT_MAX[n]||0};
+        return `<span class="subj-chip">${n} <span class="muted">${fmt(s.score)}/${fmt(s.max)}</span></span>`;
+      }).join("") + `</div>`;
+    }
+
+    html += `
+      <div class="group-box ${pass ? "ok" : "fail"} span-12">
+        <div class="group-head">
+          <div class="name" style="font-weight:800">${def.label}</div>
+          <div class="small">
+            소계 ${fmt(score)}/${fmt(max)} · 정답률 ${rate}%
+            ${pass ? pill("통과","ok") : pill("과락","red")}
+          </div>
+        </div>
+        ${chipsHtml}
+      </div>
+    `;
+  });
+
+  html += `</div>`;
+  host.innerHTML = html;
+}
+
+/* -------------------- 11) 전체 렌더 -------------------- */
+async function renderResultDynamic(sid){
+  console.log('renderResultDynamic 호출됨:', sid);
+  
+  const grid = $("#cards-grid");
+  grid.innerHTML = "";
+
+  const school = getSchoolFromSid(sid);
+  const rounds = await discoverRoundsFor(sid);
+  
+  console.log("렌더링 시작:", { sid, school, roundsCount: rounds.length });
+  
+  if (rounds.length === 0){
+    const msg = document.createElement('div');
+    msg.innerHTML = `<div class="card" style="margin-bottom:12px"><div class="small" style="opacity:.8">조회 가능한 회차 데이터가 없습니다.</div></div>`;
+    grid.appendChild(msg);
+    return;
+  }
+
+  let studentTotalsByRound = null;
+  let labelsForTrend = null;
+
+  if (SHOW_TREND_CARD) {
+    const topCard = makeFlipCard({
+      id: 'card-trend',
+      title: '종합 추이',
+      frontHTML: `
+        <div class="flex" style="justify-content:space-between;">
+          <div>
+            <div class="small">학수번호</div>
+            <div class="kpi"><div class="num" id="trend-sid">${sid}</div></div>
+            <div class="small" id="trend-school">${school}</div>
+          </div>
+          <div class="flex" id="trend-badges"></div>
+        </div>
+        <hr class="sep" />
+        <div class="small" style="opacity:.8">카드를 클릭하면 회차별 본인/학교/전국 꺾은선 그래프가 보입니다.</div>
+      `
+    });
+    grid.appendChild(topCard);
+
+    studentTotalsByRound = {};
+    labelsForTrend = [];
+  }
+
+  for (const {label, raw} of rounds){
+    try{
+      const wrongBySession = await fetchScoresRawAllSessions(sid, label);
+      if (wrongBySession && Object.keys(wrongBySession).length){
+        raw.wrong_by_session = wrongBySession;
+      }
+    }catch(e){ /* no-op */ }
+
+    const norm = (window.normalizeR
