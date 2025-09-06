@@ -110,27 +110,40 @@
   };
 
   // 6) ★ scores_raw/{round}/{klass}/{sid} 먼저 시도
-  async function readFromScoresRaw(sid, roundLabel, wrongByClass, debug){
-    const { doc, getDoc } =
-      await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+async function readFromScoresRaw(sid, roundLabel, wrongByClass, debug){
+  const { doc, getDoc } =
+    await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
 
-    const klasses = ["1교시","2교시","3교시","4교시"];
-    let hit = 0;
+  const klasses = ["1교시","2교시","3교시","4교시"];
+  let hit = 0;
 
-    for (const klass of klasses){
-      const dref = doc(window.__db, "scores_raw", roundLabel, klass, sid);
-      const snap = await getDoc(dref);
-      if (debug) console.log(`[TRY scores_raw] scores_raw/${roundLabel}/${klass}/${sid} exists?`, snap.exists());
-      if (!snap.exists()) continue;
+  for (const klass of klasses){
+    const dref = doc(window.__db, "scores_raw", roundLabel, klass, sid);
+    const snap = await getDoc(dref);
+    
+    if (debug) console.log(`[TRY scores_raw] scores_raw/${roundLabel}/${klass}/${sid} exists?`, snap.exists());
+    
+    if (!snap.exists()) continue;
 
-      const d = snap.data() || {};
-      const wrong = toNumberArray(d.wrongQuestions || d.wrong || []);
-      const total = num(d.totalQuestions || d.total || 0);
-      addWrong(wrongByClass, klass, wrong, total);
-      hit++;
-    }
-    return hit;
+    const d = snap.data() || {};
+    
+    // 🔍 실제 데이터 구조 확인 - 이 로그가 핵심입니다!
+    console.log(`[DEBUG scores_raw] ${roundLabel}/${klass}/${sid} 전체 데이터:`, d);
+    console.log(`[DEBUG scores_raw] ${roundLabel}/${klass}/${sid} wrongQuestions:`, d.wrongQuestions);
+    console.log(`[DEBUG scores_raw] ${roundLabel}/${klass}/${sid} 전체 키:`, Object.keys(d));
+
+    const wrong = toNumberArray(d.wrongQuestions || d.wrong || []);
+    const total = num(d.totalQuestions || d.total || 0);
+    
+    console.log(`[DEBUG parsed] ${roundLabel}/${klass} - wrong:`, wrong, 'total:', total);
+    
+    addWrong(wrongByClass, klass, wrong, total);
+    hit++;
   }
+  
+  console.log(`[DEBUG final] ${roundLabel} wrongByClass:`, wrongByClass);
+  return hit;
+}
 
   // 7) wrongQuestions → round 스냅샷
   async function buildRoundFromWrong(sid, roundLabel){
