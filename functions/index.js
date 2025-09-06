@@ -147,7 +147,7 @@ async function updateSessionAnalytics(roundLabel, session) {
       analytics.totalStudents++;
       
       // 학교별 통계
-      const schoolCode = sid.substring(0, 2);
+      const schoolCode = String(sid).substring(0, 2);
       if (!analytics.schoolStats[schoolCode]) {
         analytics.schoolStats[schoolCode] = {
           totalStudents: 0,
@@ -259,7 +259,7 @@ async function updateRoundAnalytics(roundLabel) {
         const analyticsRef = db.collection('analytics').doc(`${roundLabel}_${session}`);
         const analyticsSnap = await analyticsRef.get();
         
-        if (analyticsSnap.exists()) {
+        if (analyticsSnap.exists) {
           roundAnalytics.sessions[session] = analyticsSnap.data();
         }
       } catch (error) {
@@ -434,7 +434,7 @@ exports.getQuestionChoiceStats = functions.https.onRequest(async (req, res) => {
     const analyticsRef = db.collection('analytics').doc(`${roundLabel}_${session}`);
     const analyticsSnap = await analyticsRef.get();
     
-    if (analyticsSnap.exists()) {
+    if (analyticsSnap.exists) {
       const data = analyticsSnap.data();
       const questionStats = data.questionStats?.[qNum];
       const choiceStats = data.choiceStats?.[qNum];
