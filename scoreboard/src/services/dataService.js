@@ -348,13 +348,15 @@ function convertWrongToScores(wrongBySession) {
   };
 }
 
-// 회차 자동 탐색 - 🎯 기존 로직 복원 (데이터 있는 것만 표시)
+// 회차 자동 탐색 - 🎯 조건 완화 (미응시자/0점자도 포함)
 export async function discoverRoundsFor(sid) {
   const found = [];
   
   for (const label of ROUND_LABELS) {
     const data = await fetchRoundData(sid, label);
-    if (data && data.totalScore > 0) { // 기존 조건 유지
+    
+    // 🎯 데이터가 있으면 점수 상관없이 모두 포함
+    if (data) {
       found.push({ label, data });
     }
   }
