@@ -4,6 +4,8 @@ import { fmt, pct, pill, chunk, detectStudentAbsenceStatus } from '../utils/help
 import { SUBJECT_MAX } from '../services/dataService';
 import WrongAnswerPanel from './WrongAnswerPanel';
 
+
+
 /**
  * 그룹(과목 묶음) 단위 "미응시" 판정:
  * - 해당 그룹의 모든 과목 점수가 비어있거나 숫자가 아니면 => 미응시(absent)로 간주
