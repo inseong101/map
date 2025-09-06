@@ -1,4 +1,4 @@
-// src/utils/helpers.js
+// src/utils/helpers.js - 정리된 버전
 
 // 숫자 포맷팅
 export function fmt(n) {
@@ -116,6 +116,16 @@ export function isValidStudentId(sid) {
   return validCodes.includes(schoolCode);
 }
 
+// 학교명 → 학교코드 변환
+export function getSchoolCodeFromName(schoolName) {
+  const schoolMap = {
+    "가천대": "01", "경희대": "02", "대구한": "03", "대전대": "04",
+    "동국대": "05", "동신대": "06", "동의대": "07", "부산대": "08",
+    "상지대": "09", "세명대": "10", "우석대": "11", "원광대": "12"
+  };
+  return schoolMap[schoolName] || "01";
+}
+
 // 학교별/전국 평균 데이터 조회 (Firestore에서)
 export async function getAverages(schoolName, roundLabel) {
   try {
@@ -211,38 +221,6 @@ export async function getRealScoreDistribution(roundLabel) {
       bySchool: {}
     };
   }
-}
-
-// 학교명 → 학교코드 변환
-export function getSchoolCodeFromName(schoolName) {
-  const schoolMap = {
-    "가천대": "01", "경희대": "02", "대구한": "03", "대전대": "04",
-    "동국대": "05", "동신대": "06", "동의대": "07", "부산대": "08",
-    "상지대": "09", "세명대": "10", "우석대": "11", "원광대": "12"
-  };
-  return schoolMap[schoolName] || "01";
-}
-
-// src/utils/helpers.js 파일 맨 끝에 추가할 코드
-
-// 유효한 학수번호인지 확인 (01~12로 시작하는 6자리)
-export function isValidStudentId(sid) {
-  if (!sid || typeof sid !== 'string') return false;
-  if (sid.length !== 6) return false;
-  
-  const schoolCode = sid.slice(0, 2);
-  const validCodes = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
-  return validCodes.includes(schoolCode);
-}
-
-// 학교명 → 학교코드 변환 (기존 함수를 export로 변경)
-export function getSchoolCodeFromName(schoolName) {
-  const schoolMap = {
-    "가천대": "01", "경희대": "02", "대구한": "03", "대전대": "04",
-    "동국대": "05", "동신대": "06", "동의대": "07", "부산대": "08",
-    "상지대": "09", "세명대": "10", "우석대": "11", "원광대": "12"
-  };
-  return schoolMap[schoolName] || "01";
 }
 
 // 미응시자 통계 분석 함수
