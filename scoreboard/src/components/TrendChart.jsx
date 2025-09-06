@@ -69,7 +69,8 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
           totalNational: natScores.length,
           totalSchool: schScores.length,
           nationalPercentile,
-          schoolPercentile
+          schoolPercentile,
+          countsNational: dist?.countsNational ?? { totalAttended: 0, validFull: 0, absent: 0, dropout: 0 }
         });
       }
 
@@ -142,10 +143,6 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
       ? `${school} 분포 (총 ${cur.totalSchool}명)`
       : `전국 분포 (총 ${cur.totalNational}명)`;
     const avg = isSchoolMode ? cur.schoolAvg : cur.nationalAvg;
-    
-    // ✅ 상위 퍼센트 표시
-    const percentile = isSchoolMode ? cur.schoolPercentile : cur.nationalPercentile;
-    const percentileText = percentile !== null ? `상위 ${percentile}%` : '';
 
     // 제목
     ctx.fillStyle = '#e8eeff';
@@ -155,13 +152,6 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
     ctx.fillStyle = '#9db0d6';
     ctx.font = '12px system-ui';
     ctx.fillText(`평균: ${avg}점`, W / 2, 40);
-    
-    // ✅ 상위 퍼센트 표시 (올바른 계산)
-    if (percentileText) {
-      ctx.fillStyle = '#ef4444';
-      ctx.font = 'bold 12px system-ui';
-      ctx.fillText(`본인: ${percentileText}`, W / 2, 55);
-    }
 
     // 축/격자
     const activeBins = isSchoolMode ? cur.schoolBins : cur.nationalBins;
@@ -398,6 +388,25 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
               </span>)
             </>
           )}
+
+     {/* ✅ 카운트 4종 (전국 기준) */}
+     <div className="small" style={{ marginTop: 6 }}>
+        <span style={{ marginRight: 10 }}>
+          전체응시자: <b>{current.countsNational.totalAttended}</b>
+        </span>
+        <span style={{ marginRight: 10 }}>
+          유효응시자: <b>{current.countsNational.validFull}</b>
+        </span>
+        <span style={{ marginRight: 10 }}>
+          미응시자: <b>{current.countsNational.absent}</b>
+        </span>
+        <span>
+          중도포기자: <b>{current.countsNational.dropout}</b>
+        </span>
+      </div>
+
+
+          
         </div>
       )}
 
