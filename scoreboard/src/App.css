@@ -1,4 +1,4 @@
-/* src/App.css */
+/* src/App.css - 간소화된 색깔 구조 적용 */
 /* ===== 전졸협 성적 사이트 기본 테마 ===== */
 :root{
   --bg: #0b1020;
@@ -72,6 +72,15 @@ h2{margin:8px 0; font-size:18px; color:var(--muted); font-weight:700}
 }
 .badge.pass{background:rgba(34,197,94,.18); border-color:rgba(34,197,94,.55)}
 .badge.fail{background:rgba(239,68,68,.18); border-color:rgba(239,68,68,.55)}
+/* 🎯 미응시/중도포기 배지 (보라색) */
+.badge.absent {
+  background: rgba(168,85,247,.15);
+  color: #a855f7;
+  border: 1px solid rgba(168,85,247,.35);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: 700;
+}
 
 /* Buttons */
 .btn{
@@ -120,7 +129,7 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
   background:linear-gradient(90deg, var(--bad), #ff6b6b);
 }
 
-/* Group boxes */
+/* Group boxes - 🎯 단순히 과락/통과만 표시 (초록/빨강) */
 .group-grid{display:grid; grid-template-columns:repeat(12,1fr); gap:12px}
 .group-box{border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--surface-2)}
 .group-box.ok{background:rgba(34,197,94,.12); border-color:rgba(34,197,94,.55)}
@@ -132,16 +141,42 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 .subj-chip .muted{opacity:.7; font-weight:600}
 
 /* Pills */
-.pill{padding:3px 8px; border-radius:999px; font-size:12px; border:1px solid #33416f; color:var(--muted)}
+.pill{padding:3px 8px; border-radius:999px; font-size:12px; border:1px solid #334166; color:var(--muted)}
 .pill.green{border-color:rgba(34,197,94,.6); color:#d9ffe7}
 .pill.warn{border-color:rgba(245,158,11,.6); color:#fff4d6}
 .pill.red{border-color:rgba(239,68,68,.7); color:#ffd8d8}
 
-/* Flip Cards - 높이 문제 해결 */
+/* 🎯 플립 카드 - 부모에 색깔 적용 */
 .flip-card { 
   perspective: 1200px; 
   margin-bottom: 16px;
   height: fit-content;
+  /* 기본 카드 스타일 */
+  background: linear-gradient(180deg, rgba(21,29,54,.9), var(--surface));
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.25);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+/* 🎯 부모 카드 상태별 색깔 */
+.flip-card.card-pass {
+  background: linear-gradient(180deg, rgba(34,197,94,.15), rgba(34,197,94,.08));
+  border-color: rgba(34,197,94,.3);
+  box-shadow: 0 10px 30px rgba(34,197,94,.1);
+}
+
+.flip-card.card-fail {
+  background: linear-gradient(180deg, rgba(239,68,68,.15), rgba(239,68,68,.08));
+  border-color: rgba(239,68,68,.3);
+  box-shadow: 0 10px 30px rgba(239,68,68,.1);
+}
+
+.flip-card.card-absent {
+  background: linear-gradient(180deg, rgba(168,85,247,.16), rgba(168,85,247,.08));
+  border-color: rgba(168,85,247,.35);
+  box-shadow: 0 10px 30px rgba(168,85,247,.12);
 }
 
 .flip-card .flip-inner{
@@ -149,7 +184,6 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
   width: 100%;
   transform-style: preserve-3d;
   transition: transform .6s ease;
-  /* 높이를 앞면 기준으로 고정 */
   min-height: fit-content;
 }
 
@@ -158,6 +192,7 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
   transform: rotateY(180deg); 
 }
 
+/* 🎯 자녀 카드 - 색깔 제거, 구조만 담당 */
 .flip-card .flip-face{
   position: absolute;
   top: 0;
@@ -171,18 +206,21 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 .flip-card .flip-front{ 
   transform: rotateY(0deg); 
   position: relative;
-  /* 앞면은 자연스러운 높이 */
   height: auto;
 }
 
 .flip-card .flip-back { 
   transform: rotateY(180deg);
   position: absolute;
-  /* 뒷면 글자색 앞면과 동일하게 */
   color: var(--ink);
-  /* 뒷면 높이를 앞면과 동일하게 고정 */
   height: 100%;
   box-sizing: border-box;
+}
+
+/* 🎯 카드 내용 패딩 */
+.card-content {
+  padding: 16px;
+  height: 100%;
 }
 
 /* 플립 카드 뒷면 스크롤 */
@@ -191,7 +229,6 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
-  /* max-height 제거 - 앞면 높이에 맞춤 */
 }
 
 .flip-card .flip-back::-webkit-scrollbar {
