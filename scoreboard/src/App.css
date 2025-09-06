@@ -1,237 +1,223 @@
-// src/components/RoundCard.jsx - 완전 수정본
-import React, { useState, useEffect, useRef } from 'react';
-import { fmt, pct, pill, chunk, detectStudentAbsenceStatus } from '../utils/helpers';
-import { SUBJECT_MAX } from '../services/dataService';
-import WrongAnswerPanel from './WrongAnswerPanel';
+/* src/App.css - 최종 본 */
 
-/**
- * 그룹(과목 묶음) 단위 "미응시" 판정:
- * - 해당 그룹의 모든 과목 점수가 비어있거나 숫자가 아니면 => 미응시(absent)로 간주
- * - 점수가 0이더라도 "0"이 실제 채점 결과일 수 있으므로, "undefined/null/NaN"만 미응시로 본다.
- */
-function isGroupAbsent(subjects, subjectScores) {
-  if (!Array.isArray(subjects) || !subjects.length) return false;
-  return subjects.every((s) => {
-    const val = subjectScores?.[s];
-    return val == null || !Number.isFinite(Number(val));
-  });
+/* ===== 전졸협 성적 사이트 기본 테마 ===== */
+:root{
+  --bg: #0b1020;
+  --surface: #11172b;
+  --surface-2:#151d36;
+  --line: #213056;
+  --ink: #e8eeff;
+  --muted:#9db0d6;
+  --primary:#7ea2ff;
+  --ok:#22c55e;
+  --warn:#f59e0b;
+  --bad:#ef4444;
 }
 
-function RoundCard({ label, data, sid }) {
-  const [isFlipped, setIsFlipped] = useState(false);
-  const flipCardRef = useRef(null);
-  const frontRef = useRef(null);
+*{box-sizing:border-box}
+html,body{
+  margin:0; padding:0;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  background:var(--bg); color:var(--ink);
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+}
+a{color:var(--primary); text-decoration:none}
+img{max-width:100%; display:block}
 
-  // 안전 가드 & 파생값
-  const totalScore = Number.isFinite(data?.totalScore) ? Number(data.totalScore) : 0;
-  const totalMax = Number.isFinite(data?.totalMax) ? Number(data.totalMax) : 340;
-  const overallRate = pct(totalScore, totalMax);
+/* Layout */
+.container{max-width:1100px; margin:24px auto; padding:0 16px}
+.header{display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap}
+h1{margin:0 0 6px 0; font-size:24px; font-weight:800}
+h2{margin:8px 0; font-size:18px; color:var(--muted); font-weight:700}
+.small{color:var(--muted); font-size:12px}
 
-  const overallPass = !!data?.overallPass;
-  const meets60 = !!data?.meets60;
-  const anyGroupFail = !!data?.anyGroupFail;
-  const groupResults = Array.isArray(data?.groupResults) ? data.groupResults : [];
-  const subjectScores = data?.subjectScores || {};
-  const wrongBySession = data?.wrongBySession || {};
+/* Grid */
+.grid{display:grid; grid-template-columns:repeat(12,1fr); gap:16px}
+.col-12{grid-column:span 12}
+.col-6{grid-column:span 6}
+@media (max-width: 860px){ .col-6{grid-column:span 12} }
 
-  // 응시 상태 감지 (미응시/중도포기/풀참여)
-  const absence = detectStudentAbsenceStatus(wrongBySession);
-  const isNoAttendance = !!absence?.isNoAttendance;
-  const isPartiallyAbsent = !!absence?.isPartiallyAbsent;
-  const missedSessions = absence?.missedSessions || [];
-
-  // 전체 카드 배경 상태
-  // - 미응시: 보라(card-absent)
-  // - 중도포기: 빨강(card-fail)
-  // - 정상응시: 합격=초록(card-pass) / 불합격=빨강(card-fail)
-  const overallClass =
-    isNoAttendance
-      ? 'card card-absent'
-      : (isPartiallyAbsent
-          ? 'card card-fail'
-          : (overallPass ? 'card card-pass' : 'card card-fail'));
-
-  // 상단 사유 문구
-  const getReasonText = () => {
-    if (isNoAttendance) return '전체 미응시';
-    if (isPartiallyAbsent) return '중도포기';
-    if (overallPass) return '통과';
-    if (!meets60 && anyGroupFail) return '과락 및 평락으로 인한 불합격';
-    if (!meets60) return '평락으로 인한 불합격';
-    return '과락으로 인한 불합격';
-  };
-
-  // 높이 동기화 (플립 카드 앞/뒤 동일 높이)
-  useEffect(() => {
-    const syncHeight = () => {
-      if (flipCardRef.current && frontRef.current) {
-        const frontHeight = frontRef.current.offsetHeight;
-        flipCardRef.current.style.setProperty('--front-height', `${frontHeight}px`);
-        flipCardRef.current.classList.add('height-synced');
-      }
-    };
-    const t = setTimeout(syncHeight, 100);
-    window.addEventListener('resize', syncHeight);
-    return () => {
-      clearTimeout(t);
-      window.removeEventListener('resize', syncHeight);
-    };
-  }, []);
-
-  // 그룹(과목 묶음) 렌더링
-  const renderGroupBoxes = () => {
-    return groupResults.map((group) => {
-      const {
-        name,
-        label: groupLabel,
-        subjects = [],
-        layoutChunks,
-        score = 0,
-        max = 0,
-        rate = 0,
-        pass = false,
-      } = group || {};
-
-      // 과목 칩 렌더링 (미응시 과목은 칩 자체는 동일하되 점수는 '-' 처리됨)
-      let chipsNode = null;
-      const renderChip = (subject) => {
-        const sc = subjectScores?.[subject];
-        const maxSc = SUBJECT_MAX?.[subject] ?? 0;
-        const hasScore = sc != null && Number.isFinite(Number(sc));
-        return (
-          <span key={subject} className="subj-chip">
-            {subject}{' '}
-            <span className="muted">
-              {hasScore ? fmt(sc) : '-'} / {fmt(maxSc)}
-            </span>
-          </span>
-        );
-      };
-
-      if (Array.isArray(layoutChunks) && layoutChunks.length) {
-        const rows = chunk(subjects, layoutChunks);
-        chipsNode = rows.map((row, i) => (
-          <div key={i} className="subj-row">
-            {row.map((subject) => renderChip(subject))}
-          </div>
-        ));
-      } else {
-        chipsNode = (
-          <div className="subj-row">
-            {subjects.map((subject) => renderChip(subject))}
-          </div>
-        );
-      }
-
-      // ✅ 그룹 단위 미응시 판정 → 보라색 박스(.group-box.absent)
-      const groupAbsent = isGroupAbsent(subjects, subjectScores);
-      const groupClass = groupAbsent ? 'absent' : (pass ? 'ok' : 'fail');
-
-      return (
-        <div key={name || groupLabel} className={`group-box ${groupClass} span-12`}>
-          <div className="group-head">
-            <div className="name" style={{ fontWeight: 800 }}>
-              {groupLabel}
-              {/* 그룹 미응시 뱃지 */}
-              {groupAbsent && (
-                <span className="badge absent" style={{ marginLeft: 8, fontSize: 10 }}>
-                  미응시
-                </span>
-              )}
-            </div>
-            <div className="small">
-              소계 {fmt(score)}/{fmt(max)} · 정답률 {rate}%
-              {!groupAbsent && ( // 미응시는 통과/과락 배지 대신 미응시 배지만
-                pass
-                  ? <span dangerouslySetInnerHTML={{ __html: pill('통과', 'ok') }} />
-                  : <span dangerouslySetInnerHTML={{ __html: pill('과락', 'red') }} />
-              )}
-            </div>
-          </div>
-          {chipsNode}
-        </div>
-      );
-    });
-  };
-
-  const handleCardClick = (e) => {
-    // 내부 버튼 클릭은 무시
-    if (e.target.closest('button')) return;
-    setIsFlipped((v) => !v);
-  };
-
-  return (
-    <div
-      ref={flipCardRef}
-      className={`flip-card ${overallClass}`}
-      onClick={handleCardClick}
-    >
-      <div className={`flip-inner ${isFlipped ? 'is-flipped' : ''}`}>
-        {/* 앞면 - 성적 요약 */}
-        <div ref={frontRef} className="flip-face flip-front card">
-          <div className={`round ${overallPass ? '' : 'fail'}`}>
-            <div className="flex" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <h2 style={{ margin: 0 }}>{label} 총점</h2>
-
-                {/* 회차 미응시 / 중도포기 안내 */}
-                {isNoAttendance && (
-                  <div className="small" style={{ marginTop: 4, color: 'var(--muted)' }}>
-                    <span className="badge absent" style={{ fontSize: 11 }}>
-                      전체 미응시
-                    </span>
-                  </div>
-                )}
-                {(!isNoAttendance && isPartiallyAbsent) && (
-                  <div className="small" style={{ marginTop: 4, color: 'var(--muted)' }}>
-                    <span className="badge absent" style={{ fontSize: 11 }}>
-                      중도포기 (빠진 교시: {missedSessions.join(', ')})
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              <div className="kpi">
-                <div className="num">{fmt(totalScore)}</div>
-                <div className="sub">/ {fmt(totalMax)}</div>
-              </div>
-            </div>
-
-            {/* 진행바 + 컷라인 */}
-            <div className="progress" style={{ margin: '8px 0 2px 0' }}>
-              <div className="bar" style={{ width: `${overallRate}%` }} />
-              <div className="cutline" />
-            </div>
-
-            {/* 상태 배지 & 사유 */}
-            <div className="small" style={{ marginTop: 10 }}>
-              정답률 {overallRate}% (컷 60%: 204/340) ·{' '}
-              {isNoAttendance
-                ? <span className="badge absent">미응시</span>
-                : (isPartiallyAbsent
-                    ? <span dangerouslySetInnerHTML={{ __html: pill('중도포기', 'red') }} />
-                    : (overallPass
-                        ? <span dangerouslySetInnerHTML={{ __html: pill('통과', 'ok') }} />
-                        : <span dangerouslySetInnerHTML={{ __html: pill('불합격', 'red') }} />))}
-              <div className="small" style={{ marginTop: 6, opacity: 0.9 }}>
-                {getReasonText()}
-              </div>
-            </div>
-          </div>
-
-          {/* 그룹(과목 묶음) 박스들 */}
-          <div className="group-grid" style={{ marginTop: 12 }}>
-            {renderGroupBoxes()}
-          </div>
-        </div>
-
-        {/* 뒷면 - 오답 패널 */}
-        <div className="flip-face flip-back card">
-          <WrongAnswerPanel roundLabel={label} data={data} />
-        </div>
-      </div>
-    </div>
-  );
+/* Card - 기본 스타일 */
+.card{
+  background:linear-gradient(180deg, rgba(21,29,54,.9), var(--surface));
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:16px;
+  box-shadow:0 10px 30px rgba(0,0,0,.25);
+  height: fit-content;
+  min-height: auto;
 }
 
-export default RoundCard;
+/* ✅ 합격/불합격/미응시 카드 배경 & 테두리 & 그림자 */
+.card.card-pass {
+  background: linear-gradient(180deg, rgba(34,197,94,.15), rgba(34,197,94,.08));
+  border-color: rgba(34,197,94,.3);
+  box-shadow: 0 10px 30px rgba(34,197,94,.1);
+}
+.card.card-fail {
+  background: linear-gradient(180deg, rgba(239,68,68,.15), rgba(239,68,68,.08));
+  border-color: rgba(239,68,68,.3);
+  box-shadow: 0 10px 30px rgba(239,68,68,.1);
+}
+/* 🟣 미응시(보라) */
+.card.card-absent {
+  background: linear-gradient(180deg, rgba(168,85,247,.16), rgba(168,85,247,.08));
+  border-color: rgba(168,85,247,.35);
+  box-shadow: 0 10px 30px rgba(168,85,247,.12);
+}
+
+/* 플립 카드 앞/뒤 면에도 동일 톤 적용 */
+.flip-face.card.card-pass { 
+  background: linear-gradient(180deg, rgba(34,197,94,.15), rgba(34,197,94,.08));
+  border-color: rgba(34,197,94,.3);
+}
+.flip-face.card.card-fail { 
+  background: linear-gradient(180deg, rgba(239,68,68,.15), rgba(239,68,68,.08));
+  border-color: rgba(239,68,68,.3);
+}
+.flip-face.card.card-absent { 
+  background: linear-gradient(180deg, rgba(168,85,247,.16), rgba(168,85,247,.08));
+  border-color: rgba(168,85,247,.35);
+}
+
+/* 그룹 박스: 통과/과락 기본 + 미응시(보라) 추가 */
+.group-box{border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--surface-2)}
+.group-box.ok { background: rgba(34,197,94,.10); border-color: rgba(34,197,94,.55); }
+.group-box.fail { background: rgba(239,68,68,.10); border-color: rgba(239,68,68,.55); }
+/* ✅ 과목(그룹) 단위 미응시 보라색 */
+.group-box.absent { background: rgba(168,85,247,.10); border-color: rgba(168,85,247,.45); }
+
+/* 부모가 미응시 카드일 경우, 내부 그룹 박스도 보라톤 */
+.card.card-absent .group-box { background: rgba(168,85,247,.10); }
+
+/* '미응시/중도포기' 배지 (보라) */
+.badge{
+  display:inline-block; padding:6px 10px; border-radius:999px;
+  font-weight:700; letter-spacing:.2px; border:1px solid transparent;
+}
+.badge.pass{background:rgba(34,197,94,.18); border-color:rgba(34,197,94,.55)}
+.badge.fail{background:rgba(239,68,68,.18); border-color:rgba(239,68,68,.55)}
+.badge.absent {
+  background: rgba(168,85,247,.15);
+  color: #a855f7;
+  border: 1px solid rgba(168,85,247,.35);
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-weight: 700;
+}
+
+/* 좁은 카드 옵션 */
+.card.narrow { 
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+/* Flex utils */
+.flex{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+.flex-column { display: flex; flex-direction: column; gap: 12px; }
+
+/* KPI / Numbers */
+.kpi{display:flex; align-items:baseline; gap:10px}
+.kpi .num{font-size:28px; font-weight:800; letter-spacing:.2px}
+.kpi .sub{color:var(--muted); font-size:13px}
+
+/* Buttons */
+.btn{
+  appearance:none; border:1px solid var(--line);
+  background:var(--surface-2); color:var(--ink);
+  padding:8px 12px; border-radius:10px; cursor:pointer; font-weight:700;
+}
+.btn:hover{background:#0f1526}
+.btn:disabled{opacity:0.5; cursor:not-allowed}
+
+/* Inputs */
+.input{
+  background:var(--surface-2); color:var(--ink);
+  border:1px solid var(--line); border-radius:10px; padding:10px 12px;
+  font-weight:700; letter-spacing:.2px; outline:none;
+}
+.input:focus{border-color:var(--primary)}
+
+/* Separators */
+hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
+
+/* Progress */
+.progress{ position:relative; width:100%; height:10px;
+  background:#1b2542; border-radius:999px; overflow:hidden }
+.progress > .bar{height:100%; background:linear-gradient(90deg, #7ea2ff, #4cc9ff); transition:width .25s ease}
+/* 60% 컷 라인 */
+.progress .cutline{ position:absolute; top:0; bottom:0; left:60%; width:2px;
+  background:rgba(255,255,255,.55); pointer-events:none }
+/* 라운드가 평락(불합격)이면 막대 색을 빨간 계열로 */
+.round.fail .progress > .bar{ background:linear-gradient(90deg, var(--bad), #ff6b6b) }
+
+/* Group grid & chips */
+.group-grid{display:grid; grid-template-columns:repeat(12,1fr); gap:12px}
+.span-12{grid-column:span 12}
+.group-head{display:flex; align-items:center; justify-content:space-between; gap:10px}
+.subj-row{display:flex; flex-wrap:wrap; gap:6px 10px; margin-top:6px}
+.subj-chip{padding:4px 8px; border:1px solid var(--line); border-radius:999px; font-weight:800}
+.subj-chip .muted{opacity:.7; font-weight:600}
+
+/* Pills */
+.pill{padding:3px 8px; border-radius:999px; font-size:12px; border:1px solid #334166; color:var(--muted)}
+.pill.green{border-color:rgba(34,197,94,.6); color:#d9ffe7}
+.pill.warn{border-color:rgba(245,158,11,.6); color:#fff4d6}
+.pill.red{border-color:rgba(239,68,68,.7); color:#ffd8d8}
+
+/* Flip Cards */
+.flip-card { perspective: 1200px; margin-bottom: 16px; height: fit-content; }
+.flip-card .flip-inner{
+  position: relative; width: 100%;
+  transform-style: preserve-3d; transition: transform .6s ease; min-height: fit-content;
+}
+.flip-card.is-flipped .flip-inner, .flip-inner.is-flipped { transform: rotateY(180deg); }
+.flip-card .flip-face{ position: absolute; top: 0; left: 0; width: 100%;
+  backface-visibility: hidden; border-radius: 16px; overflow: hidden; }
+.flip-card .flip-front{ transform: rotateY(0deg); position: relative; height: auto; }
+.flip-card .flip-back { transform: rotateY(180deg); position: absolute; color: var(--ink); height: 100%; box-sizing: border-box; }
+/* 플립 카드 뒷면 스크롤 */
+.flip-card .flip-back { overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
+.flip-card .flip-back::-webkit-scrollbar { width: 6px; }
+.flip-card .flip-back::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); border-radius: 6px; }
+.flip-card .flip-back::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.25); border-radius: 6px; }
+/* 높이 동기화 */
+.flip-card.height-synced .flip-inner { height: var(--front-height); }
+.flip-card.height-synced .flip-back { height: var(--front-height); }
+
+/* WrongAnswerPanel - Accordion */
+.accordion { border-top: 1px solid var(--line); margin-top: 8px; }
+.accordion .session-group { margin-bottom: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); overflow: hidden; }
+.accordion .session-header {
+  background: linear-gradient(90deg, var(--surface-2), rgba(126,162,255,.08));
+  padding: 12px 16px; cursor: pointer; border-bottom: 1px solid var(--line);
+  transition: background .2s ease; display: flex; justify-content: space-between; align-items: center;
+}
+.accordion .session-header:hover { background: linear-gradient(90deg, rgba(126,162,255,.1), rgba(126,162,255,.15)); }
+.accordion .session-header .title { font-weight: 700; color: var(--ink); }
+.accordion .session-header .chevron { color: var(--muted); transition: transform .2s ease; font-size: 14px; }
+.accordion .session-header.expanded .chevron { transform: rotate(180deg); }
+.accordion .session-content { padding: 0; max-height: 0; overflow: hidden; transition: max-height .3s ease; }
+.accordion .session-content.expanded { max-height: 500px; padding: 16px; }
+.accordion .question-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(33,48,86,.3); }
+.accordion .question-item:last-child { border-bottom: none; }
+.accordion .question-num { font-weight: 700; color: var(--primary); min-width: 60px; }
+.accordion .question-subject { color: var(--muted); font-size: 12px; margin-left: auto; }
+
+/* Loading */
+.loading { display: flex; justify-content: center; align-items: center; padding: 40px 20px; color: var(--muted); }
+.loading::after {
+  content: ''; width: 20px; height: 20px; border: 2px solid var(--line);
+  border-top: 2px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin-left: 10px;
+}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* 반응형 */
+@media (max-width: 480px) {
+  .container { padding: 0 12px; }
+  .header { flex-direction: column; align-items: stretch; }
+  .kpi .num { font-size: 24px; }
+  .group-head { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .subj-row { gap: 4px 6px; }
+  .flip-card .flip-back { padding: 12px; }
+}
