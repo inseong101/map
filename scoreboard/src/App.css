@@ -1,17 +1,8 @@
-/* src/App.css - 최종 본 */
-
 /* ===== 전졸협 성적 사이트 기본 테마 ===== */
 :root{
-  --bg: #0b1020;
-  --surface: #11172b;
-  --surface-2:#151d36;
-  --line: #213056;
-  --ink: #e8eeff;
-  --muted:#9db0d6;
-  --primary:#7ea2ff;
-  --ok:#22c55e;
-  --warn:#f59e0b;
-  --bad:#ef4444;
+  --bg:#0b1020; --surface:#11172b; --surface-2:#151d36;
+  --line:#213056; --ink:#e8eeff; --muted:#9db0d6;
+  --primary:#7ea2ff; --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444;
 }
 
 *{box-sizing:border-box}
@@ -26,8 +17,12 @@ img{max-width:100%; display:block}
 
 /* Layout */
 .container{max-width:1100px; margin:24px auto; padding:0 16px}
+
+/* 헤더 기본 + 가운데 정렬 버전 */
 .header{display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap}
+.header.center{flex-direction:column; align-items:center; text-align:center; gap:8px}
 h1{margin:0 0 6px 0; font-size:24px; font-weight:800}
+h1.brand{font-size:26px; font-weight:900}
 h2{margin:8px 0; font-size:18px; color:var(--muted); font-weight:700}
 .small{color:var(--muted); font-size:12px}
 
@@ -35,100 +30,90 @@ h2{margin:8px 0; font-size:18px; color:var(--muted); font-weight:700}
 .grid{display:grid; grid-template-columns:repeat(12,1fr); gap:16px}
 .col-12{grid-column:span 12}
 .col-6{grid-column:span 6}
-@media (max-width: 860px){ .col-6{grid-column:span 12} }
+@media (max-width:860px){ .col-6{grid-column:span 12} }
 
-/* Card - 기본 스타일 */
+/* Card - 기본 */
 .card{
   background:linear-gradient(180deg, rgba(21,29,54,.9), var(--surface));
   border:1px solid var(--line);
   border-radius:16px;
   padding:16px;
   box-shadow:0 10px 30px rgba(0,0,0,.25);
-  height: fit-content;
-  min-height: auto;
+  height:fit-content; min-height:auto;
 }
+/* 조회 카드 좁게 + 중앙 */
+.card.narrow{max-width:560px; margin:0 auto 16px auto}
 
-/* ✅ 합격/불합격/미응시 카드 배경 & 테두리 & 그림자 */
-.card.card-pass {
-  background: linear-gradient(180deg, rgba(34,197,94,.15), rgba(34,197,94,.08));
-  border-color: rgba(34,197,94,.3);
-  box-shadow: 0 10px 30px rgba(34,197,94,.1);
+/* ✅ 합격/불합격/미응시 카드 배경 */
+.card.card-pass{
+  background:linear-gradient(180deg, rgba(34,197,94,.15), rgba(34,197,94,.08));
+  border-color:rgba(34,197,94,.3);
+  box-shadow:0 10px 30px rgba(34,197,94,.1);
 }
-.card.card-fail {
-  background: linear-gradient(180deg, rgba(239,68,68,.15), rgba(239,68,68,.08));
-  border-color: rgba(239,68,68,.3);
-  box-shadow: 0 10px 30px rgba(239,68,68,.1);
+.card.card-fail{
+  background:linear-gradient(180deg, rgba(239,68,68,.15), rgba(239,68,68,.08));
+  border-color:rgba(239,68,68,.3);
+  box-shadow:0 10px 30px rgba(239,68,68,.1);
 }
 /* 🟣 미응시(보라) */
-.card.card-absent {
-  background: linear-gradient(180deg, rgba(168,85,247,.16), rgba(168,85,247,.08));
-  border-color: rgba(168,85,247,.35);
-  box-shadow: 0 10px 30px rgba(168,85,247,.12);
+.card.card-absent{
+  background:linear-gradient(180deg, rgba(168,85,247,.16), rgba(168,85,247,.08));
+  border-color:rgba(168,85,247,.35);
+  box-shadow:0 10px 30px rgba(168,85,247,.12);
 }
 
-/* 플립 카드 앞/뒤 면에도 동일 톤 적용 */
-.flip-face.card.card-pass { 
-  background: linear-gradient(180deg, rgba(34,197,94,.15), rgba(34,197,94,.08));
-  border-color: rgba(34,197,94,.3);
-}
-.flip-face.card.card-fail { 
-  background: linear-gradient(180deg, rgba(239,68,68,.15), rgba(239,68,68,.08));
-  border-color: rgba(239,68,68,.3);
-}
-.flip-face.card.card-absent { 
-  background: linear-gradient(180deg, rgba(168,85,247,.16), rgba(168,85,247,.08));
-  border-color: rgba(168,85,247,.35);
-}
+/* 플립 카드 앞/뒤 톤 */
+.flip-face.card.card-pass{background:linear-gradient(180deg, rgba(34,197,94,.15), rgba(34,197,94,.08)); border-color:rgba(34,197,94,.3)}
+.flip-face.card.card-fail{background:linear-gradient(180deg, rgba(239,68,68,.15), rgba(239,68,68,.08)); border-color:rgba(239,68,68,.3)}
+.flip-face.card.card-absent{background:linear-gradient(180deg, rgba(168,85,247,.16), rgba(168,85,247,.08)); border-color:rgba(168,85,247,.35)}
 
-/* 그룹 박스: 통과/과락 기본 + 미응시(보라) 추가 */
+/* 그룹 박스(과목) : 통과/과락 + 과목단위 미응시(보라) */
 .group-box{border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--surface-2)}
-.group-box.ok { background: rgba(34,197,94,.10); border-color: rgba(34,197,94,.55); }
-.group-box.fail { background: rgba(239,68,68,.10); border-color: rgba(239,68,68,.55); }
-/* ✅ 과목(그룹) 단위 미응시 보라색 */
-.group-box.absent { background: rgba(168,85,247,.10); border-color: rgba(168,85,247,.45); }
+.group-box.ok{background:rgba(34,197,94,.10); border-color:rgba(34,197,94,.55)}
+.group-box.fail{background:rgba(239,68,68,.10); border-color:rgba(239,68,68,.55)}
+.group-box.absent{background:rgba(168,85,247,.10); border-color:rgba(168,85,247,.45)}
+/* 부모 카드가 미응시면 내부도 보라톤 */
+.card.card-absent .group-box{background:rgba(168,85,247,.10); border-color:rgba(168,85,247,.35)}
 
-/* 부모가 미응시 카드일 경우, 내부 그룹 박스도 보라톤 */
-.card.card-absent .group-box { background: rgba(168,85,247,.10); }
-
-/* '미응시/중도포기' 배지 (보라) */
+/* Badges */
 .badge{
   display:inline-block; padding:6px 10px; border-radius:999px;
   font-weight:700; letter-spacing:.2px; border:1px solid transparent;
 }
 .badge.pass{background:rgba(34,197,94,.18); border-color:rgba(34,197,94,.55)}
 .badge.fail{background:rgba(239,68,68,.18); border-color:rgba(239,68,68,.55)}
-.badge.absent {
-  background: rgba(168,85,247,.15);
-  color: #a855f7;
-  border: 1px solid rgba(168,85,247,.35);
-  padding: 2px 6px;
-  border-radius: 6px;
-  font-weight: 700;
-}
-
-/* 좁은 카드 옵션 */
-.card.narrow { 
-  max-width: 480px;
-  margin: 0 auto;
+.badge.absent{
+  background:rgba(168,85,247,.15); color:#a855f7;
+  border:1px solid rgba(168,85,247,.35);
+  padding:2px 6px; border-radius:6px; font-weight:700;
 }
 
 /* Flex utils */
 .flex{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
-.flex-column { display: flex; flex-direction: column; gap: 12px; }
+.flex-column{display:flex; flex-direction:column; gap:12px}
 
-/* KPI / Numbers */
+/* KPI */
 .kpi{display:flex; align-items:baseline; gap:10px}
 .kpi .num{font-size:28px; font-weight:800; letter-spacing:.2px}
 .kpi .sub{color:var(--muted); font-size:13px}
 
-/* Buttons */
+/* Buttons — 로딩 시 높이 고정 & 스피너 */
 .btn{
   appearance:none; border:1px solid var(--line);
   background:var(--surface-2); color:var(--ink);
-  padding:8px 12px; border-radius:10px; cursor:pointer; font-weight:700;
+  padding:8px 14px; border-radius:10px; cursor:pointer; font-weight:700;
+  display:inline-flex; align-items:center; justify-content:center;
+  min-height:40px; min-width:110px; line-height:1;
 }
 .btn:hover{background:#0f1526}
-.btn:disabled{opacity:0.5; cursor:not-allowed}
+.btn:disabled{opacity:.5; cursor:not-allowed}
+.btn.loading{position:relative; pointer-events:none; opacity:.9}
+.btn.loading::after{
+  content:''; display:inline-block; width:14px; height:14px; margin-left:8px;
+  border:2px solid rgba(255,255,255,.35); border-top-color:#fff;
+  border-radius:50%; animation:btnspin .9s linear infinite; vertical-align:-2px;
+}
+@keyframes btnspin{to{transform:rotate(360deg)}}
 
 /* Inputs */
 .input{
@@ -142,14 +127,11 @@ h2{margin:8px 0; font-size:18px; color:var(--muted); font-weight:700}
 hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 
 /* Progress */
-.progress{ position:relative; width:100%; height:10px;
-  background:#1b2542; border-radius:999px; overflow:hidden }
-.progress > .bar{height:100%; background:linear-gradient(90deg, #7ea2ff, #4cc9ff); transition:width .25s ease}
-/* 60% 컷 라인 */
-.progress .cutline{ position:absolute; top:0; bottom:0; left:60%; width:2px;
-  background:rgba(255,255,255,.55); pointer-events:none }
-/* 라운드가 평락(불합격)이면 막대 색을 빨간 계열로 */
-.round.fail .progress > .bar{ background:linear-gradient(90deg, var(--bad), #ff6b6b) }
+.progress{position:relative; width:100%; height:10px; background:#1b2542; border-radius:999px; overflow:hidden}
+.progress>.bar{height:100%; background:linear-gradient(90deg, #7ea2ff, #4cc9ff); transition:width .25s ease}
+.progress .cutline{position:absolute; top:0; bottom:0; left:60%; width:2px; background:rgba(255,255,255,.55); pointer-events:none}
+/* 라운드가 평락(불합격)이면 막대 빨강 */
+.round.fail .progress>.bar{background:linear-gradient(90deg, var(--bad), #ff6b6b)}
 
 /* Group grid & chips */
 .group-grid{display:grid; grid-template-columns:repeat(12,1fr); gap:12px}
@@ -166,228 +148,68 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 .pill.red{border-color:rgba(239,68,68,.7); color:#ffd8d8}
 
 /* Flip Cards */
-.flip-card { perspective: 1200px; margin-bottom: 16px; height: fit-content; }
-.flip-card .flip-inner{
-  position: relative; width: 100%;
-  transform-style: preserve-3d; transition: transform .6s ease; min-height: fit-content;
+.flip-card{perspective:1200px; margin-bottom:16px; height:fit-content}
+.flip-card .flip-inner{position:relative; width:100%; transform-style:preserve-3d; transition:transform .6s ease; min-height:fit-content}
+.flip-card.is-flipped .flip-inner, .flip-inner.is-flipped{transform:rotateY(180deg)}
+.flip-card .flip-face{position:absolute; top:0; left:0; width:100%; backface-visibility:hidden; border-radius:16px; overflow:hidden}
+.flip-card .flip-front{transform:rotateY(0deg); position:relative; height:auto}
+.flip-card .flip-back{transform:rotateY(180deg); position:absolute; color:var(--ink); height:100%; box-sizing:border-box}
+/* 플립 뒤 스크롤/높이 보장 */
+.flip-card .flip-back{
+  overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; scroll-behavior:smooth;
+  max-height:min(70vh, 700px); padding:16px;
 }
-.flip-card.is-flipped .flip-inner, .flip-inner.is-flipped { transform: rotateY(180deg); }
-.flip-card .flip-face{ position: absolute; top: 0; left: 0; width: 100%;
-  backface-visibility: hidden; border-radius: 16px; overflow: hidden; }
-.flip-card .flip-front{ transform: rotateY(0deg); position: relative; height: auto; }
-.flip-card .flip-back { transform: rotateY(180deg); position: absolute; color: var(--ink); height: 100%; box-sizing: border-box; }
-/* 플립 카드 뒷면 스크롤 */
-.flip-card .flip-back { overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
-.flip-card .flip-back::-webkit-scrollbar { width: 6px; }
-.flip-card .flip-back::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); border-radius: 6px; }
-.flip-card .flip-back::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.25); border-radius: 6px; }
-/* 높이 동기화 */
-.flip-card.height-synced .flip-inner { height: var(--front-height); }
-.flip-card.height-synced .flip-back { height: var(--front-height); }
+.flip-card.height-synced .flip-inner{height:var(--front-height)}
+.flip-card.height-synced .flip-back{height:var(--front-height); max-height:var(--front-height)}
 
-/* WrongAnswerPanel - Accordion */
-.accordion { border-top: 1px solid var(--line); margin-top: 8px; }
-.accordion .session-group { margin-bottom: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); overflow: hidden; }
-.accordion .session-header {
-  background: linear-gradient(90deg, var(--surface-2), rgba(126,162,255,.08));
-  padding: 12px 16px; cursor: pointer; border-bottom: 1px solid var(--line);
-  transition: background .2s ease; display: flex; justify-content: space-between; align-items: center;
+/* WrongAnswerPanel - (교시만 아코디언, 내부는 단순 그리드) */
+.accordion{border-top:1px solid var(--line); margin-top:8px}
+.accordion .session-group{margin-bottom:16px; border:1px solid var(--line); border-radius:12px; background:var(--surface-2); overflow:hidden}
+.accordion .session-header{
+  background:linear-gradient(90deg, var(--surface-2), rgba(126,162,255,.08));
+  padding:12px 16px; cursor:pointer; border-bottom:1px solid var(--line);
+  transition:background .2s ease; display:flex; justify-content:space-between; align-items:center;
 }
-.accordion .session-header:hover { background: linear-gradient(90deg, rgba(126,162,255,.1), rgba(126,162,255,.15)); }
-.accordion .session-header .title { font-weight: 700; color: var(--ink); }
-.accordion .session-header .chevron { color: var(--muted); transition: transform .2s ease; font-size: 14px; }
-.accordion .session-header.expanded .chevron { transform: rotate(180deg); }
-.accordion .session-content { padding: 0; max-height: 0; overflow: hidden; transition: max-height .3s ease; }
-.accordion .session-content.expanded { max-height: 500px; padding: 16px; }
-.accordion .question-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(33,48,86,.3); }
-.accordion .question-item:last-child { border-bottom: none; }
-.accordion .question-num { font-weight: 700; color: var(--primary); min-width: 60px; }
-.accordion .question-subject { color: var(--muted); font-size: 12px; margin-left: auto; }
+.accordion .session-header:hover{background:linear-gradient(90deg, rgba(126,162,255,.1), rgba(126,162,255,.15))}
+.accordion .session-header .title{font-weight:700; color:var(--ink)}
+.accordion .session-header .chevron{color:var(--muted); transition:transform .2s ease; font-size:14px}
+.accordion .session-header.expanded .chevron{transform:rotate(180deg)}
+.accordion .session-content{padding:0; max-height:0; overflow:hidden; transition:max-height .28s ease}
+.accordion .session-content.expanded{max-height:65vh; padding:12px 14px; overflow:auto}
 
-/* Loading */
-.loading { display: flex; justify-content: center; align-items: center; padding: 40px 20px; color: var(--muted); }
-.loading::after {
-  content: ''; width: 20px; height: 20px; border: 2px solid var(--line);
-  border-top: 2px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin-left: 10px;
-}
-@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-/* 반응형 */
-@media (max-width: 480px) {
-  .container { padding: 0 12px; }
-  .header { flex-direction: column; align-items: stretch; }
-  .kpi .num { font-size: 24px; }
-  .group-head { flex-direction: column; align-items: flex-start; gap: 6px; }
-  .subj-row { gap: 4px 6px; }
-  .flip-card .flip-back { padding: 12px; }
-}
-
-/* 버튼 로딩 상태(검색중…) */
-.btn.loading {
-  position: relative;
-  pointer-events: none;
-  opacity: 0.85;
-}
-
-.btn.loading::after {
-  content: '';
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  margin-left: 8px;
-  border: 2px solid rgba(255,255,255,.35);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: btnspin 0.9s linear infinite;
-  vertical-align: -2px;
-}
-
-@keyframes btnspin {
-  to { transform: rotate(360deg); }
-}
-
-/* 조회 카드 좁게 중앙 */
-.card.narrow {
-  max-width: 560px;
-  margin: 0 auto 16px auto;
-}
-
-/* ===== 플립 뒤 스크롤 복구(높이 보장 + 스크롤) ===== */
-.flip-card .flip-back {
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-  scroll-behavior: smooth;
-  /* 높이 정책은 프로젝트에 맞게: height-synced 쓰면 그 값, 아니면 아래 기본값 */
-  max-height: min(70vh, 700px);
-  padding: 16px;
-}
-
-
-/* height-synced가 있으면 그 값을 우선 */
-.flip-card.height-synced .flip-back {
-  max-height: var(--front-height);
-}
-
-/* ===== 세션(교시) 아코디언 - 부모 카드 색을 상속 ===== */
-.accordion.only-session .session-group {
-  margin-bottom: 16px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  /* 부모 카드 배경 톤 유지 */
-  background: inherit;
-}
-
-/* 미응시(보라 카드)면 세션 박스도 보라 톤으로 가볍게 강조 */
-.card.card-absent .accordion.only-session .session-group {
-  background: rgba(168,85,247,.10);
-  border-color: rgba(168,85,247,.35);
-}
-
-/* 세션 헤더 */
-.accordion.only-session .session-header {
-  width: 100%;
-  background: linear-gradient(90deg, var(--surface-2), rgba(126,162,255,.08));
-  padding: 12px 16px;
-  cursor: pointer;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  transition: background .2s ease;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  color: var(--ink);
-}
-.accordion.only-session .session-header:hover {
-  background: linear-gradient(90deg, rgba(126,162,255,.10), rgba(126,162,255,.15));
-}
-.accordion.only-session .session-header .title {
-  font-weight: 800;
-}
-.accordion.only-session .session-header .chevron {
-  color: var(--muted);
-  transition: transform .2s ease;
-}
-.accordion.only-session .session-header.expanded .chevron {
-  transform: rotate(90deg);
-}
-
-/* 세션 컨텐츠: 넉넉한 높이 + 내부 스크롤 */
-.accordion.only-session .session-content {
-  padding: 0;
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height .28s ease;
-}
-.accordion.only-session .session-content.expanded {
-  max-height: 65vh;    /* 🔹 이전보다 크게 */
-  padding: 12px 14px;
-  overflow: auto;
-}
-
-/* 과목 블록(자식 아코디언 삭제, 단순 블록) */
-.subject-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
-@media (max-width: 720px) {
-  .subject-grid { grid-template-columns: 1fr; }
-}
-
-.subject-block {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface-2); /* 기본 카드톤 */
-  padding: 10px;
-}
-.card.card-absent .subject-block {
-  /* 부모가 보라 카드면 과목 블록도 보라 톤 */
-  background: rgba(168,85,247,.08);
-  border-color: rgba(168,85,247,.35);
-}
-.subject-block.none {
-  opacity: .85;
-}
-.subject-title {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 6px;
-  font-weight: 800;
-  margin-bottom: 6px;
-}
-.subject-title .count {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-}
+/* 과목 블록(자식 아코디언 제거 → 단순 블록) */
+.subject-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:10px}
+@media (max-width:720px){ .subject-grid{grid-template-columns:1fr} }
+.subject-block{border:1px solid var(--line); border-radius:10px; background:var(--surface-2); padding:10px}
+.card.card-absent .subject-block{background:rgba(168,85,247,.08); border-color:rgba(168,85,247,.35)}
+.subject-block.none{opacity:.85}
+.subject-title{display:flex; justify-content:space-between; align-items:baseline; gap:6px; font-weight:800; margin-bottom:6px}
+.subject-title .count{color:var(--muted); font-size:12px; font-weight:700}
 
 /* 오답 번호 그리드 */
-.qgrid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+.qgrid{display:flex; flex-wrap:wrap; gap:6px}
+.qcell{
+  min-width:32px; height:28px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center;
+  padding:0 8px; font-weight:800; border:1px solid var(--line); color:var(--ink);
 }
-.qcell {
-  min-width: 32px;
-  height: 28px;
-  border-radius: 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 8px;
-  font-weight: 800;
-  border: 1px solid var(--line);
-  color: var(--ink);
-}
-.qcell.bad {
-  background: rgba(239,68,68,.14);
-  border-color: rgba(239,68,68,.5);
-}
+.qcell.bad{background:rgba(239,68,68,.14); border-color:rgba(239,68,68,.5)}
+/* 전체 카드가 미응시면 오답칩도 보라 톤 */
+.card.card-absent .qcell.bad{background:rgba(168,85,247,.12); border-color:rgba(168,85,247,.35)}
 
-/* (참고) 필수는 아니지만, 전체 카드가 미응시라면 내부 텍스트도 약간 보라 톤 */
-.card.card-absent .qcell.bad {
-  background: rgba(168,85,247,.12);
-  border-color: rgba(168,85,247,.35);
+/* Loading 블럭 */
+.loading{display:flex; justify-content:center; align-items:center; padding:40px 20px; color:var(--muted)}
+.loading::after{
+  content:''; width:20px; height:20px; border:2px solid var(--line); border-top:2px solid var(--primary);
+  border-radius:50%; animation:spin 1s linear infinite; margin-left:10px;
+}
+@keyframes spin{0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)}}
+
+/* 반응형 */
+@media (max-width:480px){
+  .container{padding:0 12px}
+  .header{flex-direction:column; align-items:stretch}
+  .kpi .num{font-size:24px}
+  .group-head{flex-direction:column; align-items:flex-start; gap:6px}
+  .subj-row{gap:4px 6px}
+  .flip-card .flip-back{padding:12px}
 }
