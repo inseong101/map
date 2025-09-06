@@ -1,5 +1,4 @@
-
-// src/utils/helpers.js - 모든 누락 함수 포함
+// src/utils/helpers.js
 
 // 숫자 포맷팅
 export function fmt(n) {
@@ -16,15 +15,14 @@ export function pct(score, max) {
 // 배지 HTML 생성
 export function pill(text, type) {
   const className = type === 'ok' ? 'pill green' : (type === 'warn' ? 'pill warn' : 'pill red');
-  return '<span class="' + className + '">' + text + '</span>';
+  return `<span class="${className}">${text}</span>`;
 }
 
 // 배열을 지정된 크기로 청크 분할
 export function chunk(arr, sizes) {
   const out = [];
   let i = 0;
-  for (let idx = 0; idx < sizes.length; idx++) {
-    const s = sizes[idx];
+  for (const s of sizes) {
     out.push(arr.slice(i, i + s));
     i += s;
   }
@@ -35,7 +33,7 @@ export function chunk(arr, sizes) {
 // 캔버스에 라인 차트 그리기
 export function drawLineChart(canvas, labels, series, maxValue) {
   if (!canvas) return;
-
+  
   const ctx = canvas.getContext('2d');
   const W = canvas.width;
   const H = canvas.height;
@@ -45,9 +43,9 @@ export function drawLineChart(canvas, labels, series, maxValue) {
   const plotW = W - padL - padR;
   const plotH = H - padT - padB;
   const n = labels.length;
-
-  const x = function(i) { return padL + (n <= 1 ? plotW / 2 : (i * (plotW / (n - 1)))); };
-  const y = function(v) { return padT + (plotH * (1 - (v / Math.max(1, maxValue || 1)))); };
+  
+  const x = (i) => padL + (n <= 1 ? plotW / 2 : (i * (plotW / (n - 1))));
+  const y = (v) => padT + (plotH * (1 - (v / Math.max(1, maxValue || 1))));
 
   // 축 그리기
   ctx.strokeStyle = 'rgba(255,255,255,.25)';
@@ -62,18 +60,18 @@ export function drawLineChart(canvas, labels, series, maxValue) {
   ctx.fillStyle = 'rgba(255,255,255,.8)';
   ctx.font = '12px system-ui';
   ctx.textAlign = 'center';
-  labels.forEach(function(lb, i) { ctx.fillText(lb, x(i), padT + plotH + 18); });
+  labels.forEach((lb, i) => ctx.fillText(lb, x(i), padT + plotH + 18));
 
   // 시리즈 그리기
   const colors = ['#7ea2ff', '#4cc9ff', '#22c55e'];
-  series.forEach(function(s, si) {
+  series.forEach((s, si) => {
     const col = colors[si % colors.length];
-
+    
     // 선 그리기
     ctx.strokeStyle = col;
     ctx.lineWidth = 2;
     ctx.beginPath();
-    s.values.forEach(function(v, i) {
+    s.values.forEach((v, i) => {
       if (v == null) return;
       const xx = x(i), yy = y(v);
       if (i === 0 || s.values[i - 1] == null) {
@@ -83,10 +81,10 @@ export function drawLineChart(canvas, labels, series, maxValue) {
       }
     });
     ctx.stroke();
-
+    
     // 포인트 그리기
     ctx.fillStyle = col;
-    s.values.forEach(function(v, i) {
+    s.values.forEach((v, i) => {
       if (v == null) return;
       const xx = x(i), yy = y(v);
       ctx.beginPath();
@@ -97,7 +95,7 @@ export function drawLineChart(canvas, labels, series, maxValue) {
 
   // 범례
   const legendX = padL, legendY = 12;
-  series.forEach(function(s, si) {
+  series.forEach((s, si) => {
     const col = colors[si % colors.length];
     ctx.fillStyle = col;
     ctx.fillRect(legendX + si * 120, legendY - 8, 10, 10);
@@ -109,16 +107,113 @@ export function drawLineChart(canvas, labels, series, maxValue) {
 }
 
 // 유효한 학수번호인지 확인 (01~12로 시작하는 6자리)
-export function isValidStudentId(sid) {
+function isValidStudentId(sid) {
   if (!sid || typeof sid !== 'string') return false;
   if (sid.length !== 6) return false;
-
+  
   const schoolCode = sid.slice(0, 2);
-  const validCodes = ['01','02','03','04','05','06','07','08','09','10','11','12'];
+  const validCodes = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
   return validCodes.includes(schoolCode);
 }
 
-// 학교명 → 학교코드 변환 (내부용)
+// 학교별/전국 평균 데이터 조회 (Firestore에서)
+export async function getAverages(schoolName, roundLabel) {
+  try {
+    const { db } = await import('../services/firebase');
+    const { doc, getDoc } = await import('firebase/firestore');
+    
+    // 학교 코드 추출
+    const schoolCode = getSchoolCodeFromName(schoolName);
+    
+    // 전국 평균 조회
+    const nationalRef = doc(db, 'averages', roundLabel, 'data', 'national');
+    const nationalSnap = await getDoc(nationalRef);
+    
+    // 학교 평균 조회
+    const schoolRef = doc(db, 'averages', roundLabel, 'data', `school_${schoolCode}`);
+    const schoolSnap = await getDoc(schoolRef);
+    
+    const nationalAvg = nationalSnap.exists() ? nationalSnap.data().avg : 204;
+    const schoolAvg = schoolSnap.exists() ? schoolSnap.data().avg : 211;
+    
+    return { nationalAvg, schoolAvg };
+  } catch (error) {
+    console.error('평균 조회 오류:', error);
+    return {
+      nationalAvg: 204,
+      schoolAvg: 211
+    };
+  }
+}
+
+// 실제 점수 분포 데이터 조회
+export async function getRealScoreDistribution(roundLabel) {
+  try {
+    const { db } = await import('../services/firebase');
+    const { collection, getDocs } = await import('firebase/firestore');
+    
+    const sessions = ['1교시', '2교시', '3교시', '4교시'];
+    const allScores = {}; // sid -> totalScore
+    const schoolScores = {}; // schoolCode -> [scores]
+    
+    // 교시별 데이터 수집
+    for (const session of sessions) {
+      const sessionRef = collection(db, 'scores_raw', roundLabel, session);
+      const snapshot = await getDocs(sessionRef);
+      
+      snapshot.forEach(doc => {
+        const sid = doc.id;
+        
+        // 유효한 학수번호만 처리 (01~12로 시작하는 것만)
+        if (!isValidStudentId(sid)) {
+          return; // 유효하지 않은 학번은 제외
+        }
+        
+        const data = doc.data();
+        const wrongQuestions = data.wrongQuestions || data.wrong || [];
+        
+        if (!allScores[sid]) {
+          allScores[sid] = 340; // 만점에서 시작
+        }
+        
+        // 오답 개수만큼 점수 차감
+        if (Array.isArray(wrongQuestions)) {
+          allScores[sid] = Math.max(0, allScores[sid] - wrongQuestions.length);
+        }
+      });
+    }
+    
+    // 학교별로 점수 분류 (유효한 학번만)
+    Object.entries(allScores).forEach(([sid, score]) => {
+      if (!isValidStudentId(sid)) return; // 이중 체크
+      
+      const schoolCode = sid.slice(0, 2);
+      if (!schoolScores[schoolCode]) {
+        schoolScores[schoolCode] = [];
+      }
+      schoolScores[schoolCode].push(score);
+    });
+    
+    // 전국 점수 (유효한 학번의 점수만)
+    const nationalScores = Object.values(allScores);
+    
+    return {
+      national: nationalScores,
+      school: schoolScores, // 학교코드별 점수 배열
+      bySchool: schoolScores
+    };
+    
+  } catch (error) {
+    console.error('점수 분포 조회 오류:', error);
+    return {
+      national: [],
+      school: {},
+      bySchool: {}
+    };
+  }
+}
+
+// 학교명 → 학교코드 변환
 function getSchoolCodeFromName(schoolName) {
   const schoolMap = {
     "가천대": "01", "경희대": "02", "대구한": "03", "대전대": "04",
@@ -126,156 +221,4 @@ function getSchoolCodeFromName(schoolName) {
     "상지대": "09", "세명대": "10", "우석대": "11", "원광대": "12"
   };
   return schoolMap[schoolName] || "01";
-}
-
-// 학교별/전국 평균 데이터 조회 (Firestore에서)
-export async function getAverages(schoolName, roundLabel) {
-  try {
-    const mod = await import('../services/firebase');
-    const fb = await import('firebase/firestore');
-    const db = mod.db;
-    const doc = fb.doc;
-    const getDoc = fb.getDoc;
-
-    const schoolCode = getSchoolCodeFromName(schoolName);
-
-    const nationalRef = doc(db, 'averages', roundLabel, 'data', 'national');
-    const nationalSnap = await getDoc(nationalRef);
-
-    const schoolRef = doc(db, 'averages', roundLabel, 'data', 'school_' + schoolCode);
-    const schoolSnap = await getDoc(schoolRef);
-
-    const nationalAvg = nationalSnap.exists() ? nationalSnap.data().avg : 204;
-    const schoolAvg = schoolSnap.exists() ? schoolSnap.data().avg : 211;
-
-    return { nationalAvg: nationalAvg, schoolAvg: schoolAvg };
-  } catch (error) {
-    console.error('평균 조회 오류:', error);
-    return { nationalAvg: 204, schoolAvg: 211 };
-  }
-}
-
-// ✅ 상위 퍼센트(상위 백분위): 등수 기반, 동점 처리
-export function calculatePercentile(studentScore, allScores) {
-  if (!Array.isArray(allScores) || allScores.length === 0) return null;
-  if (studentScore == null || isNaN(studentScore)) return null;
-
-  const S = allScores.filter(function(v){ return Number.isFinite(v); }).sort(function(a, b){ return b - a; });
-  if (S.length === 0) return null;
-
-  var firstIdx = -1;
-  for (var i = 0; i < S.length; i++) {
-    if (S[i] === studentScore) { firstIdx = i; break; }
-  }
-  const rank = (firstIdx === -1) ? (S.length + 1) : (firstIdx + 1); // 1등=1
-  const pct = (rank / S.length) * 100;
-  return Math.round(pct * 10) / 10; // 소수 1자리
-}
-
-// 실제 점수 분포 데이터 조회 (유효 SID만; 중도포기 제외; 4종 카운트 포함)
-export async function getRealScoreDistribution(roundLabel) {
-  try {
-    const mod = await import('../services/firebase');
-    const fb = await import('firebase/firestore');
-    const db = mod.db;
-    const collection = fb.collection;
-    const getDocs = fb.getDocs;
-
-    const sessions = ['1교시', '2교시', '3교시', '4교시'];
-
-    // 임시 누적
-    const rawScoreBySid = {}; // sid -> 임시 총점(세션별 오답 차감 합산)
-    const sessionCount = {};  // sid -> 응시한 교시 수
-    const schoolOfSid = {};   // sid -> '01'~'12'
-
-    // 교시별 데이터 수집
-    for (let si = 0; si < sessions.length; si++) {
-      const session = sessions[si];
-      const sessionRef = collection(db, 'scores_raw', roundLabel, session);
-      const snapshot = await getDocs(sessionRef);
-
-      snapshot.forEach(function(docSnap) {
-        const sid = docSnap.id;
-        if (!isValidStudentId(sid)) return; // ❗️비유효 SID는 완전 제외
-
-        const data = docSnap.data();
-        const wrongQuestions = (data && (data.wrongQuestions || data.wrong)) ? (data.wrongQuestions || data.wrong) : [];
-
-        sessionCount[sid] = (sessionCount[sid] != null ? sessionCount[sid] : 0) + 1;
-        schoolOfSid[sid] = sid.slice(0, 2);
-
-        // 점수 누적(만점 340에서 오답만큼 차감)
-        rawScoreBySid[sid] = (rawScoreBySid[sid] != null ? rawScoreBySid[sid] : 340);
-        if (Array.isArray(wrongQuestions)) {
-          rawScoreBySid[sid] = Math.max(0, rawScoreBySid[sid] - wrongQuestions.length);
-        }
-      });
-    }
-
-    // ✅ 분포/퍼센타일용 점수는 "풀참여(4교시)"만 사용 (중도포기 1~3교시 제외)
-    const nationalScores = [];
-    const schoolScores = {}; // schoolCode -> [scores]
-
-    Object.keys(rawScoreBySid).forEach(function(sid) {
-      const score = rawScoreBySid[sid];
-      const c = sessionCount[sid] || 0;
-      if (c === 4) {
-        nationalScores.push(score);
-        const sc = schoolOfSid[sid];
-        if (!schoolScores[sc]) schoolScores[sc] = [];
-        schoolScores[sc].push(score);
-      }
-    });
-
-    // ✅ 카운트(전국 기준) — 모두 유효 SID만 대상으로 계산
-    let totalAttended = 0, validFull = 0, dropout = 0;
-    Object.keys(sessionCount).forEach(function(sid) {
-      const c = sessionCount[sid] || 0;
-      if (c >= 1) totalAttended += 1;
-      if (c === 4) validFull += 1;
-      if (c >= 1 && c <= 3) dropout += 1;
-    });
-    const absent = 0; // raw에서 완전 미응시자는 수집 불가
-
-    return {
-      national: nationalScores,
-      school: schoolScores,
-      bySchool: schoolScores,
-      countsNational: {
-        totalAttended: totalAttended,
-        validFull: validFull,
-        absent: absent,
-        dropout: dropout
-      }
-    };
-  } catch (error) {
-    console.error('점수 분포 조회 오류:', error);
-    return {
-      national: [],
-      school: {},
-      bySchool: {},
-      countsNational: { totalAttended: 0, validFull: 0, absent: 0, dropout: 0 }
-    };
-  }
-}
-
-// ✅ 누락된 함수 추가
-export function detectStudentAbsenceStatus(wrongBySession) {
-  const allSessions = ["1교시", "2교시", "3교시", "4교시"];
-  const base = wrongBySession || {};
-  const attendedSessions = Object.keys(base);
-  const attendedCount = attendedSessions.length;
-
-  const isFullAttendance = allSessions.every(function(sess){ return attendedSessions.indexOf(sess) !== -1; });
-  const isPartiallyAbsent = attendedCount > 0 && attendedCount < 4;
-  const isNoAttendance = attendedCount === 0;
-
-  return {
-    isFullAttendance: isFullAttendance,
-    isPartiallyAbsent: isPartiallyAbsent,
-    isNoAttendance: isNoAttendance,
-    attendedCount: attendedCount,
-    attendedSessions: attendedSessions,
-    missedSessions: allSessions.filter(function(sess){ return attendedSessions.indexOf(sess) === -1; })
-  };
 }

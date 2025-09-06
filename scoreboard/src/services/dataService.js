@@ -111,32 +111,13 @@ export async function fetchRoundData(sid, roundLabel) {
   }
 }
 
-// 오답을 과목별 점수로 변환 (중도포기자 처리 포함)
+// 오답을 과목별 점수로 변환
 function convertWrongToScores(wrongBySession) {
   const subjectScores = {};
-  const attendedSessions = Object.keys(wrongBySession);
   
-  // 과목이 속한 교시를 찾는 헬퍼 함수
-  const findSessionForSubject = (subject) => {
-    for (const [session, ranges] of Object.entries(SESSION_SUBJECT_RANGES)) {
-      if (ranges.some(range => range.s === subject)) {
-        return session;
-      }
-    }
-    return null;
-  };
-  
-  // 과목별 점수 초기화 (미응시 교시 고려)
+  // 모든 과목을 만점으로 초기화
   ALL_SUBJECTS.forEach(subject => {
-    const sessionForSubject = findSessionForSubject(subject);
-    
-    if (attendedSessions.includes(sessionForSubject)) {
-      // 응시한 교시의 과목: 만점에서 시작
-      subjectScores[subject] = SUBJECT_MAX[subject];
-    } else {
-      // 미응시한 교시의 과목: 0점
-      subjectScores[subject] = 0;
-    }
+    subjectScores[subject] = SUBJECT_MAX[subject];
   });
 
   // 교시별 오답을 과목별로 차감
