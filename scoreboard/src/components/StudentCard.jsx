@@ -1,10 +1,14 @@
-
-import React from 'react';
+// src/components/StudentCard.jsx - 회차별/학교별 토글 기능 추가
+import React, { useState } from 'react';
 import { TOTAL_MAX } from '../services/dataService';
 import { detectStudentAbsenceStatus } from '../utils/helpers';
 import TrendChart from './TrendChart';
 
 function StudentCard({ sid, school, rounds }) {
+  
+  // 🎯 토글 상태 관리
+  const [selectedRoundIndex, setSelectedRoundIndex] = useState(0);
+  const [viewMode, setViewMode] = useState('round'); // 'round' | 'school'
   
   // 🎯 최고 성적 회차 찾기 (상위% 표시용)
   const getBestRound = () => {
@@ -28,14 +32,26 @@ function StudentCard({ sid, school, rounds }) {
     return bestRound;
   };
 
-  // 🎯 전체 응시자 분류 통계 (최신 회차 기준)
-  const getAttendanceStats = () => {
-    const latestRound = rounds[rounds.length - 1];
-    return latestRound?.data?.attendanceStats || {
+  // 🎯 선택된 회차의 응시자 분류 통계
+  const getSelectedRoundStats = () => {
+    if (rounds.length === 0) return { totalTargets: 0, validAttendees: 0, absentees: 0, dropouts: 0 };
+    
+    const selectedRound = rounds[selectedRoundIndex] || rounds[0];
+    return selectedRound?.data?.attendanceStats || {
       totalTargets: 0,
       validAttendees: 0,
       absentees: 0,
       dropouts: 0
+    };
+  };
+
+  // 🎯 학교별 통계 (임시 - 실제로는 API 호출 필요)
+  const getSchoolStats = () => {
+    return {
+      totalTargets: 120,
+      validAttendees: 95,
+      absentees: 15,
+      dropouts: 10
     };
   };
 
@@ -98,7 +114,7 @@ function StudentCard({ sid, school, rounds }) {
   };
 
   const bestRound = getBestRound();
-  const attendanceStats = getAttendanceStats();
+  const currentStats = viewMode === 'round' ? getSelectedRoundStats() : getSchoolStats();
   const studentStatus = getStudentStatus();
 
   return (
@@ -146,16 +162,78 @@ function StudentCard({ sid, school, rounds }) {
         </div>
       </div>
       
-      {/* 🎯 응시자 분류 통계 */}
+      {/* 🎯 토글 버튼들 */}
       <div style={{ 
         marginTop: 16, 
+        display: 'flex', 
+        gap: 8, 
+        alignItems: 'center',
+        flexWrap: 'wrap'
+      }}>
+        {/* 회차별/학교별 토글 */}
+        <div style={{ display: 'flex', gap: 4 }}>
+          <button 
+            className={`btn ${viewMode === 'round' ? 'active' : ''}`}
+            onClick={() => setViewMode('round')}
+            style={{ 
+              padding: '4px 12px', 
+              fontSize: 12,
+              backgroundColor: viewMode === 'round' ? 'var(--primary)' : 'var(--surface-2)',
+              color: viewMode === 'round' ? '#fff' : 'var(--ink)'
+            }}
+          >
+            회차별
+          </button>
+          <button 
+            className={`btn ${viewMode === 'school' ? 'active' : ''}`}
+            onClick={() => setViewMode('school')}
+            style={{ 
+              padding: '4px 12px', 
+              fontSize: 12,
+              backgroundColor: viewMode === 'school' ? 'var(--primary)' : 'var(--surface-2)',
+              color: viewMode === 'school' ? '#fff' : 'var(--ink)'
+            }}
+          >
+            학교별
+          </button>
+        </div>
+
+        {/* 🎯 회차별 모드일 때만 회차 선택 버튼들 */}
+        {viewMode === 'round' && rounds.length > 0 && (
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {rounds.map((round, index) => (
+              <button
+                key={round.label}
+                className={`btn ${selectedRoundIndex === index ? 'active' : ''}`}
+                onClick={() => setSelectedRoundIndex(index)}
+                style={{ 
+                  padding: '4px 8px', 
+                  fontSize: 11,
+                  backgroundColor: selectedRoundIndex === index ? 'var(--ok)' : 'var(--surface)',
+                  color: selectedRoundIndex === index ? '#fff' : 'var(--muted)',
+                  border: `1px solid ${selectedRoundIndex === index ? 'var(--ok)' : 'var(--line)'}`
+                }}
+              >
+                {round.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      
+      {/* 🎯 응시자 분류 통계 */}
+      <div style={{ 
+        marginTop: 12, 
         padding: 12, 
         background: 'rgba(126,162,255,0.08)', 
         borderRadius: 8,
         border: '1px solid rgba(126,162,255,0.2)'
       }}>
         <div className="small" style={{ marginBottom: 8, color: 'var(--muted)' }}>
-          전체 응시자 현황 (최신 회차 기준)
+          {viewMode === 'round' 
+            ? `${rounds[selectedRoundIndex]?.label || '선택된 회차'} 응시자 현황`
+            : `${school} 전체 응시자 현황`
+          }
         </div>
         <div style={{ 
           display: 'grid', 
@@ -165,25 +243,25 @@ function StudentCard({ sid, school, rounds }) {
         }}>
           <div>
             <strong style={{ color: 'var(--ink)' }}>
-              {attendanceStats.totalTargets}명
+              {currentStats.totalTargets}명
             </strong>
             <span className="small"> 시험대상자</span>
           </div>
           <div>
             <strong style={{ color: '#22c55e' }}>
-              {attendanceStats.validAttendees}명
+              {currentStats.validAttendees}명
             </strong>
             <span className="small"> 유효응시자</span>
           </div>
           <div>
             <strong style={{ color: '#a855f7' }}>
-              {attendanceStats.absentees}명
+              {currentStats.absentees}명
             </strong>
             <span className="small"> 미응시자</span>
           </div>
           <div>
             <strong style={{ color: '#ef4444' }}>
-              {attendanceStats.dropouts}명
+              {currentStats.dropouts}명
             </strong>
             <span className="small"> 중도포기자</span>
           </div>
