@@ -143,7 +143,7 @@ function App() {
             data={roundData.data}
             sid={studentId}
             isPartialAbsent={absenceStatus.isPartiallyAbsent}
-            attendedCount={absenceStatus.attendedCount}
+            missedSessions={absenceStatus.missedSessions}
           />
         );
       } else {
