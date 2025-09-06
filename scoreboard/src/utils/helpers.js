@@ -47,16 +47,74 @@ export async function getAverages(schoolName, roundLabel) {
     const schoolRef = doc(db, 'averages', roundLabel, 'data', `school_${schoolCode}`);
     const schoolSnap = await getDoc(schoolRef);
     
-    const nationalAvg = nationalSnap.exists() ? nationalSnap.data().avg : 204; // 340*0.6
-    const schoolAvg = schoolSnap.exists() ? schoolSnap.data().avg : 211; // 340*0.62
+    const nationalAvg = nationalSnap.exists() ? nationalSnap.data().avg : 204;
+    const schoolAvg = schoolSnap.exists() ? schoolSnap.data().avg : 211;
     
     return { nationalAvg, schoolAvg };
   } catch (error) {
     console.error('평균 조회 오류:', error);
-    // 오류 시 기본값 반환
     return {
-      nationalAvg: 204, // 340 * 0.6
-      schoolAvg: 211    // 340 * 0.62
+      nationalAvg: 204,
+      schoolAvg: 211
+    };
+  }
+}
+
+// 실제 점수 분포 데이터 조회
+export async function getRealScoreDistribution(roundLabel) {
+  try {
+    const { db } = await import('../services/firebase');
+    const { collection, getDocs } = await import('firebase/firestore');
+    
+    const sessions = ['1교시', '2교시', '3교시', '4교시'];
+    const allScores = {}; // sid -> totalScore
+    const schoolScores = {}; // schoolCode -> [scores]
+    
+    // 교시별 데이터 수집
+    for (const session of sessions) {
+      const sessionRef = collection(db, 'scores_raw', roundLabel, session);
+      const snapshot = await getDocs(sessionRef);
+      
+      snapshot.forEach(doc => {
+        const sid = doc.id;
+        const data = doc.data();
+        const wrongQuestions = data.wrongQuestions || data.wrong || [];
+        
+        if (!allScores[sid]) {
+          allScores[sid] = 340; // 만점에서 시작
+        }
+        
+        // 오답 개수만큼 점수 차감
+        if (Array.isArray(wrongQuestions)) {
+          allScores[sid] = Math.max(0, allScores[sid] - wrongQuestions.length);
+        }
+      });
+    }
+    
+    // 학교별로 점수 분류
+    Object.entries(allScores).forEach(([sid, score]) => {
+      const schoolCode = sid.slice(0, 2);
+      if (!schoolScores[schoolCode]) {
+        schoolScores[schoolCode] = [];
+      }
+      schoolScores[schoolCode].push(score);
+    });
+    
+    // 전국 점수 (모든 학교 합계)
+    const nationalScores = Object.values(allScores);
+    
+    return {
+      national: nationalScores,
+      school: schoolScores, // 학교코드별 점수 배열
+      bySchool: schoolScores
+    };
+    
+  } catch (error) {
+    console.error('점수 분포 조회 오류:', error);
+    return {
+      national: [],
+      school: {},
+      bySchool: {}
     };
   }
 }
