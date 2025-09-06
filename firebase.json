@@ -3,10 +3,13 @@
     "public": ".",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
-      { "source": "/scoreboard/**", "destination": "/scoreboard/index.html" },
       { "source": "/map/**", "destination": "/map/index.html" },
       { "source": "/pedi/**", "destination": "/pedi/index.html" },
       { "source": "**", "destination": "/index.html" }
     ]
+  },
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs18"
   }
 }
