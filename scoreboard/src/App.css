@@ -1,26 +1,261 @@
-un cd scoreboard
-npm error code EUSAGE
-npm error
-npm error The `npm ci` command can only install with an existing package-lock.json or
-npm error npm-shrinkwrap.json with lockfileVersion >= 1. Run an install with npm@5 or
-npm error later to generate a package-lock.json file, then try again.
-npm error
-npm error Clean install a project
-npm error
-npm error Usage:
-npm error npm ci
-npm error
-npm error Options:
-npm error [--install-strategy <hoisted|nested|shallow|linked>] [--legacy-bundling]
-npm error [--global-style] [--omit <dev|optional|peer> [--omit <dev|optional|peer> ...]]
-npm error [--include <prod|dev|optional|peer> [--include <prod|dev|optional|peer> ...]]
-npm error [--strict-peer-deps] [--foreground-scripts] [--ignore-scripts] [--no-audit]
-npm error [--no-bin-links] [--no-fund] [--dry-run]
-npm error [-w|--workspace <workspace-name> [-w|--workspace <workspace-name> ...]]
-npm error [-ws|--workspaces] [--include-workspace-root] [--install-links]
-npm error
-npm error aliases: clean-install, ic, install-clean, isntall-clean
-npm error
-npm error Run "npm help ci" for more info
-npm error A complete log of this run can be found in: /home/runner/.npm/_logs/2025-09-06T03_53_01_598Z-debug-0.log
-Error: Process completed with exit code 1.
+/* src/App.css */
+/* ===== 전졸협 성적 사이트 기본 테마 ===== */
+:root{
+  --bg: #0b1020;
+  --surface: #11172b;
+  --surface-2:#151d36;
+  --line: #213056;
+  --ink: #e8eeff;
+  --muted:#9db0d6;
+  --primary:#7ea2ff;
+  --ok:#22c55e;
+  --warn:#f59e0b;
+  --bad:#ef4444;
+}
+
+*{box-sizing:border-box}
+html,body{
+  margin:0; padding:0;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  background:var(--bg); color:var(--ink);
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+}
+a{color:var(--primary); text-decoration:none}
+img{max-width:100%; display:block}
+
+/* Layout */
+.container{max-width:1100px; margin:24px auto; padding:0 16px}
+.header{display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap}
+h1{margin:0 0 6px 0; font-size:24px; font-weight:800}
+h2{margin:8px 0; font-size:18px; color:var(--muted); font-weight:700}
+.small{color:var(--muted); font-size:12px}
+
+/* Grid */
+.grid{display:grid; grid-template-columns:repeat(12,1fr); gap:16px}
+.col-12{grid-column:span 12}
+.col-6{grid-column:span 6}
+@media (max-width: 860px){ .col-6{grid-column:span 12} }
+
+/* Card */
+.card{
+  background:linear-gradient(180deg, rgba(21,29,54,.9), var(--surface));
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:16px;
+  box-shadow:0 10px 30px rgba(0,0,0,.25);
+  height: fit-content;
+  min-height: auto;
+}
+
+.card.narrow {
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+/* Flex utils */
+.flex{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+.flex-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* KPI / Numbers */
+.kpi{display:flex; align-items:baseline; gap:10px}
+.kpi .num{font-size:28px; font-weight:800; letter-spacing:.2px}
+.kpi .sub{color:var(--muted); font-size:13px}
+
+/* Badges */
+.badge{
+  display:inline-block; padding:6px 10px; border-radius:999px;
+  font-weight:700; letter-spacing:.2px; border:1px solid transparent;
+}
+.badge.pass{background:rgba(34,197,94,.18); border-color:rgba(34,197,94,.55)}
+.badge.fail{background:rgba(239,68,68,.18); border-color:rgba(239,68,68,.55)}
+
+/* Buttons */
+.btn{
+  appearance:none; border:1px solid var(--line);
+  background:var(--surface-2); color:var(--ink);
+  padding:8px 12px; border-radius:10px; cursor:pointer;
+  font-weight:700;
+}
+.btn:hover{background:#0f1526}
+.btn:disabled{opacity:0.5; cursor:not-allowed}
+
+/* Form inputs */
+.input{
+  background:var(--surface-2);
+  color:var(--ink);
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:10px 12px;
+  font-weight:700;
+  letter-spacing:.2px;
+  outline:none;
+}
+.input:focus{border-color:var(--primary)}
+
+/* Separators */
+hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
+
+/* Progress */
+.progress{
+  position:relative;
+  width:100%; height:10px;
+  background:#1b2542; border-radius:999px; overflow:hidden
+}
+.progress > .bar{height:100%; background:linear-gradient(90deg, #7ea2ff, #4cc9ff); transition:width .25s ease}
+
+/* 60% 컷 라인 */
+.progress .cutline{
+  position:absolute; top:0; bottom:0;
+  left:60%; width:2px;
+  background:rgba(255,255,255,.55);
+  pointer-events:none;
+}
+
+/* 라운드가 평락(불합격)이면 막대 색을 빨간 계열로 */
+.round.fail .progress > .bar{
+  background:linear-gradient(90deg, var(--bad), #ff6b6b);
+}
+
+/* Group boxes */
+.group-grid{display:grid; grid-template-columns:repeat(12,1fr); gap:12px}
+.group-box{border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--surface-2)}
+.group-box.ok{background:rgba(34,197,94,.12); border-color:rgba(34,197,94,.55)}
+.group-box.fail{background:rgba(239,68,68,.12); border-color:rgba(239,68,68,.55)}
+.span-12{grid-column:span 12}
+.group-head{display:flex; align-items:center; justify-content:space-between; gap:10px}
+.subj-row{display:flex; flex-wrap:wrap; gap:6px 10px; margin-top:6px}
+.subj-chip{padding:4px 8px; border:1px solid var(--line); border-radius:999px; font-weight:800}
+.subj-chip .muted{opacity:.7; font-weight:600}
+
+/* Pills */
+.pill{padding:3px 8px; border-radius:999px; font-size:12px; border:1px solid #33416f; color:var(--muted)}
+.pill.green{border-color:rgba(34,197,94,.6); color:#d9ffe7}
+.pill.warn{border-color:rgba(245,158,11,.6); color:#fff4d6}
+.pill.red{border-color:rgba(239,68,68,.7); color:#ffd8d8}
+
+/* Flip Cards - 높이 문제 해결 */
+.flip-card { 
+  perspective: 1200px; 
+  margin-bottom: 16px;
+  height: fit-content;
+}
+
+.flip-card .flip-inner{
+  position: relative;
+  width: 100%;
+  height: fit-content;
+  transform-style: preserve-3d;
+  transition: transform .6s ease;
+}
+
+.flip-card.is-flipped .flip-inner,
+.flip-inner.is-flipped { 
+  transform: rotateY(180deg); 
+}
+
+.flip-card .flip-face{
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  backface-visibility: hidden;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.flip-card .flip-front{ 
+  transform: rotateY(0deg); 
+  position: relative;
+}
+
+.flip-card .flip-back { 
+  transform: rotateY(180deg);
+  position: absolute;
+}
+
+/* 플립 카드 뒷면 스크롤 */
+.flip-card .flip-back {
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  max-height: 600px;
+}
+
+.flip-card .flip-back::-webkit-scrollbar {
+  width: 6px;
+}
+
+.flip-card .flip-back::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+}
+
+.flip-card .flip-back::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+}
+
+/* Accordion */
+.accordion{border-top:1px solid var(--line); margin-top:8px}
+.accordion .item{border-bottom:1px solid var(--line); margin-bottom: 6px}
+.accordion .acc-btn{ 
+  width:100%; display:flex; justify-content:space-between; align-items:center; 
+  gap:8px; padding:8px 10px; border:1px solid var(--line); border-radius:10px; 
+  background:var(--surface-2); font-weight:700; cursor:pointer;
+}
+.accordion .acc-btn .rotate{ transition:.2s transform ease; }
+.accordion .acc-btn.open .rotate{ transform: rotate(90deg); }
+.accordion .panel{ overflow:hidden; transition:max-height .25s ease; }
+
+/* Question grid */
+.qgrid{display:flex; flex-wrap:wrap; gap:6px; max-height: 120px; overflow-y: auto; padding-right: 4px}
+.qcell{
+  padding:3px 8px; border-radius:999px; border:1px solid var(--line); font-weight:700;
+  background:#1a2240; 
+}
+.qcell.bad{background:rgba(239,68,68,.17); border-color:rgba(239,68,68,.5)}
+
+.qgrid::-webkit-scrollbar {
+  width: 4px;
+}
+
+.qgrid::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.qgrid::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+/* Cards grid - 간격 조정 */
+.cards-grid { 
+  display: grid; 
+  gap: 12px; 
+  margin-top: 12px;
+}
+
+/* Alert */
+.alert{
+  margin-top:10px;
+  padding:10px 12px;
+  border-radius:10px;
+  border:1px solid rgba(239,68,68,.55);
+  background:rgba(239,68,68,.14);
+  color:#ffd8d8;
+  font-weight:700;
+}
+
+/* Print */
+@media print{
+  :root{--bg:#ffffff; --ink:#000; --muted:#444}
+  body{background:#fff; color:#000}
+  .btn{display:none !important}
+  .card{box-shadow:none; border-color:#ddd; background:#fff}
+  .badge{border-color:#999}
+}
