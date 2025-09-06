@@ -555,24 +555,29 @@ function renderRound(hostSel, title, round){
   host.innerHTML = html;
 }
 
-  // 트렌드 카드를 일반 카드로 생성 (flip 기능 제거)
-  if (SHOW_TREND_CARD) {
-    const trendCard = document.createElement('div');
-    trendCard.className = 'card';
-    trendCard.style.marginBottom = '16px';
-    trendCard.innerHTML = `
-      <div class="flex" style="justify-content:space-between;">
-        <div>
-          <div class="small">학수번호</div>
-          <div class="kpi"><div class="num">${sid}</div></div>
-          <div class="small">${school}</div>
-        </div>
-        <div class="flex" id="trend-badges"></div>
-      </div>
-      <hr class="sep" />
+// 트렌드 카드를 일반 카드로 생성 (flip 기능 제거)
+if (SHOW_TREND_CARD) {
+  const trendCard = document.createElement('div');
+  trendCard.className = 'card';
+  trendCard.style.marginBottom = '16px';
+  trendCard.innerHTML = `
+    <div class="flex" style="justify-content:space-between;">
       <div>
-        <h2 style="margin-top:0">회차별 성적 추이</h2>
-        <canvas id="trend-canvas" width="360" height="220"></canvas>
-        <div class="small" style="margin-top:8px; opacity:.8">회차별 본인/학교/전국 평균 비교</div>
+        <div class="small">학수번호</div>
+        <div class="kpi"><div class="num">${sid}</div></div>
+        <div class="small">${school}</div>
       </div>
-    `;
+      <div class="flex" id="trend-badges"></div>
+    </div>
+    <hr class="sep" />
+    <div>
+      <h2 style="margin-top:0">회차별 성적 추이</h2>
+      <canvas id="trend-canvas" width="360" height="220"></canvas>
+      <div class="small" style="margin-top:8px; opacity:.8">회차별 본인/학교/전국 평균 비교</div>
+    </div>
+  `;
+  grid.appendChild(trendCard);
+
+  studentTotalsByRound = {};
+  labelsForTrend = [];
+}
