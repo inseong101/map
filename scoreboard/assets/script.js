@@ -33,8 +33,8 @@ const SCHOOL_MAP = {
 };
 function getSchoolFromSid(sid){ const p2 = String(sid||"").slice(0,2); return SCHOOL_MAP[p2] || "미상"; }
 const ROUND_LABELS = ["1차","2차","3차","4차","5차","6차","7차","8차"];
+
 // 교시별 문항번호 → 과목 매핑
-// 1교시: 1~16 간, 17~32 심, 33~48 비, 49~64 폐, 65~80 신
 const SESSION_SUBJECT_RANGES = {
   "1교시": [
     { from: 1,  to: 16, s: "간" },
@@ -43,21 +43,19 @@ const SESSION_SUBJECT_RANGES = {
     { from: 49, to: 64, s: "폐" },
     { from: 65, to: 80, s: "신" }
   ],
-
-  // ⬇️ 2~4교시는 정확한 범위 알려주면 여기 채워줄게
-    "2교시": [
+  "2교시": [
     { from: 1,  to: 16, s: "상한" },
     { from: 17, to: 32, s: "사상" },
     { from: 33, to: 80, s: "침구" },
     { from: 81, to: 100, s: "보건" },
   ],
-     "3교시": [
+  "3교시": [
     { from: 1,  to: 16, s: "외과" },
     { from: 17, to: 32, s: "신경" },
     { from: 33, to: 48, s: "안이비" },
     { from: 49, to: 80, s: "부인과" }
   ],
-     "4교시": [
+  "4교시": [
     { from: 1,  to: 24, s: "소아" },
     { from: 25, to: 48, s: "예방" },
     { from: 49, to: 64, s: "생리" },
@@ -65,14 +63,12 @@ const SESSION_SUBJECT_RANGES = {
   ],
 };
 
-
-
 /* -------------------- 1) 평균치(임시 더미) -------------------- */
 async function getAverages(_schoolName, _roundLabel){
   return { nationalAvg: Math.round(TOTAL_MAX * 0.60), schoolAvg: Math.round(TOTAL_MAX * 0.62) };
 }
 
-/* 맨 위 트렌드(학수번호) 카드 표시 여부 — false면 상단 카드만 숨김 */
+/* 맨 위 트렌드(학수번호) 카드 표시 여부 */
 const SHOW_TREND_CARD = true;
 
 /* -------------------- 2) 오프라인 인덱스 -------------------- */
@@ -172,16 +168,14 @@ function getSubjectScores(round){
 }
 
 /* -------------------- 5) Firestore scores_raw(s) 로더 -------------------- */
-/*  - 프로젝트에 맞는 Firestore 인스턴스를 자동 탐색합니다.
-    - 컬렉션명은 scores_raws 또는 scores_raw 모두 대응합니다. */
 function getDb(){
   return window.firebaseDb || window.db || window.__db || null;
 }
 function resolveScoresRootName(){
   if (window.__SCORES_ROOT_NAME__) return window.__SCORES_ROOT_NAME__;
-  return 'scores_raw'; // 네 DB 구조에 맞춤
+  return 'scores_raw';
 }
-// v9 modular 또는 v8 네임스페이스 둘 다 지원
+
 async function readDocMaybe(db, root, roundLabel, session, sid){
   try{
     if (window.firebase && db && typeof db.collection === 'function'){ // v8
@@ -196,22 +190,36 @@ async function readDocMaybe(db, root, roundLabel, session, sid){
   }catch(e){ console.warn('[scores_raw readDocMaybe]', e); }
   return null;
 }
+
 async function fetchScoresRawAllSessions(sid, roundLabel){
   const db = getDb();
   if (!db) return {};
   const root = resolveScoresRootName();
   const sessions = ["1교시","2교시","3교시","4교시"];
   const out = {};
+  
+  console.log(`[fetchScoresRaw] 시작: ${sid} / ${roundLabel}`);
+  
   for (const sess of sessions){
     const data = await readDocMaybe(db, root, roundLabel, sess, sid);
     if (!data) continue;
+    
+    console.log(`[fetchScoresRaw] ${sess} 원본 데이터:`, data);
+    
     let v = data.wrongQuestions ?? data.wrong_questions ?? data.wrong ?? data.wrongNumbers ?? data.wrong_numbers ?? data.wrongs;
+    
+    console.log(`[fetchScoresRaw] ${sess} wrongQuestions 필드:`, v);
+    
     if (Array.isArray(v)) {
       out[sess] = v.map(n=>+n).filter(n=>!isNaN(n));
     } else if (typeof v === 'string') {
       out[sess] = v.split(/[,\s]+/).map(n=>+n).filter(n=>!isNaN(n));
     }
+    
+    console.log(`[fetchScoresRaw] ${sess} 파싱 결과:`, out[sess]);
   }
+  
+  console.log(`[fetchScoresRaw] 최종 결과:`, out);
   return out;
 }
 
@@ -290,7 +298,6 @@ function drawLineChart(canvas, labels, series, maxValue){
 }
 
 /* -------------------- 8) 오답 수집/매핑 -------------------- */
-// (A) row 안에서 오답 키 추출
 function extractWrongFromSubjectRow(row){
   const keys = [
     "wrongQuestions","wrong_questions","wrongs","wrong",
@@ -312,10 +319,9 @@ function extractWrongFromSubjectRow(row){
   return [];
 }
 
-// (B) 교시별 번호 → 과목별 배열로 분배
 function mapWrongBySessionToSubjects(wrong_by_session){
   const result = {};
-  ALL_SUBJECTS.forEach(s => result[s] = []); // 빈 배열 준비
+  ALL_SUBJECTS.forEach(s => result[s] = []);
 
   Object.entries(wrong_by_session||{}).forEach(([sess, arr])=>{
     const ranges = SESSION_SUBJECT_RANGES[sess] || [];
@@ -325,7 +331,6 @@ function mapWrongBySessionToSubjects(wrong_by_session){
     });
   });
 
-  // 과목별 정렬 및 중복 제거
   Object.keys(result).forEach(k=>{
     const uniq = Array.from(new Set(result[k]||[])).sort((a,b)=>a-b);
     result[k] = uniq;
@@ -333,20 +338,17 @@ function mapWrongBySessionToSubjects(wrong_by_session){
   return result;
 }
 
-// (C) round에서 과목별 오답 맵 추출 (scores_raw 우선)
 function collectWrongQuestions(roundRawOrNorm){
   const r = (roundRawOrNorm?.by_class || roundRawOrNorm?.subject_results || roundRawOrNorm?.group_results || roundRawOrNorm?.wrong_by_session)
     ? roundRawOrNorm
     : (window.normalizeRound?.(roundRawOrNorm) || roundRawOrNorm);
 
-  // 0) scores_raw(s)에서 불러온 교시별 → 과목 분배가 있으면 최우선
   if (r.wrong_by_session && Object.keys(r.wrong_by_session).length){
     return mapWrongBySessionToSubjects(r.wrong_by_session);
   }
 
   const out = {};
 
-  // 1) 새 스키마: subject_results
   if (Array.isArray(r?.subject_results)) {
     r.subject_results.forEach(s=>{
       const nm = s.name;
@@ -357,7 +359,6 @@ function collectWrongQuestions(roundRawOrNorm){
     return out;
   }
 
-  // 2) 새 스키마(폴백): group_results에 과목명
   if (Array.isArray(r?.group_results)) {
     r.group_results.forEach(g=>{
       const nm = String(g.name);
@@ -368,7 +369,6 @@ function collectWrongQuestions(roundRawOrNorm){
     return out;
   }
 
-  // 3) 구 스키마: by_class → "종합".groups
   const groups = r?.by_class?.["종합"]?.groups || {};
   Object.keys(groups).forEach(nm=>{
     const row = groups[nm] || {};
@@ -378,13 +378,16 @@ function collectWrongQuestions(roundRawOrNorm){
   return out;
 }
 
-// (D) 오답 패널 HTML
 function buildWrongPanelHTML(roundLabel, roundRawOrNorm){
   const wrongMapRaw = collectWrongQuestions(roundRawOrNorm);
+  
+  console.log(`[buildWrongPanel] ${roundLabel} - collectWrongQuestions 결과:`, wrongMapRaw);
 
-  // 17개 과목 전부 버튼 노출(오답 없어도)
   const items = ALL_SUBJECTS.map(sj => {
     const arr = Array.isArray(wrongMapRaw[sj]) ? wrongMapRaw[sj].slice(0, 999) : [];
+    
+    console.log(`[buildWrongPanel] ${roundLabel} - ${sj} 오답:`, arr);
+    
     const cells = arr.length
       ? arr.map(n => `<div class="qcell bad">${n}</div>`).join('')
       : '<div class="small" style="opacity:.8">오답 없음</div>';
@@ -431,11 +434,12 @@ function makeFlipCard({id, title, frontHTML, backHTML, backCaption}){
   `;
   const card = wrap.querySelector('.flip-card');
   card.addEventListener('click', (e)=>{
-    if (e.target.closest('button')) return; // 아코디언 버튼 클릭 예외
+    if (e.target.closest('button')) return;
     card.classList.toggle('is-flipped');
   });
   return wrap.firstElementChild;
 }
+
 function chunk(arr, sizes){
   const out = []; let i=0;
   for (const s of sizes){ out.push(arr.slice(i, i+s)); i+=s; }
@@ -458,7 +462,6 @@ function renderRound(hostSel, title, round){
   const totalMax   = TOTAL_MAX;
   const overallRate = pct(totalScore, totalMax);
 
-  // 그룹 요약 (40% 과락)
   const groupSummaries = GROUPS.map(g => {
     const gScore = g.subjects.reduce((a,n)=>a+(subjects[n]?.score||0), 0);
     const gMax   = g.subjects.reduce((a,n)=>a+(subjects[n]?.max||0),   0);
@@ -468,11 +471,9 @@ function renderRound(hostSel, title, round){
   });
   const anyGroupFail = groupSummaries.some(s => !s.pass);
 
-  // 평락/종합
   const meets60 = (totalScore >= totalMax * 0.6);
   const overallPass = meets60 && !anyGroupFail;
 
-  // 사유
   let reasonText = "통과";
   if (!overallPass){
     if (!meets60 && anyGroupFail) reasonText = "과락 및 평락으로 인한 불합격";
@@ -480,7 +481,6 @@ function renderRound(hostSel, title, round){
     else                          reasonText = "과락으로 인한 불합격";
   }
 
-  // 상단
   let html = `
     <div class="round ${overallPass ? "" : "fail"}">
       <div class="flex" style="justify-content:space-between;">
@@ -496,11 +496,9 @@ function renderRound(hostSel, title, round){
         <div class="small" style="margin-top:6px; opacity:.9">${reasonText}</div>
       </div>
     </div>
-
     <div class="group-grid" style="margin-top:12px">
   `;
 
-  // 그룹 카드
   groupSummaries.forEach(({def, score, max, rate, pass})=>{
     let chipsHtml = "";
     const names = def.subjects;
@@ -538,13 +536,12 @@ function renderRound(hostSel, title, round){
 }
 
 /* -------------------- 11) 전체 렌더 -------------------- */
-async function renderResultDynamicFixed(sid){
+async function renderResultDynamic(sid){
+  console.log('renderResultDynamic 호출됨:', sid);
+  
   const grid = $("#cards-grid");
-  const resultView = $("#view-result");
-  
-  // 기존 내용 초기화
   grid.innerHTML = "";
-  
+
   const school = getSchoolFromSid(sid);
   const rounds = await discoverRoundsFor(sid);
   
@@ -552,46 +549,38 @@ async function renderResultDynamicFixed(sid){
   
   if (rounds.length === 0){
     const msg = document.createElement('div');
-    msg.innerHTML = `
-      <div class="card" style="margin-bottom:12px">
-        <div class="small" style="opacity:.8">조회 가능한 회차 데이터가 없습니다.</div>
-      </div>
-    `;
+    msg.innerHTML = `<div class="card" style="margin-bottom:12px"><div class="small" style="opacity:.8">조회 가능한 회차 데이터가 없습니다.</div></div>`;
     grid.appendChild(msg);
     return;
   }
 
-/* (A) 맨 위 카드(옵션): 앞(SID/학교/회차배지) / 뒤(꺾은선) */
-let studentTotalsByRound = null; // 카드 꺼두면 null
-let labelsForTrend = null;
+  let studentTotalsByRound = null;
+  let labelsForTrend = null;
 
-if (SHOW_TREND_CARD) {
-  const topCard = makeFlipCard({
-    id: 'card-trend',
-    title: '종합 추이',
-    frontHTML: `
-      <div class="flex" style="justify-content:space-between;">
-        <div>
-          <div class="small">학수번호</div>
-          <div class="kpi"><div class="num" id="trend-sid">${sid}</div></div>
-          <div class="small" id="trend-school">${school}</div>
+  if (SHOW_TREND_CARD) {
+    const topCard = makeFlipCard({
+      id: 'card-trend',
+      title: '종합 추이',
+      frontHTML: `
+        <div class="flex" style="justify-content:space-between;">
+          <div>
+            <div class="small">학수번호</div>
+            <div class="kpi"><div class="num" id="trend-sid">${sid}</div></div>
+            <div class="small" id="trend-school">${school}</div>
+          </div>
+          <div class="flex" id="trend-badges"></div>
         </div>
-        <div class="flex" id="trend-badges"></div>
-      </div>
-      <hr class="sep" />
-      <div class="small" style="opacity:.8">카드를 클릭하면 회차별 본인/학교/전국 꺾은선 그래프가 보입니다.</div>
-    `
-  });
-  grid.appendChild(topCard);
+        <hr class="sep" />
+        <div class="small" style="opacity:.8">카드를 클릭하면 회차별 본인/학교/전국 꺾은선 그래프가 보입니다.</div>
+      `
+    });
+    grid.appendChild(topCard);
 
-  // 꺾은선 데이터 준비(맨 위 카드 켰을 때만)
-  studentTotalsByRound = {};
-  labelsForTrend = [];
-}
+    studentTotalsByRound = {};
+    labelsForTrend = [];
+  }
 
-  /* (B) 회차 카드들: 앞(상세) / 뒤(오답 패널) */
   for (const {label, raw} of rounds){
-    // 1) scores_raw(s)에서 교시별 wrongQuestions 읽어와 주입
     try{
       const wrongBySession = await fetchScoresRawAllSessions(sid, label);
       if (wrongBySession && Object.keys(wrongBySession).length){
@@ -599,28 +588,25 @@ if (SHOW_TREND_CARD) {
       }
     }catch(e){ /* no-op */ }
 
-    // 2) 앞면 렌더
     const norm = (window.normalizeRound?.(raw)) || raw;
     const hostId = `round-host-${label}`;
     const card = makeFlipCard({
       id: `card-${label}`,
       title: label,
       frontHTML: `<div id="${hostId}"></div>`,
-      backHTML: buildWrongPanelHTML(label, raw)  // 3) 뒷면: 과목별 오답 패널
+      backHTML: buildWrongPanelHTML(label, raw)
     });
     grid.appendChild(card);
     renderRound(`#${hostId}`, label, norm);
 
-    // 꺾은선용 본인 총점(상단 카드가 있을 때만 수집)
-if (SHOW_TREND_CARD) {
-  const subs = getSubjectScores(norm);
-  const total = ALL_SUBJECTS.reduce((a,n)=>a+(subs[n]?.score||0),0);
-  studentTotalsByRound[label] = total;
-  labelsForTrend.push(label);
-}
+    if (SHOW_TREND_CARD) {
+      const subs = getSubjectScores(norm);
+      const total = ALL_SUBJECTS.reduce((a,n)=>a+(subs[n]?.score||0),0);
+      studentTotalsByRound[label] = total;
+      labelsForTrend.push(label);
+    }
   }
 
-  // (C) 상단 배지 & 꺾은선 — 트렌드 카드가 있을 때만
   if (SHOW_TREND_CARD) {
     const badgesHost = $('#trend-badges');
     if (badgesHost){
@@ -634,14 +620,13 @@ if (SHOW_TREND_CARD) {
       });
     }
 
-    // 상단 카드 뒤: 꺾은선 (본인/학교/전국 더미)
     const trendCanvas = document.createElement('canvas');
     trendCanvas.id = 'card-trend-canvas';
     trendCanvas.width = 360; trendCanvas.height = 220;
     $('#card-trend .flip-back.card')?.appendChild(trendCanvas);
 
     const labels = labelsForTrend.sort((a,b)=> parseInt(a) - parseInt(b));
-    const meSeries   = labels.map(lb => studentTotalsByRound[lb] ?? null);
+    const meSeries = labels.map(lb => studentTotalsByRound[lb] ?? null);
 
     const schoolAvgSeries = await Promise.all(labels.map(async lb=>{
       const { schoolAvg } = await getAverages(school, lb);
@@ -660,7 +645,6 @@ if (SHOW_TREND_CARD) {
     ], maxV);
   }
 
-  // 플립 높이 동기화
   requestAnimationFrame(()=>{
     syncFlipHeights(grid);
     installFlipHeightObservers();
@@ -673,6 +657,7 @@ function goHome(){
   $("#view-home")?.classList.remove("hidden");
   $("#sid")?.focus();
 }
+
 async function lookupStudent(e){
   e?.preventDefault?.();
   hideError();
@@ -686,6 +671,7 @@ async function lookupStudent(e){
   }
 
   try {
+    console.log('lookupStudent 호출, renderResultDynamic 존재?', typeof renderResultDynamic);
     await renderResultDynamic(id);
     $("#view-home")?.classList.add("hidden");
     $("#view-result")?.classList.remove("hidden");
@@ -698,7 +684,6 @@ async function lookupStudent(e){
 
 /* -------------------- 13) 초기화 & 전역 -------------------- */
 function initApp(){
-  // 간격/컴포넌트 보조 스타일(필요 시 삭제 가능)
   (function injectMinorSpacing(){
     const css = `
       #cards-grid { display:grid; gap:14px; }
@@ -741,6 +726,7 @@ function initApp(){
     form?.dispatchEvent(new Event("submit", {cancelable:true}));
   }
 }
+
 document.addEventListener('DOMContentLoaded', initApp);
 
 // 전역 노출
@@ -749,12 +735,12 @@ window.initApp = initApp;
 window.normalizeRound = normalizeRound;
 window.renderResultDynamic = renderResultDynamic;
 window.__SUBJECT_TOTALS = SUBJECT_MAX;
-window.__GROUPS_DEF     = GROUPS;
+window.__GROUPS_DEF = GROUPS;
 
 /* -------------------- 14) Flip 높이 동기화 -------------------- */
 function measureFaceHeight(card, faceEl){
   const tmp = document.createElement('div');
-  tmp.className = faceEl.className.replace('flip-face','').trim(); // .card 스타일 유지
+  tmp.className = faceEl.className.replace('flip-face','').trim();
   tmp.style.cssText = `
     position:absolute; visibility:hidden; left:-9999px; top:-9999px;
     width:${card.clientWidth}px;
@@ -765,6 +751,7 @@ function measureFaceHeight(card, faceEl){
   document.body.removeChild(tmp);
   return h;
 }
+
 function syncFlipHeights(root = document){
   const scope = (root instanceof Element ? root : document);
   const cards = scope.querySelectorAll('.flip-card');
@@ -778,6 +765,7 @@ function syncFlipHeights(root = document){
     inner.style.height = Math.max(hf, hb) + 'px';
   });
 }
+
 let __flipObserverInstalled = false;
 function installFlipHeightObservers(){
   if (__flipObserverInstalled) return;
