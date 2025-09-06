@@ -30,24 +30,25 @@ export function chunk(arr, sizes) {
   return out;
 }
 
-// 🎯 미응시/중도포기 상태 감지 함수
+// 🎯 미응시/중도포기 상태 감지 함수 (정확한 기준 적용)
 export function detectStudentAbsenceStatus(wrongBySession) {
   if (!wrongBySession || typeof wrongBySession !== 'object') {
     return {
       isNoAttendance: true,
       isPartiallyAbsent: false,
-      missedSessions: [],
+      missedSessions: ['1교시', '2교시', '3교시', '4교시'],
       attendedCount: 0
     };
   }
 
-  const sessions = ['1교시', '2교시', '3교시', '4교시'];
+  const allSessions = ['1교시', '2교시', '3교시', '4교시'];
   const attendedSessions = [];
   const missedSessions = [];
 
-  sessions.forEach(session => {
-    const hasData = wrongBySession[session];
-    if (hasData && Array.isArray(hasData)) {
+  allSessions.forEach(session => {
+    // 🎯 해당 교시에 데이터가 있으면 응시한 것으로 판단
+    // (빈 배열이어도 응시한 것 - 모든 문제를 다 맞춘 경우)
+    if (wrongBySession.hasOwnProperty(session) && Array.isArray(wrongBySession[session])) {
       attendedSessions.push(session);
     } else {
       missedSessions.push(session);
@@ -55,8 +56,11 @@ export function detectStudentAbsenceStatus(wrongBySession) {
   });
 
   const attendedCount = attendedSessions.length;
-  const isNoAttendance = attendedCount === 0;
-  const isPartiallyAbsent = attendedCount > 0 && attendedCount < 4;
+  
+  // 🎯 정확한 분류 기준
+  const isNoAttendance = attendedCount === 0;        // 모든 교시 데이터 없음
+  const isPartiallyAbsent = attendedCount > 0 && attendedCount < 4; // 일부 교시만 데이터 있음
+  // attendedCount === 4 이면 유효응시자 (개별 문항 누락은 상관없음)
 
   return {
     isNoAttendance,
