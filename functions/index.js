@@ -568,15 +568,21 @@ exports.processStorageExcel = functions.storage.object().onFinalize(async (objec
 function extractFileInfo(filePath) {
   // "1차 모의고사 1교시.xlsx" 형태에서 정보 추출
   const fileName = filePath.split('/').pop(); // 폴더 경로 제거
+  console.log('파일명 분석:', fileName);
+  
   const match = fileName.match(/(\d+)차.*?(\d+)교시/);
+  console.log('정규식 매치 결과:', match);
   
   if (match) {
-    return {
+    const result = {
       roundLabel: `${match[1]}차`,
       session: `${match[2]}교시`
     };
+    console.log('추출된 정보:', result);
+    return result;
   }
   
+  console.log('정규식 매치 실패 - 파일명:', fileName);
   return null;
 }
 
