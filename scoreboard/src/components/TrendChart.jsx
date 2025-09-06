@@ -1,4 +1,4 @@
-// src/components/TrendChart.jsx - 미응시자 정보 표시 추가
+// src/components/TrendChart.jsx - 중도포기 용어 변경
 import React, { useState, useEffect, useRef } from 'react';
 import { getAverages, getRealScoreDistribution, getAbsenceStatistics } from '../utils/helpers';
 
@@ -141,7 +141,7 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
     const chartW = W - padding.left - padding.right;
     const chartH = H - padding.top - padding.bottom;
 
-    // 타이틀/평균
+    // 타이틀/평균 - 중도포기 용어 변경
     const createTitle = () => {
       if (isSchoolMode) {
         return `${school} 분포 (총 ${cur.totalSchool}명)`;
@@ -149,7 +149,7 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
         // 전국 모드에서 미응시자 정보 표시
         const stats = cur.absenceStats;
         if (stats) {
-          return `전국 분포 (총 ${stats.totalExpected}명, 응시자 ${stats.attendees}명, 미응시자 ${stats.fullAbsentees}명, 일부미응시자 ${stats.partialAttendees}명)`;
+          return `전국 분포 (총 ${stats.totalExpected}명, 응시자 ${stats.attendees}명, 미응시자 ${stats.fullAbsentees}명, 중도포기 ${stats.partialAttendees}명)`;
         } else {
           return `전국 분포 (총 ${cur.totalNational}명)`; // fallback
         }
