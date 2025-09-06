@@ -1,111 +1,14 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ko">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>전졸협 모의고사 성적 사이트</title>
-  <link rel="stylesheet" href="assets/style.css" />
-  <style>
-    /* 줄바꿈 스타일 */
-    #lookup-form.flex-column {
-      display: flex;
-      flex-direction: column;
-      gap: 12px; /* 항목 간 간격 */
-    }
-    #lookup-form .row {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-    #lookup-form .input {
-      flex: 1;
-      max-width: 300px; /* 입력칸 너비 제한 */
-    }
-    #lookup-form .btn {
-      width: 150px;
-    }
-    .card.narrow {
-      max-width: 480px;
-      margin: 0 auto;
-    }
-  </style>
-</head>
-<body>
-<div class="container">
-  <div class="header">
-    <div>
-      <h1>전졸협 모의고사 성적 사이트</h1>
-      <div class="small">학수번호 6자리를 입력해 본인 성적을 확인하세요.</div>
-    </div>
-  </div>
-  <!-- 홈 뷰 -->
-  <div id="view-home" class="grid">
-    <div class="col-12">
-      <div class="card narrow">
-        <h2 style="margin-top:0">본인 점수 보기</h2>
-        <form id="lookup-form" class="flex-column" novalidate>
-          <!-- 학수번호 -->
-          <label for="sid" class="small">학수번호</label>
-          <input id="sid" name="sid" class="input" type="text"
-                 inputmode="numeric" placeholder="예) 015001"
-                 maxlength="6" required />
-          <!-- 전화번호 + 인증번호 받기 버튼 -->
-          <label for="phone" class="small">전화번호</label>
-          <div class="row">
-            <input id="phone" class="input" type="tel" placeholder="+821012345678" />
-            <button class="btn" type="button" onclick="requestSmsCode()">인증번호 받기</button>
-          </div>
-          <!-- 인증번호 + 인증 확인 버튼 -->
-          <label for="smsCode" class="small">인증번호</label>
-          <div class="row">
-            <input id="smsCode" class="input" type="text" inputmode="numeric" maxlength="6" placeholder="6자리" />
-            <button class="btn" type="button" onclick="verifySmsCodeAndProceed()">인증 확인</button>
-          </div>
-          <!-- 성적 확인 버튼 -->
-          <button class="btn" type="submit" formnovalidate>성적 확인</button>
-        </form>
-        <!-- 힌트 -->
-        <div id="hint" class="small" style="margin-top:10px">
-          • 숫자 6자리만 입력 가능합니다. 예: <code>015001</code>
-        </div>
-        <!-- reCAPTCHA -->
-        <div id="recaptcha-container" style="margin:12px 0;"></div>
-        <div id="error" class="alert hidden" role="alert" aria-live="assertive"></div>
-      </div>
-    </div>
-  </div>
-
-<!-- 결과 뷰 - 기존 상단 카드 완전 제거 -->
-<div id="view-result" class="hidden">
-  <!-- 동적으로 카드가 생성되는 그리드 (트렌드 카드가 맨 위에 생성됨) -->
-  <div id="cards-grid" class="cards-grid" style="margin-top:12px;"></div>
-  
-  <div class="card" style="margin-top:16px">
-    <div class="flex" style="gap:8px; flex-wrap:wrap;">
-      <button class="btn" type="button" onclick="goHome()">다른 학생 조회</button>
-      <button class="btn ghost" type="button" onclick="window.print()">인쇄하기</button>
-    </div>
-  </div>
-</div>
-
-<!-- Firebase 초기화 -->
-<script type="module" src="assets/firebase-init.js"></script>
-<!-- UI/렌더 -->
-<script src="assets/script.js"></script>
-<!-- Firestore 계산 로더 -->
-<script src="assets/firestore-loader.js"></script>
-<!-- 숫자만 입력 -->
-<script>
-  document.addEventListener('DOMContentLoaded', () => {
-    const $sid = document.getElementById('sid');
-    if ($sid) {
-      $sid.addEventListener('input', () => {
-        $sid.value = ($sid.value || '').replace(/\D/g, '').slice(0, 6);
-      });
-      $sid.setAttribute('enterkeyhint', 'done');
-    }
-    if (window.initApp) initApp();
-  });
-</script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0b1020" />
+    <meta name="description" content="전졸협 모의고사 성적 조회 시스템" />
+    <title>전졸협 모의고사 성적 사이트</title>
+  </head>
+  <body>
+    <noscript>JavaScript를 활성화해주세요.</noscript>
+    <div id="root"></div>
+  </body>
 </html>
