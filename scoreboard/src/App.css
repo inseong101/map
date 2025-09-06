@@ -221,3 +221,34 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
   .subj-row { gap: 4px 6px; }
   .flip-card .flip-back { padding: 12px; }
 }
+
+/* 버튼 로딩 상태(검색중…) */
+.btn.loading {
+  position: relative;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+.btn.loading::after {
+  content: '';
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-left: 8px;
+  border: 2px solid rgba(255,255,255,.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: btnspin 0.9s linear infinite;
+  vertical-align: -2px;
+}
+
+@keyframes btnspin {
+  to { transform: rotate(360deg); }
+}
+
+/* 조회 카드 좁게 중앙 */
+.card.narrow {
+  max-width: 560px;
+  margin: 0 auto 16px auto;
+}
+
