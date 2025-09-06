@@ -1,4 +1,4 @@
-// src/components/TrendChart.jsx - 올바른 상위 퍼센트 계산
+// src/components/TrendChart.jsx - 올바른 상위 퍼센트 계산 (ES5 호환)
 import React, { useState, useEffect, useRef } from 'react';
 import { getAverages, getRealScoreDistribution, calculatePercentile } from '../utils/helpers';
 
@@ -26,6 +26,7 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
     const onResize = () => drawCurrent(bundle);
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bundle, isSchoolMode, selectedRoundIdx]);
 
   // 데이터 준비 + 그리기
@@ -36,19 +37,21 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
       const schCode = nameToCode(school);
       const out = [];
 
-      for (const round of rounds) {
-        const { label, data: roundData } = round;
-        const studentScore = Number.isFinite(roundData?.totalScore)
-          ? Number(roundData.totalScore)
-          : null;
+      for (let i = 0; i < rounds.length; i++) {
+        const round = rounds[i];
+        const label = round && round.label ? round.label : '';
+        const roundData = round && round.data ? round.data : null;
+
+        const hasScore = roundData && Number.isFinite(roundData.totalScore);
+        const studentScore = hasScore ? Number(roundData.totalScore) : null;
 
         // 평균
         const averages = await getAverages(school, label);
 
         // 실제 분포
         const dist = await getRealScoreDistribution(label);
-        const natScores = Array.isArray(dist?.national) ? dist.national : [];
-        const schScores = dist?.bySchool && Array.isArray(dist.bySchool[schCode])
+        const natScores = (dist && Array.isArray(dist.national)) ? dist.national : [];
+        const schScores = (dist && dist.bySchool && Array.isArray(dist.bySchool[schCode]))
           ? dist.bySchool[schCode]
           : [];
 
@@ -60,28 +63,32 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
         const schoolPercentile = calculatePercentile(studentScore, schScores);
 
         out.push({
-          label,
-          studentScore,
-          nationalAvg: averages?.nationalAvg ?? '-',
-          schoolAvg: averages?.schoolAvg ?? '-',
+          label: label,
+          studentScore: studentScore,
+          nationalAvg: (averages && averages.nationalAvg != null) ? averages.nationalAvg : '-',
+          schoolAvg: (averages && averages.schoolAvg != null) ? averages.schoolAvg : '-',
           nationalBins: nat,
           schoolBins: sch,
           totalNational: natScores.length,
           totalSchool: schScores.length,
-          nationalPercentile,
-          schoolPercentile,
-          countsNational: dist?.countsNational ?? { totalAttended: 0, validFull: 0, absent: 0, dropout: 0 }
+          nationalPercentile: nationalPercentile,
+          schoolPercentile: schoolPercentile,
+          countsNational: (dist && dist.countsNational)
+            ? dist.countsNational
+            : { totalAttended: 0, validFull: 0, absent: 0, dropout: 0 }
         });
       }
 
       setBundle(out);
       drawCurrent(out);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rounds, school, sid]);
 
   // 그리기 트리거
   useEffect(() => {
     drawCurrent(bundle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bundle, selectedRoundIdx, isSchoolMode]);
 
   // 분포 생성
@@ -90,18 +97,18 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
 
     // 0~335 (5점 간격)
     for (let x = X_MIN; x < X_MAX; x += BIN_SIZE) {
-      const count = scores.filter(s => s >= x && s < x + BIN_SIZE).length;
+      const count = scores.filter(function(s){ return s >= x && s < x + BIN_SIZE; }).length;
       bins.push({
         min: x,
         max: x + BIN_SIZE,
-        count,
-        isStudent: studentScore != null && studentScore >= x && studentScore < x + BIN_SIZE,
+        count: count,
+        isStudent: (studentScore != null && studentScore >= x && studentScore < x + BIN_SIZE),
         percentage: scores.length > 0 ? (count / scores.length) * 100 : 0
       });
     }
 
     // 마지막 340점
-    const lastCount = scores.filter(s => s === X_MAX).length;
+    const lastCount = scores.filter(function(s){ return s === X_MAX; }).length;
     bins.push({
       min: X_MAX,
       max: X_MAX,
@@ -140,8 +147,8 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
 
     // 타이틀/평균
     const title = isSchoolMode
-      ? `${school} 분포 (총 ${cur.totalSchool}명)`
-      : `전국 분포 (총 ${cur.totalNational}명)`;
+      ? (school + ' 분포 (총 ' + cur.totalSchool + '명)')
+      : ('전국 분포 (총 ' + cur.totalNational + '명)');
     const avg = isSchoolMode ? cur.schoolAvg : cur.nationalAvg;
 
     // 제목
@@ -151,7 +158,7 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
     ctx.fillText(title, W / 2, 22);
     ctx.fillStyle = '#9db0d6';
     ctx.font = '12px system-ui';
-    ctx.fillText(`평균: ${avg}점`, W / 2, 40);
+    ctx.fillText('평균: ' + avg + '점', W / 2, 40);
 
     // 축/격자
     const activeBins = isSchoolMode ? cur.schoolBins : cur.nationalBins;
@@ -196,7 +203,7 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
     }
 
     // Y축 눈금
-    const maxCount = Math.max(1, ...bins.map(b => b.count));
+    const maxCount = Math.max.apply(null, [1].concat(bins.map(function(b){ return b.count; })));
     const steps = 4;
     const niceStep = makeNiceStep(maxCount / steps);
     const yStep = Math.max(1, niceStep);
@@ -227,7 +234,7 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
   function drawBarsWithLabels(ctx, padding, chartW, chartH, bins, color, yMax) {
     const binWidth = chartW / bins.length;
 
-    bins.forEach((bin, i) => {
+    bins.forEach(function(bin, i) {
       const x = padding.left + i * binWidth;
       const barHeight = (bin.count / yMax) * chartH;
       const y = padding.top + chartH - barHeight;
@@ -241,7 +248,7 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
         ctx.strokeStyle = '#ef4444';
         ctx.lineWidth = 2;
         ctx.strokeRect(x + 1, y, binWidth - 2, barHeight);
-        
+
         // 화살표 표시
         ctx.fillStyle = '#ef4444';
         ctx.font = 'bold 16px system-ui';
@@ -275,7 +282,7 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
   function makeNiceStep(rawStep) {
     const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
     const normalized = rawStep / magnitude;
-    
+
     if (normalized <= 1) return magnitude;
     if (normalized <= 2) return 2 * magnitude;
     if (normalized <= 5) return 5 * magnitude;
@@ -374,39 +381,38 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
           fontSize: 14,
           color: 'var(--muted)'
         }}>
-          <strong style={{ color: 'var(--ink)' }}>{rounds[selectedRoundIdx]?.label}</strong>
+          <strong style={{ color: 'var(--ink)' }}>
+            {rounds[selectedRoundIdx] && rounds[selectedRoundIdx].label}
+          </strong>
           {' '}— 본인 점수:{' '}
           <span style={{ color: '#ef4444', fontWeight: 'bold' }}>
-            {Number.isFinite(current.studentScore) ? `${current.studentScore}점` : '표시 안함'}
+            {Number.isFinite(current.studentScore) ? (current.studentScore + '점') : '표시 안함'}
           </span>
           {/* ✅ 올바른 상위 퍼센트 표시 */}
-          {current.studentScore !== null && (
-            <>
+          {(current.studentScore !== null) && (
+            <span>
               {' '}({isSchoolMode ? '학교' : '전국'} 상위{' '}
               <span style={{ color: '#22c55e', fontWeight: 'bold' }}>
                 {isSchoolMode ? current.schoolPercentile : current.nationalPercentile}%
               </span>)
-            </>
+            </span>
           )}
 
-     {/* ✅ 카운트 4종 (전국 기준) */}
-     <div className="small" style={{ marginTop: 6 }}>
-        <span style={{ marginRight: 10 }}>
-          전체응시자: <b>{current.countsNational.totalAttended}</b>
-        </span>
-        <span style={{ marginRight: 10 }}>
-          유효응시자: <b>{current.countsNational.validFull}</b>
-        </span>
-        <span style={{ marginRight: 10 }}>
-          미응시자: <b>{current.countsNational.absent}</b>
-        </span>
-        <span>
-          중도포기자: <b>{current.countsNational.dropout}</b>
-        </span>
-      </div>
-
-
-          
+          {/* ✅ 카운트 4종 (전국 기준) */}
+          <div className="small" style={{ marginTop: 6 }}>
+            <span style={{ marginRight: 10 }}>
+              전체응시자: <b>{current.countsNational.totalAttended}</b>
+            </span>
+            <span style={{ marginRight: 10 }}>
+              유효응시자: <b>{current.countsNational.validFull}</b>
+            </span>
+            <span style={{ marginRight: 10 }}>
+              미응시자: <b>{current.countsNational.absent}</b>
+            </span>
+            <span>
+              중도포기자: <b>{current.countsNational.dropout}</b>
+            </span>
+          </div>
         </div>
       )}
 
