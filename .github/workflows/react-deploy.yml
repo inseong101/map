@@ -24,3 +24,8 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JEONJOLHYUP }}
           channelId: live
           projectId: jeonjolhyup
+- name: Deploy Functions
+  run: |
+    cd functions
+    npm install
+    npx firebase deploy --only functions --project jeonjolhyup
