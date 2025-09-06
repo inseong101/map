@@ -254,14 +254,15 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 
 /* ===== 플립 뒤 스크롤 복구(높이 보장 + 스크롤) ===== */
 .flip-card .flip-back {
-  /* 앞면 높이 동기화가 없더라도 쓸 수 있는 기본값 */
-  max-height: min(70vh, 700px);
-  padding: 16px;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
+  /* 높이 정책은 프로젝트에 맞게: height-synced 쓰면 그 값, 아니면 아래 기본값 */
+  max-height: min(70vh, 700px);
+  padding: 16px;
 }
+
 
 /* height-synced가 있으면 그 값을 우선 */
 .flip-card.height-synced .flip-back {
