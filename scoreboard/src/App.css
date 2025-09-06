@@ -148,14 +148,10 @@ h2{margin:8px 0; font-size:18px; color:var(--muted); font-weight:700}
   height: var(--front-height);
 }
 
-/* 그룹 박스: 통과/과락 기본 + 미응시(보라) 추가 */
+/* 그룹 박스: 과락/통과만 표시 (초록/빨강) */
 .group-box{border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--surface-2)}
 .group-box.ok { background: rgba(34,197,94,.10); border-color: rgba(34,197,94,.55); }
 .group-box.fail { background: rgba(239,68,68,.10); border-color: rgba(239,68,68,.55); }
-.group-box.absent { background: rgba(168,85,247,.10); border-color: rgba(168,85,247,.45); }
-
-/* 부모가 미응시 카드일 경우, 내부 그룹 박스도 보라톤 */
-.flip-card.card-absent .group-box { background: rgba(168,85,247,.10); }
 
 /* 배지 스타일 */
 .badge{
