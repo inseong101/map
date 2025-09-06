@@ -1,4 +1,4 @@
-// src/components/TrendChart.jsx - 올바른 상위 퍼센트 계산 (ES5 호환, eslint 주석 제거)
+// src/components/TrendChart.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { getAverages, getRealScoreDistribution, calculatePercentile } from '../utils/helpers';
 
