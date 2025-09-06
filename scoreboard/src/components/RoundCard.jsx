@@ -1,10 +1,10 @@
-// src/components/RoundCard.jsx
+// src/components/RoundCard.jsx - 중도포기 배지 추가
 import React, { useState, useEffect, useRef } from 'react';
 import { fmt, pct, pill, chunk } from '../utils/helpers';
 import { SUBJECT_MAX } from '../services/dataService';
 import WrongAnswerPanel from './WrongAnswerPanel';
 
-function RoundCard({ label, data, sid }) {
+function RoundCard({ label, data, sid, isPartialAbsent = false, attendedCount = 4 }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const flipCardRef = useRef(null);
   const frontRef = useRef(null);
@@ -35,6 +35,7 @@ function RoundCard({ label, data, sid }) {
   }, []);
 
   const getReasonText = () => {
+    if (isPartialAbsent) return "중도포기";
     if (overallPass) return "통과";
     if (!meets60 && anyGroupFail) return "과락 및 평락으로 인한 불합격";
     if (!meets60) return "평락으로 인한 불합격";
@@ -82,7 +83,15 @@ function RoundCard({ label, data, sid }) {
       return (
         <div key={group.name} className={`group-box ${pass ? 'ok' : 'fail'} span-12`}>
           <div className="group-head">
-            <div className="name" style={{ fontWeight: 800 }}>{groupLabel}</div>
+            <div className="name" style={{ fontWeight: 800 }}>
+              {groupLabel}
+              {/* 중도포기 표시 추가 */}
+              {isPartialAbsent && (
+                <span className="badge absent" style={{ marginLeft: '8px', fontSize: '10px' }}>
+                  중도포기
+                </span>
+              )}
+            </div>
             <div className="small">
               소계 {fmt(score)}/{fmt(max)} · 정답률 {rate}%
               {pass ? 
@@ -113,8 +122,19 @@ function RoundCard({ label, data, sid }) {
         {/* 앞면 - 성적 */}
         <div ref={frontRef} className="flip-face flip-front card">
           <div className={`round ${overallPass ? "" : "fail"}`}>
-            <div className="flex" style={{ justifyContent: 'space-between' }}>
-              <h2 style={{ margin: 0 }}>{label} 총점</h2>
+            {/* 헤더 - 중도포기 배지 추가 */}
+            <div className="flex" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <h2 style={{ margin: 0 }}>{label} 총점</h2>
+                {/* 중도포기 정보 표시 */}
+                {isPartialAbsent && (
+                  <div className="small" style={{ marginTop: '4px', color: 'var(--muted)' }}>
+                    <span className="badge absent" style={{ fontSize: '11px' }}>
+                      중도포기 ({attendedCount}/4교시)
+                    </span>
+                  </div>
+                )}
+              </div>
               <div className="kpi">
                 <div className="num">{fmt(totalScore)}</div>
                 <div className="sub">/ {fmt(totalMax)}</div>
@@ -128,9 +148,12 @@ function RoundCard({ label, data, sid }) {
             
             <div className="small" style={{ marginTop: 10 }}>
               정답률 {overallRate}% (컷 60%: 204/340) · 
-              {overallPass ? 
-                <span dangerouslySetInnerHTML={{__html: pill("통과", "ok")}} /> : 
-                <span dangerouslySetInnerHTML={{__html: pill("불합격", "red")}} />
+              {isPartialAbsent ? 
+                <span dangerouslySetInnerHTML={{__html: pill("중도포기", "red")}} /> :
+                (overallPass ? 
+                  <span dangerouslySetInnerHTML={{__html: pill("통과", "ok")}} /> : 
+                  <span dangerouslySetInnerHTML={{__html: pill("불합격", "red")}} />
+                )
               }
               <div className="small" style={{ marginTop: '6px', opacity: 0.9 }}>
                 {getReasonText()}
