@@ -108,19 +108,12 @@ export function drawLineChart(canvas, labels, series, maxValue) {
 
 // 유효한 학수번호인지 확인 (01~12로 시작하는 6자리)
 export function isValidStudentId(sid) {
-
   if (!sid || typeof sid !== 'string') return false;
   if (sid.length !== 6) return false;
-  
   const schoolCode = sid.slice(0, 2);
   const validCodes = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
   return validCodes.includes(schoolCode);
 }
-
-
-
-
-
 
 // 학교별/전국 평균 데이터 조회 (Firestore에서)
 export async function getAverages(schoolName, roundLabel) {
@@ -164,83 +157,80 @@ export function calculatePercentile(studentScore, allScores) {
   return Math.round(pct * 10) / 10; // 소수 1자리
 }
 
-// 실제 점수 분포 데이터 조회
+// 실제 점수 분포 데이터 조회 (유효 SID만; 중도포기 제외; 4종 카운트 포함)
 export async function getRealScoreDistribution(roundLabel) {
   try {
     const { db } = await import('../services/firebase');
     const { collection, getDocs } = await import('firebase/firestore');
     
     const sessions = ['1교시', '2교시', '3교시', '4교시'];
-    const allScores = {};       // sid -> totalScore (풀참여만)
-    const schoolScores = {};    // schoolCode -> [scores] (풀참여만)
-    const sessionCount = {};    // sid -> 참여 교시 수 (유효 SID만)
-    const schoolOfSid = {};     // sid -> schoolCode
-    
+
+    // 임시 누적
+    const rawScoreBySid = {}; // sid -> 임시 총점(세션별 오답 차감 합산)
+    const sessionCount = {};  // sid -> 응시한 교시 수
+    const schoolOfSid = {};   // sid -> '01'~'12'
+
     // 교시별 데이터 수집
     for (const session of sessions) {
       const sessionRef = collection(db, 'scores_raw', roundLabel, session);
       const snapshot = await getDocs(sessionRef);
       
-      snapshot.forEach(doc => {
-        const sid = doc.id;
-              snapshot.forEach(docSnap => {
+      snapshot.forEach(docSnap => {
         const sid = docSnap.id;
         if (!isValidStudentId(sid)) return; // ❗️비유효 SID는 완전 제외
+
         const data = docSnap.data();
         const wrongQuestions = data.wrongQuestions || data.wrong || [];
-        const schoolCode = sid.slice(0, 2);
-        schoolOfSid[sid] = schoolCode;
+
         sessionCount[sid] = (sessionCount[sid] ?? 0) + 1;
-        // 점수 누적은 일단 세션별로 모았다가, 나중에 "풀참여(4교시)"만 반영
-        allScores[sid] = (allScores[sid] ?? 340);
+        schoolOfSid[sid] = sid.slice(0, 2);
+
+        // 점수 누적(만점 340에서 오답만큼 차감)
+        rawScoreBySid[sid] = (rawScoreBySid[sid] ?? 340);
         if (Array.isArray(wrongQuestions)) {
-          allScores[sid] = Math.max(0, allScores[sid] - wrongQuestions.length);
+          rawScoreBySid[sid] = Math.max(0, rawScoreBySid[sid] - wrongQuestions.length);
         }
-      });}
-        
-    
-    // ✅ 카운트 계산 (유효 SID만 대상):
-    //   - 전체 응시자: at least 1교시
-    //   - 유효 응시자: 4교시 모두
-    //   - 중도포기자: 1~3교시
-    //   - 미응시자: 0교시
-    const sids = Object.keys(sessionCount); // 유효 SID 중 "한 번이라도 문서가 있었던" SID
-    const allKnownSids = new Set(sids);     // ‘미응시자(0교시)’는 raw에서 직접 측정 어려움 → 아래 카운트는 분모 기준을 raw에서 볼 수 있는 SID로 제한
-
-    let totalAttended = 0, validFull = 0, dropout = 0;
-    for (const sid of sids) {
-      const c = sessionCount[sid] || 0;
-      if (c >= 1) totalAttended += 1;
-      if (c === 4) validFull += 1;
-      if (c >= 1 && c <= 3) dropout += 1;
+      });
     }
-    // 주의: '완전 미응시자(0교시)'는 scores_raw에 전혀 나타나지 않기 때문에
-    // 여기서는 0으로 둘 수밖에 없음. 만약 별도 명단(전체 등록 SID)이 있다면,
-    // 그 목록과 비교해서 absent를 산출해야 함.
-    const absent = 0;
 
-    // ✅ 분포/퍼센타일용 점수는 "풀참여(4교시)"만 사용
+    // ✅ 분포/퍼센타일용 점수는 "풀참여(4교시)"만 사용 (중도포기 1~3교시는 제외)
     const nationalScores = [];
-    for (const [sid, score] of Object.entries(allScores)) {
-      if ((sessionCount[sid] || 0) === 4) {
+    const schoolScores = {}; // schoolCode -> [scores]
+
+    Object.entries(rawScoreBySid).forEach(([sid, score]) => {
+      const c = sessionCount[sid] || 0;
+      if (c === 4) {
         nationalScores.push(score);
         const sc = schoolOfSid[sid];
         if (!schoolScores[sc]) schoolScores[sc] = [];
         schoolScores[sc].push(score);
       }
-    }
-    
+    });
+
+    // ✅ 카운트(전국 기준) — 모두 유효 SID만 대상으로 계산
+    //  - 전체응시자: 1~4교시 중 하나라도 응시
+    //  - 유효응시자: 4교시 모두 응시
+    //  - 중도포기자: 1~3교시
+    //  - 미응시자: raw에서 0교시는 잡히지 않음(명부 없으면 0으로 둠)
+    let totalAttended = 0, validFull = 0, dropout = 0;
+    Object.values(sessionCount).forEach(c => {
+      if (c >= 1) totalAttended += 1;
+      if (c === 4) validFull += 1;
+      if (c >= 1 && c <= 3) dropout += 1;
+    });
+    const absent = 0;
+
     return {
       national: nationalScores,
+      school: schoolScores,
       bySchool: schoolScores,
       countsNational: {
         totalAttended,   // 전체 응시자(1~4교시)
         validFull,       // 유효 응시자(4교시)
-        absent,          // 미응시자(0교시, 여기서는 0)
+        absent,          // 미응시자(0교시, 명부 없으면 0)
         dropout          // 중도포기(1~3교시)
       }
     };
-    
   } catch (error) {
     console.error('점수 분포 조회 오류:', error);
     return {
@@ -265,18 +255,18 @@ function getSchoolCodeFromName(schoolName) {
 // ✅ 누락된 함수 추가
 export function detectStudentAbsenceStatus(wrongBySession) {
   const allSessions = ["1교시", "2교시", "3교시", "4교시"];
-  const attendedSessions = Object.keys(wrongBySession);
-  const attendedCount = attendedSessions.length;             // 참석한 교시 수
+  const attendedSessions = Object.keys(wrongBySession || {});
+  const attendedCount = attendedSessions.length; // 참석한 교시 수
   
   const isFullAttendance = allSessions.every(sess => attendedSessions.includes(sess));
-  const isPartiallyAbsent = attendedCount > 0 && attendedCount < 4;  // 일부 교시만 응시 (중도포기)
+  const isPartiallyAbsent = attendedCount > 0 && attendedCount < 4; // 일부 교시만 응시(중도포기)
   const isNoAttendance = attendedCount === 0;
   
   return {
     isFullAttendance,
-    isPartiallyAbsent,       // 새 속성: 중도포기 여부
+    isPartiallyAbsent,        // 중도포기 여부
     isNoAttendance,
-    attendedCount,           // 새 속성: 참석한 교시 개수
+    attendedCount,            // 참석한 교시 개수
     attendedSessions,
     missedSessions: allSessions.filter(sess => !attendedSessions.includes(sess))
   };
