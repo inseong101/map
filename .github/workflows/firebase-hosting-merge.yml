@@ -36,4 +36,3 @@ jobs:
           firebase deploy --project jeonjolhyup --non-interactive
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JEONJOLHYUP }}
-
