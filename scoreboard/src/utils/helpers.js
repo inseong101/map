@@ -212,3 +212,22 @@ function getSchoolCodeFromName(schoolName) {
   };
   return schoolMap[schoolName] || "01";
 }
+
+// ✅ 누락된 함수 추가
+export function detectStudentAbsenceStatus(wrongBySession) {
+  // 4교시가 모두 있는지 확인
+  const allSessions = ["1교시", "2교시", "3교시", "4교시"];
+  const attendedSessions = Object.keys(wrongBySession);
+  
+  const isFullAttendance = allSessions.every(session => attendedSessions.includes(session));
+  const isPartialAttendance = attendedSessions.length > 0 && attendedSessions.length < 4;
+  const isNoAttendance = attendedSessions.length === 0;
+  
+  return {
+    isFullAttendance,
+    isPartialAttendance,
+    isNoAttendance,
+    attendedSessions,
+    missedSessions: allSessions.filter(session => !attendedSessions.includes(session))
+  };
+}
