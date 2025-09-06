@@ -335,3 +335,9 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
   .card{box-shadow:none; border-color:#ddd; background:#fff}
   .badge{border-color:#999}
 }
+
+.badge.absent {
+  background: rgba(139, 92, 246, 0.18); /* 보라색 배경 */
+  border-color: rgba(139, 92, 246, 0.55); /* 보라색 테두리 */
+  color: #c4b5fd; /* 밝은 보라색 텍스트 */
+}
