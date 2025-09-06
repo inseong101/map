@@ -1,9 +1,11 @@
-// src/App.jsx
+// src/App.jsx - 전체 미응시자 처리 추가
 import React, { useState } from 'react';
 import StudentCard from './components/StudentCard';
 import RoundCard from './components/RoundCard';
+import AbsentCard from './components/AbsentCard';
 import './App.css';
-import { discoverRoundsFor, getSchoolFromSid } from './services/dataService';
+import { discoverRoundsFor, getSchoolFromSid, ROUND_LABELS } from './services/dataService';
+import { detectStudentAbsenceStatus } from './utils/helpers';
 
 function App() {
   const [currentView, setCurrentView] = useState('home'); // 'home' | 'result'
@@ -28,7 +30,7 @@ function App() {
       const foundRounds = await discoverRoundsFor(id);
       
       if (foundRounds.length === 0) {
-        setError('존재하지 않는 학수번호거나 미응시자입니다.');
+        setError('존재하지 않는 학수번호거나 모든 회차를 미응시했습니다.');
         return;
       }
       
@@ -110,26 +112,73 @@ function App() {
   // 결과 화면
   const school = getSchoolFromSid(studentId);
 
-  return (
-    <div className="container">
-      <div id="cards-grid" className="cards-grid">
+  // 카드 렌더링 로직
+  const renderCards = () => {
+    const cards = [];
+    
+    // StudentCard는 응시한 회차가 있는 경우만 표시
+    if (rounds.length > 0) {
+      cards.push(
         <StudentCard 
+          key="student"
           sid={studentId} 
           school={school} 
           rounds={rounds} 
         />
+      );
+    }
+    
+    // 각 회차별 카드 렌더링 (1차~8차 순서대로)
+    ROUND_LABELS.forEach(label => {
+      const roundData = rounds.find(r => r.label === label);
+      
+      if (roundData) {
+        // 응시한 회차 - 일반 RoundCard 또는 중도포기 카드
+        const absenceStatus = detectStudentAbsenceStatus(roundData.data);
         
-        {rounds.map(({ label, data }) => (
+        cards.push(
           <RoundCard 
             key={label}
             label={label}
-            data={data}
+            data={roundData.data}
             sid={studentId}
+            isPartialAbsent={absenceStatus.isPartiallyAbsent}
+            attendedCount={absenceStatus.attendedCount}
           />
-        ))}
+        );
+      } else {
+        // 전체 미응시 - 얇은 AbsentCard
+        cards.push(
+          <AbsentCard 
+            key={label}
+            label={label}
+          />
+        );
+      }
+    });
+    
+    return cards;
+  };
+
+  return (
+    <div className="container">
+      <div className="header">
+        <div>
+          <h1>전졸협 모의고사 성적 사이트</h1>
+          <div className="small">{school} {studentId} 학생의 성적표</div>
+        </div>
+        <button 
+          onClick={goHome}
+          className="btn"
+          style={{ fontSize: '14px' }}
+        >
+          다른 학번 조회
+        </button>
       </div>
 
-
+      <div id="cards-grid" className="cards-grid">
+        {renderCards()}
+      </div>
     </div>
   );
 }
