@@ -347,59 +347,14 @@ function convertWrongToScores(wrongBySession) {
   };
 }
 
-// 회차 자동 탐색 - 🎯 모든 회차 포함하도록 수정
+// 회차 자동 탐색 - 🎯 기존 로직 복원 (데이터 있는 것만 표시)
 export async function discoverRoundsFor(sid) {
   const found = [];
   
   for (const label of ROUND_LABELS) {
-    try {
-      const data = await fetchRoundData(sid, label);
-      
-      // 🎯 데이터가 없어도 빈 데이터로라도 포함
-      if (data) {
-        found.push({ label, data });
-      } else {
-        // 미응시자도 카드 표시를 위해 빈 데이터 추가
-        found.push({
-          label,
-          data: {
-            totalScore: 0,
-            totalMax: TOTAL_MAX,
-            overallPass: false,
-            meets60: false,
-            anyGroupFail: true,
-            groupResults: [],
-            subjectScores: {},
-            wrongBySession: {},
-            attendedSessions: 0,
-            percentile: null,
-            rank: null,
-            totalStudents: 0,
-            attendanceStats: await calculateAttendanceStats(label)
-          }
-        });
-      }
-    } catch (error) {
-      console.error(`${label} 데이터 로딩 실패:`, error);
-      // 오류가 있어도 빈 데이터로 추가
-      found.push({
-        label,
-        data: {
-          totalScore: 0,
-          totalMax: TOTAL_MAX,
-          overallPass: false,
-          meets60: false,
-          anyGroupFail: true,
-          groupResults: [],
-          subjectScores: {},
-          wrongBySession: {},
-          attendedSessions: 0,
-          percentile: null,
-          rank: null,
-          totalStudents: 0,
-          attendanceStats: { totalTargets: 0, validAttendees: 0, absentees: 0, dropouts: 0 }
-        }
-      });
+    const data = await fetchRoundData(sid, label);
+    if (data && data.totalScore > 0) { // 기존 조건 유지
+      found.push({ label, data });
     }
   }
   
