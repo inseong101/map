@@ -1,6 +1,6 @@
 // src/components/RoundCard.jsx - 중도포기 배지 추가
 import React, { useState, useEffect, useRef } from 'react';
-import { fmt, pct, pill, chunk } from '../utils/helpers';
+import { fmt, pct, pill, chunk, detectStudentAbsenceStatus } from '../utils/helpers';
 import { SUBJECT_MAX } from '../services/dataService';
 import WrongAnswerPanel from './WrongAnswerPanel';
 
@@ -11,6 +11,15 @@ function RoundCard({ label, data, sid, isPartialAbsent = false, attendedCount = 
 
   const { totalScore, totalMax, overallPass, meets60, anyGroupFail, groupResults } = data;
   const overallRate = pct(totalScore, totalMax);
+    const absence = detectStudentAbsenceStatus(data?.wrongBySession || {});
+  const isPartiallyAbsentFinal = isPartialAbsent || absence.isPartiallyAbsent;
+  const missedSessions = absence.missedSessions || [];
+
+  // 전체 카드 배경 상태
+  const overallClass =
+    !absence || absence.isNoAttendance ? 'card card-absent'
+      : (isPartiallyAbsentFinal ? 'card card-fail'
+        : (overallPass ? 'card card-pass' : 'card card-fail'));
 
   // 높이 동기화 함수
   useEffect(() => {
@@ -115,7 +124,7 @@ function RoundCard({ label, data, sid, isPartialAbsent = false, attendedCount = 
   return (
     <div 
       ref={flipCardRef}
-      className="flip-card" 
+      className={`flip-card ${overallClass}`} 
       onClick={handleCardClick}
     >
       <div className={`flip-inner ${isFlipped ? 'is-flipped' : ''}`}>
@@ -127,7 +136,7 @@ function RoundCard({ label, data, sid, isPartialAbsent = false, attendedCount = 
               <div>
                 <h2 style={{ margin: 0 }}>{label} 총점</h2>
                 {/* 중도포기 정보 표시 */}
-                {isPartialAbsent && (
+                {isPartiallyAbsentFinal && (
                   <div className="small" style={{ marginTop: '4px', color: 'var(--muted)' }}>
                     <span className="badge absent" style={{ fontSize: '11px' }}>
                       중도포기 (빠진 교시: {missedSessions.join(", ")})
