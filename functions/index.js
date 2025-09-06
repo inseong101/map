@@ -1,4 +1,4 @@
-// functions/index.js - 정리된 완전한 통계 분석 함수들
+// functions/index.js
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const XLSX = require('xlsx');
