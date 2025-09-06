@@ -1,10 +1,8 @@
-// src/components/RoundCard.jsx - 완전 수정본
+// src/components/RoundCard.jsx - 부모카드에 색깔 이식, 자녀카드 간소화
 import React, { useState, useEffect, useRef } from 'react';
 import { fmt, pct, pill, chunk, detectStudentAbsenceStatus } from '../utils/helpers';
 import { SUBJECT_MAX } from '../services/dataService';
 import WrongAnswerPanel from './WrongAnswerPanel';
-
-
 
 /**
  * 그룹(과목 묶음) 단위 "미응시" 판정:
@@ -42,16 +40,20 @@ function RoundCard({ label, data, sid }) {
   const isPartiallyAbsent = !!absence?.isPartiallyAbsent;
   const missedSessions = absence?.missedSessions || [];
 
-  // 전체 카드 배경 상태
-  // - 미응시: 보라(card-absent)
-  // - 중도포기: 빨강(card-fail)
-  // - 정상응시: 합격=초록(card-pass) / 불합격=빨강(card-fail)
-  const overallClass =
-    isNoAttendance
-      ? 'card card-absent'
-      : (isPartiallyAbsent
-          ? 'card card-fail'
-          : (overallPass ? 'card card-pass' : 'card card-fail'));
+  // 🎯 부모 카드 클래스 결정 (색깔 포함)
+  const getCardClass = () => {
+    let baseClass = 'flip-card';
+    
+    if (isNoAttendance) {
+      return `${baseClass} card-absent`;
+    } else if (isPartiallyAbsent) {
+      return `${baseClass} card-fail`;
+    } else if (overallPass) {
+      return `${baseClass} card-pass`;
+    } else {
+      return `${baseClass} card-fail`;
+    }
+  };
 
   // 상단 사유 문구
   const getReasonText = () => {
@@ -125,29 +127,20 @@ function RoundCard({ label, data, sid }) {
         );
       }
 
-      // ✅ 그룹 단위 미응시 판정 → 보라색 박스(.group-box.absent)
-      const groupAbsent = isGroupAbsent(subjects, subjectScores);
-      const groupClass = groupAbsent ? 'absent' : (pass ? 'ok' : 'fail');
+      // 단순히 과락/통과만 표시 (초록/빨강)
+      const groupClass = pass ? 'ok' : 'fail';
 
       return (
         <div key={name || groupLabel} className={`group-box ${groupClass} span-12`}>
           <div className="group-head">
             <div className="name" style={{ fontWeight: 800 }}>
               {groupLabel}
-              {/* 그룹 미응시 뱃지 */}
-              {groupAbsent && (
-                <span className="badge absent" style={{ marginLeft: 8, fontSize: 10 }}>
-                  미응시
-                </span>
-              )}
             </div>
             <div className="small">
-              소계 {fmt(score)}/{fmt(max)} · 정답률 {rate}%
-              {!groupAbsent && ( // 미응시는 통과/과락 배지 대신 미응시 배지만
-                pass
-                  ? <span dangerouslySetInnerHTML={{ __html: pill('통과', 'ok') }} />
-                  : <span dangerouslySetInnerHTML={{ __html: pill('과락', 'red') }} />
-              )}
+              소계 {fmt(score)}/{fmt(max)} · 정답률 {rate}%{' '}
+              {pass
+                ? <span dangerouslySetInnerHTML={{ __html: pill('통과', 'ok') }} />
+                : <span dangerouslySetInnerHTML={{ __html: pill('과락', 'red') }} />}
             </div>
           </div>
           {chipsNode}
@@ -165,13 +158,14 @@ function RoundCard({ label, data, sid }) {
   return (
     <div
       ref={flipCardRef}
-      className={`flip-card ${overallClass}`}
+      className={getCardClass()}
       onClick={handleCardClick}
+      style={{ cursor: 'pointer' }}
     >
       <div className={`flip-inner ${isFlipped ? 'is-flipped' : ''}`}>
-        {/* 앞면 - 성적 요약 */}
-        <div ref={frontRef} className="flip-face flip-front card">
-          <div className={`round ${overallPass ? '' : 'fail'}`}>
+        {/* 🎯 앞면 - 자녀카드에서 card 클래스 제거, 색깔은 부모가 담당 */}
+        <div ref={frontRef} className="flip-face flip-front">
+          <div className="card-content">
             <div className="flex" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
                 <h2 style={{ margin: 0 }}>{label} 총점</h2>
@@ -219,17 +213,19 @@ function RoundCard({ label, data, sid }) {
                 {getReasonText()}
               </div>
             </div>
-          </div>
 
-          {/* 그룹(과목 묶음) 박스들 */}
-          <div className="group-grid" style={{ marginTop: 12 }}>
-            {renderGroupBoxes()}
+            {/* 그룹(과목 묶음) 박스들 */}
+            <div className="group-grid" style={{ marginTop: 12 }}>
+              {renderGroupBoxes()}
+            </div>
           </div>
         </div>
 
-        {/* 뒷면 - 오답 패널 */}
-        <div className="flip-face flip-back card">
-          <WrongAnswerPanel roundLabel={label} data={data} />
+        {/* 🎯 뒷면 - 자녀카드에서 card 클래스 제거, 색깔은 부모가 담당 */}
+        <div className="flip-face flip-back">
+          <div className="card-content">
+            <WrongAnswerPanel roundLabel={label} data={data} />
+          </div>
         </div>
       </div>
     </div>
