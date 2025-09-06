@@ -147,9 +147,10 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 .flip-card .flip-inner{
   position: relative;
   width: 100%;
-  height: fit-content;
   transform-style: preserve-3d;
   transition: transform .6s ease;
+  /* 높이를 앞면 기준으로 고정 */
+  min-height: fit-content;
 }
 
 .flip-card.is-flipped .flip-inner,
@@ -170,6 +171,8 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 .flip-card .flip-front{ 
   transform: rotateY(0deg); 
   position: relative;
+  /* 앞면은 자연스러운 높이 */
+  height: auto;
 }
 
 .flip-card .flip-back { 
@@ -177,6 +180,9 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
   position: absolute;
   /* 뒷면 글자색 앞면과 동일하게 */
   color: var(--ink);
+  /* 뒷면 높이를 앞면과 동일하게 고정 */
+  height: 100%;
+  box-sizing: border-box;
 }
 
 /* 플립 카드 뒷면 스크롤 */
@@ -185,7 +191,7 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
-  max-height: 600px;
+  /* max-height 제거 - 앞면 높이에 맞춤 */
 }
 
 .flip-card .flip-back::-webkit-scrollbar {
@@ -200,6 +206,15 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 .flip-card .flip-back::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.25);
   border-radius: 6px;
+}
+
+/* 높이 동기화를 위한 JavaScript 도움 클래스 */
+.flip-card.height-synced .flip-inner {
+  height: var(--front-height);
+}
+
+.flip-card.height-synced .flip-back {
+  height: var(--front-height);
 }
 
 /* Accordion - 교시별 그룹화 */
