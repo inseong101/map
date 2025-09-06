@@ -570,7 +570,8 @@ function extractFileInfo(filePath) {
   const fileName = filePath.split('/').pop(); // 폴더 경로 제거
   console.log('파일명 분석:', fileName);
   
-  const match = fileName.match(/(\d+)차.*?(\d+)교시/);
+  // 정규식 수정: 공백과 한글을 더 명확하게 처리
+  const match = fileName.match(/(\d+)차\s+모의고사\s+(\d+)교시/);
   console.log('정규식 매치 결과:', match);
   
   if (match) {
