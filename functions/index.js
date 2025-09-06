@@ -698,49 +698,6 @@ async function processExcelData(jsonData, roundLabel, session) {
         errors.push(`행 ${i + 1}: ${rowError.message}`);
       }
     }
-      const row = jsonData[i];
-      
-      try {
-        // 학수번호 추출 (첫 번째 컬럼)
-        const sid = String(row[0] || '').trim();
-        
-        if (!sid || sid.length < 6) {
-          if (sid) { // 빈 행이 아닌 경우만 오류로 기록
-            errors.push(`행 ${i + 1}: 유효하지 않은 학수번호 (${sid})`);
-          }
-          continue;
-        }
-        
-        const responses = {};
-        const wrongQuestions = [];
-        
-        // 유효한 문항들만 처리
-        validQuestions.forEach(q => {
-          const studentAnswer = row[q.columnIndex];
-          
-          if (studentAnswer >= 1 && studentAnswer <= 5) {
-            responses[q.questionNum] = parseInt(studentAnswer);
-            
-            // 정답과 비교하여 오답 문항 확인
-            if (studentAnswer !== q.correctAnswer) {
-              wrongQuestions.push(q.questionNum);
-            }
-          }
-        });
-        
-        // 응답이 있는 경우만 저장
-        if (Object.keys(responses).length > 0) {
-          processedData.push({
-            sid,
-            responses,
-            wrongQuestions: wrongQuestions.sort((a, b) => a - b)
-          });
-        }
-        
-      } catch (rowError) {
-        errors.push(`행 ${i + 1}: ${rowError.message}`);
-      }
-    }
     
     console.log(`처리된 학생 수: ${processedData.length}, 오류 수: ${errors.length}`);
     
