@@ -129,16 +129,7 @@ function App() {
         ))}
       </div>
 
-      <div className="card" style={{ marginTop: 16 }}>
-        <div className="flex" style={{ gap: 8, flexWrap: 'wrap' }}>
-          <button className="btn" onClick={goHome}>
-            다른 학생 조회
-          </button>
-          <button className="btn ghost" onClick={() => window.print()}>
-            인쇄하기
-          </button>
-        </div>
-      </div>
+
     </div>
   );
 }
