@@ -14,7 +14,7 @@ function StudentCard({ sid, school, rounds }) {
       if (absenceStatus.isPartiallyAbsent) {
         return (
           <span key={label} className="badge absent">
-            {label} 중도포기 ({absenceStatus.attendedCount}/4교시)
+            {label} 중도포기 (빠진 교시: {absenceStatus.missedSessions.join(", ")})
           </span>
         );
       }
