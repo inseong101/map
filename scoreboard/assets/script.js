@@ -555,25 +555,6 @@ function renderRound(hostSel, title, round){
   host.innerHTML = html;
 }
 
-/* -------------------- 11) 전체 렌더 -------------------- */
-async function renderResultDynamic(sid){
-  console.log('renderResultDynamic 호출됨:', sid);
-  
-  const grid = $("#cards-grid");
-  grid.innerHTML = "";
-
-  const school = getSchoolFromSid(sid);
-  const rounds = await discoverRoundsFor(sid);
-  
-  console.log("렌더링 시작:", { sid, school, roundsCount: rounds.length });
-  
-  if (rounds.length === 0){
-    const msg = document.createElement('div');
-    msg.innerHTML = `<div class="card" style="margin-bottom:12px"><div class="small" style="opacity:.8">조회 가능한 회차 데이터가 없습니다.</div></div>`;
-    grid.appendChild(msg);
-    return;
-  }
-
   // 트렌드 카드를 일반 카드로 생성 (flip 기능 제거)
   if (SHOW_TREND_CARD) {
     const trendCard = document.createElement('div');
@@ -593,3 +574,5 @@ async function renderResultDynamic(sid){
         <h2 style="margin-top:0">회차별 성적 추이</h2>
         <canvas id="trend-canvas" width="360" height="220"></canvas>
         <div class="small" style="margin-top:8px; opacity:.8">회차별 본인/학교/전국 평균 비교</div>
+      </div>
+    `;
