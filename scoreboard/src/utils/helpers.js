@@ -30,6 +30,42 @@ export function chunk(arr, sizes) {
   return out;
 }
 
+// 🎯 미응시/중도포기 상태 감지 함수
+export function detectStudentAbsenceStatus(wrongBySession) {
+  if (!wrongBySession || typeof wrongBySession !== 'object') {
+    return {
+      isNoAttendance: true,
+      isPartiallyAbsent: false,
+      missedSessions: [],
+      attendedCount: 0
+    };
+  }
+
+  const sessions = ['1교시', '2교시', '3교시', '4교시'];
+  const attendedSessions = [];
+  const missedSessions = [];
+
+  sessions.forEach(session => {
+    const hasData = wrongBySession[session];
+    if (hasData && Array.isArray(hasData)) {
+      attendedSessions.push(session);
+    } else {
+      missedSessions.push(session);
+    }
+  });
+
+  const attendedCount = attendedSessions.length;
+  const isNoAttendance = attendedCount === 0;
+  const isPartiallyAbsent = attendedCount > 0 && attendedCount < 4;
+
+  return {
+    isNoAttendance,
+    isPartiallyAbsent,
+    missedSessions,
+    attendedCount
+  };
+}
+
 // 캔버스에 라인 차트 그리기
 export function drawLineChart(canvas, labels, series, maxValue) {
   if (!canvas) return;
@@ -107,7 +143,7 @@ export function drawLineChart(canvas, labels, series, maxValue) {
 }
 
 // 유효한 학수번호인지 확인 (01~12로 시작하는 6자리)
-function isValidStudentId(sid) {
+export function isValidStudentId(sid) {
   if (!sid || typeof sid !== 'string') return false;
   if (sid.length !== 6) return false;
   
@@ -134,7 +170,7 @@ export async function getAverages(schoolName, roundLabel) {
     const schoolSnap = await getDoc(schoolRef);
     
     const nationalAvg = nationalSnap.exists() ? nationalSnap.data().avg : 204;
-    const schoolAvg = schoolSnap.exists() ? schoolSnap.data().avg : 211;
+    const schoolAvg = schoolSnap.exists() ? schoolSnap.data().avg : 204;
     
     return { nationalAvg, schoolAvg };
   } catch (error) {
