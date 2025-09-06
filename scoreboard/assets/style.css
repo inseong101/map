@@ -258,7 +258,7 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 
 /* 플립 카드 뒷면 전체 스크롤 기능 추가 */
 .flip-card .flip-back {
-  max-height: 600px; /* 뒷면 최대 높이 제한 */
+  /* max-height 제거 - 앞면과 같은 높이로 고정 */
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
