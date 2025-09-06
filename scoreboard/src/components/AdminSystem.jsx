@@ -1,4 +1,4 @@
-// src/components/AdminSystem.jsx - 관리자용 성적관리시스템
+// src/components/AdminSystem.jsx - 통계 정보 추가된 관리자 시스템
 import React, { useState, useEffect } from 'react';
 import { collection, doc, getDocs, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -11,20 +11,29 @@ const AdminSystem = () => {
   const [availableSessions, setAvailableSessions] = useState([]);
   const [answerData, setAnswerData] = useState([]);
   const [answerKey, setAnswerKey] = useState({});
+  const [roundStats, setRoundStats] = useState(null); // 🎯 회차별 통계 추가
   const [loading, setLoading] = useState(false);
 
   const rounds = ['1차', '2차', '3차', '4차', '5차', '6차', '7차', '8차'];
   const sessions = ['1교시', '2교시', '3교시', '4교시'];
+
+  // 학교 코드 매핑
+  const schoolCodes = {
+    '01': '가천대', '02': '경희대', '03': '대구한', '04': '대전대',
+    '05': '동국대', '06': '동신대', '07': '동의대', '08': '부산대',
+    '09': '상지대', '10': '세명대', '11': '우석대', '12': '원광대'
+  };
 
   // 사용 가능한 회차 확인
   useEffect(() => {
     checkAvailableRounds();
   }, []);
 
-  // 선택된 회차의 사용 가능한 교시 확인
+  // 선택된 회차의 사용 가능한 교시 확인 + 통계 로드
   useEffect(() => {
     if (selectedRound) {
       checkAvailableSessions(selectedRound);
+      loadRoundStatistics(selectedRound); // 🎯 회차별 통계 로드
     }
   }, [selectedRound]);
 
@@ -34,7 +43,6 @@ const AdminSystem = () => {
     
     for (const round of rounds) {
       try {
-        // 해당 회차에 데이터가 있는지 확인
         const sessionRef = collection(db, 'scores_raw', round, '1교시');
         const snapshot = await getDocs(sessionRef);
         
@@ -69,6 +77,101 @@ const AdminSystem = () => {
     setAvailableSessions(available);
   };
 
+  // 🎯 회차별 통계 계산
+  const loadRoundStatistics = async (round) => {
+    try {
+      const allStudents = new Set();
+      const attendanceData = {}; // sid -> Set of attended sessions
+      const schoolData = {}; // schoolCode -> stats
+      let totalScores = [];
+
+      // 모든 교시 데이터 수집
+      for (const session of sessions) {
+        try {
+          const sessionRef = collection(db, 'scores_raw', round, session);
+          const snapshot = await getDocs(sessionRef);
+          
+          snapshot.forEach(doc => {
+            const sid = doc.id;
+            allStudents.add(sid);
+            
+            if (!attendanceData[sid]) {
+              attendanceData[sid] = new Set();
+            }
+            attendanceData[sid].add(session);
+
+            // 학교별 분류
+            const schoolCode = sid.slice(0, 2);
+            if (!schoolData[schoolCode]) {
+              schoolData[schoolCode] = {
+                name: schoolCodes[schoolCode] || `학교${schoolCode}`,
+                totalTargets: new Set(),
+                validAttendees: new Set(),
+                absentees: new Set(),
+                dropouts: new Set()
+              };
+            }
+            schoolData[schoolCode].totalTargets.add(sid);
+          });
+        } catch (error) {
+          console.warn(`${session} 통계 계산 실패:`, error);
+        }
+      }
+
+      // 응시자 분류
+      let totalTargets = allStudents.size;
+      let validAttendees = 0;
+      let absentees = 0;
+      let dropouts = 0;
+
+      Array.from(allStudents).forEach(sid => {
+        const attendedCount = attendanceData[sid]?.size || 0;
+        const schoolCode = sid.slice(0, 2);
+        
+        if (schoolData[schoolCode]) {
+          if (attendedCount === 0) {
+            absentees++;
+            schoolData[schoolCode].absentees.add(sid);
+          } else if (attendedCount === 4) {
+            validAttendees++;
+            schoolData[schoolCode].validAttendees.add(sid);
+          } else {
+            dropouts++;
+            schoolData[schoolCode].dropouts.add(sid);
+          }
+        }
+      });
+
+      // 학교별 통계를 숫자로 변환
+      const schoolStats = Object.entries(schoolData).map(([code, data]) => ({
+        code,
+        name: data.name,
+        totalTargets: data.totalTargets.size,
+        validAttendees: data.validAttendees.size,
+        absentees: data.absentees.size,
+        dropouts: data.dropouts.size,
+        attendanceRate: data.totalTargets.size > 0 
+          ? Math.round((data.validAttendees.size / data.totalTargets.size) * 100) 
+          : 0
+      })).filter(school => school.totalTargets > 0);
+
+      setRoundStats({
+        overall: {
+          totalTargets,
+          validAttendees,
+          absentees,
+          dropouts,
+          attendanceRate: totalTargets > 0 ? Math.round((validAttendees / totalTargets) * 100) : 0
+        },
+        schools: schoolStats
+      });
+
+    } catch (error) {
+      console.error('통계 계산 실패:', error);
+      setRoundStats(null);
+    }
+  };
+
   const loadAnswerData = async (round, session) => {
     setLoading(true);
     
@@ -84,11 +187,21 @@ const AdminSystem = () => {
       const snapshot = await getDocs(sessionRef);
       
       const students = [];
+      const questionNumbers = getQuestionNumbers(session);
+      
       snapshot.forEach(doc => {
         const data = doc.data();
+        const responses = data.responses || {};
+        
+        // 🎯 모든 문항에 대해 응답 확인, 없으면 null 처리
+        const completeResponses = {};
+        questionNumbers.forEach(qNum => {
+          completeResponses[qNum] = responses[qNum] || null;
+        });
+        
         students.push({
           sid: doc.id,
-          responses: data.responses || {},
+          responses: completeResponses,
           wrongQuestions: data.wrongQuestions || []
         });
       });
@@ -105,7 +218,6 @@ const AdminSystem = () => {
   };
 
   const getQuestionNumbers = (session) => {
-    // 교시별 문항 번호 범위
     const ranges = {
       '1교시': Array.from({length: 80}, (_, i) => i + 1),
       '2교시': Array.from({length: 100}, (_, i) => i + 1),
@@ -118,7 +230,8 @@ const AdminSystem = () => {
   const getCellColor = (sid, questionNum, selectedAnswer) => {
     const correctAnswer = answerKey[questionNum];
     
-    if (!selectedAnswer || !correctAnswer) return '#2a2a2a'; // 기본색
+    if (selectedAnswer === null) return '#6b7280'; // 회색 (미응답)
+    if (!correctAnswer) return '#2a2a2a'; // 기본색
     
     return selectedAnswer === correctAnswer ? '#22c55e' : '#ef4444'; // 초록/빨강
   };
@@ -142,6 +255,7 @@ const AdminSystem = () => {
       setCurrentView('rounds');
       setSelectedRound('');
       setAvailableSessions([]);
+      setRoundStats(null);
     }
   };
 
@@ -195,7 +309,7 @@ const AdminSystem = () => {
     );
   }
 
-  // 교시 선택 화면
+  // 교시 선택 화면 + 🎯 통계 정보 표시
   if (currentView === 'sessions') {
     return (
       <div style={{ padding: 20 }}>
@@ -214,6 +328,91 @@ const AdminSystem = () => {
           <h2 style={{ display: 'inline', color: 'var(--ink)' }}>{selectedRound} - 교시 선택</h2>
         </div>
         
+        {/* 🎯 전체 통계 */}
+        {roundStats && (
+          <div style={{ 
+            marginBottom: 24, 
+            padding: 16, 
+            background: 'var(--surface-2)', 
+            borderRadius: 8,
+            border: '1px solid var(--line)'
+          }}>
+            <h3 style={{ margin: '0 0 12px 0', color: 'var(--ink)' }}>전체 응시 현황</h3>
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', 
+              gap: 12,
+              marginBottom: 16
+            }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 24, fontWeight: 'bold', color: 'var(--ink)' }}>
+                  {roundStats.overall.totalTargets}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>시험대상자</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 24, fontWeight: 'bold', color: '#22c55e' }}>
+                  {roundStats.overall.validAttendees}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>유효응시자</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 24, fontWeight: 'bold', color: '#a855f7' }}>
+                  {roundStats.overall.absentees}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>미응시자</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 24, fontWeight: 'bold', color: '#ef4444' }}>
+                  {roundStats.overall.dropouts}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>중도포기자</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 24, fontWeight: 'bold', color: 'var(--primary)' }}>
+                  {roundStats.overall.attendanceRate}%
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>출석률</div>
+              </div>
+            </div>
+
+            {/* 🎯 학교별 통계 */}
+            <h4 style={{ margin: '16px 0 8px 0', color: 'var(--ink)' }}>학교별 현황</h4>
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', 
+              gap: 8,
+              maxHeight: 200,
+              overflowY: 'auto'
+            }}>
+              {roundStats.schools.map(school => (
+                <div key={school.code} style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  padding: '8px 12px',
+                  background: 'var(--surface)',
+                  borderRadius: 6,
+                  fontSize: 12
+                }}>
+                  <span style={{ fontWeight: 'bold', color: 'var(--ink)' }}>
+                    {school.name}
+                  </span>
+                  <div style={{ display: 'flex', gap: 12, color: 'var(--muted)' }}>
+                    <span>대상: {school.totalTargets}</span>
+                    <span style={{ color: '#22c55e' }}>유효: {school.validAttendees}</span>
+                    <span style={{ color: '#ef4444' }}>포기: {school.dropouts}</span>
+                    <span style={{ color: '#a855f7' }}>미응시: {school.absentees}</span>
+                    <span style={{ color: 'var(--primary)' }}>({school.attendanceRate}%)</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {/* 교시 선택 버튼들 */}
+        <h3 style={{ marginBottom: 12, color: 'var(--ink)' }}>교시 선택</h3>
         <div style={{ 
           display: 'grid', 
           gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', 
@@ -274,6 +473,7 @@ const AdminSystem = () => {
             총 {answerData.length}명 응시 • 
             <span style={{ color: '#22c55e', marginLeft: 8 }}>■</span> 정답 
             <span style={{ color: '#ef4444', marginLeft: 8 }}>■</span> 오답
+            <span style={{ color: '#6b7280', marginLeft: 8 }}>■</span> 미응답
           </div>
         </div>
 
@@ -352,7 +552,7 @@ const AdminSystem = () => {
                         fontWeight: 600,
                         minWidth: 30
                       }}>
-                        {answer || '-'}
+                        {answer === null ? '-' : answer}
                       </td>
                     );
                   })}
