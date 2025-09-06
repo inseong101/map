@@ -15,7 +15,7 @@ jobs:
       - name: Install and Build React
         run: |
           cd scoreboard
-          npm ci
+          npm install
           npm run build
           cp -r build/* ../
       - uses: FirebaseExtended/action-hosting-deploy@v0
