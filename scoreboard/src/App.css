@@ -252,3 +252,141 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
   margin: 0 auto 16px auto;
 }
 
+/* ===== 플립 뒤 스크롤 복구(높이 보장 + 스크롤) ===== */
+.flip-card .flip-back {
+  /* 앞면 높이 동기화가 없더라도 쓸 수 있는 기본값 */
+  max-height: min(70vh, 700px);
+  padding: 16px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* height-synced가 있으면 그 값을 우선 */
+.flip-card.height-synced .flip-back {
+  max-height: var(--front-height);
+}
+
+/* ===== 세션(교시) 아코디언 - 부모 카드 색을 상속 ===== */
+.accordion.only-session .session-group {
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  /* 부모 카드 배경 톤 유지 */
+  background: inherit;
+}
+
+/* 미응시(보라 카드)면 세션 박스도 보라 톤으로 가볍게 강조 */
+.card.card-absent .accordion.only-session .session-group {
+  background: rgba(168,85,247,.10);
+  border-color: rgba(168,85,247,.35);
+}
+
+/* 세션 헤더 */
+.accordion.only-session .session-header {
+  width: 100%;
+  background: linear-gradient(90deg, var(--surface-2), rgba(126,162,255,.08));
+  padding: 12px 16px;
+  cursor: pointer;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  transition: background .2s ease;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--ink);
+}
+.accordion.only-session .session-header:hover {
+  background: linear-gradient(90deg, rgba(126,162,255,.10), rgba(126,162,255,.15));
+}
+.accordion.only-session .session-header .title {
+  font-weight: 800;
+}
+.accordion.only-session .session-header .chevron {
+  color: var(--muted);
+  transition: transform .2s ease;
+}
+.accordion.only-session .session-header.expanded .chevron {
+  transform: rotate(90deg);
+}
+
+/* 세션 컨텐츠: 넉넉한 높이 + 내부 스크롤 */
+.accordion.only-session .session-content {
+  padding: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height .28s ease;
+}
+.accordion.only-session .session-content.expanded {
+  max-height: 65vh;    /* 🔹 이전보다 크게 */
+  padding: 12px 14px;
+  overflow: auto;
+}
+
+/* 과목 블록(자식 아코디언 삭제, 단순 블록) */
+.subject-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+@media (max-width: 720px) {
+  .subject-grid { grid-template-columns: 1fr; }
+}
+
+.subject-block {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2); /* 기본 카드톤 */
+  padding: 10px;
+}
+.card.card-absent .subject-block {
+  /* 부모가 보라 카드면 과목 블록도 보라 톤 */
+  background: rgba(168,85,247,.08);
+  border-color: rgba(168,85,247,.35);
+}
+.subject-block.none {
+  opacity: .85;
+}
+.subject-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+.subject-title .count {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* 오답 번호 그리드 */
+.qgrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.qcell {
+  min-width: 32px;
+  height: 28px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  font-weight: 800;
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+.qcell.bad {
+  background: rgba(239,68,68,.14);
+  border-color: rgba(239,68,68,.5);
+}
+
+/* (참고) 필수는 아니지만, 전체 카드가 미응시라면 내부 텍스트도 약간 보라 톤 */
+.card.card-absent .qcell.bad {
+  background: rgba(168,85,247,.12);
+  border-color: rgba(168,85,247,.35);
+}
