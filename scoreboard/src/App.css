@@ -74,6 +74,7 @@ h2{margin:8px 0; font-size:18px; color:var(--muted); font-weight:700}
 }
 .badge.pass{background:rgba(34,197,94,.18); border-color:rgba(34,197,94,.55)}
 .badge.fail{background:rgba(239,68,68,.18); border-color:rgba(239,68,68,.55)}
+.badge.invalid{background:rgba(107,33,168,.18); border-color:rgba(107,33,168,.55); color:#e9d5ff}
 
 /* Buttons */
 .btn{
@@ -84,6 +85,8 @@ h2{margin:8px 0; font-size:18px; color:var(--muted); font-weight:700}
 }
 .btn:hover{background:#0f1526}
 .btn:disabled{opacity:0.5; cursor:not-allowed}
+.btn.secondary{ background: rgba(126,162,255,.12); border-color: rgba(126,162,255,.45); }
+.btn.secondary:hover{ background: rgba(126,162,255,.18); }
 
 /* Form inputs */
 .input{
@@ -185,11 +188,16 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
   .card{box-shadow:none; border-color:#ddd; background:#fff}
   .badge{border-color:#999}
 }
-.btn.secondary{ background: rgba(126,162,255,.12); border-color: rgba(126,162,255,.45); }
-.btn.secondary:hover{ background: rgba(126,162,255,.18); }
-.badge.invalid{background:rgba(107,33,168,.18); border-color:rgba(107,33,168,.55); color:#e9d5ff}
 
-/* RoundCard 배경색 */
+/* RoundCard 내부 배경 박스(.round) */
+.round{
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+/* RoundCard 배경색 (상태) */
 .round.pass {
   background: rgba(34,197,94,0.15);   /* 초록 */
   border: 1px solid rgba(34,197,94,0.45);
@@ -204,7 +212,3 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
   background: rgba(107,33,168,0.15);  /* 보라 */
   border: 1px solid rgba(107,33,168,0.45);
 }
-
-
-
-
