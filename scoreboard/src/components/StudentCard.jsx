@@ -2,11 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { TOTAL_MAX } from '../services/dataService';
 import TrendChart from './TrendChart';
-
-// Firestore
 import { getFirestore, collection, getDocs } from 'firebase/firestore';
-
-// 내부 상수
 const SESSIONS = ['1교시', '2교시', '3교시', '4교시'];
 
 function calcPercentileDesc(scores, myScore) {
