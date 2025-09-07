@@ -108,9 +108,7 @@ function RoundCard({ label, data, sid }) {
 
   // invalid = 미응시/중도포기/기타 무효 판정
   const isInvalid = status === 'absent' || status === 'dropout' || status === 'dropped';
-
-  // 상태 클래스 (초록/빨강/보라)
-  const stateClass = isInvalid ? 'rc-invalid' : (overallPass ? 'rc-pass' : 'rc-fail');
+  const statusClass = isInvalid ? 'rc-invalid' : (overallPass ? 'rc-pass' : 'rc-fail');
 
   return (
     <div
@@ -120,10 +118,10 @@ function RoundCard({ label, data, sid }) {
     >
       <div className={`flip-inner ${isFlipped ? 'is-flipped' : ''}`}>
 
-        {/* 앞면: 카드 자체에 상태 클래스 부여 */}
+        {/* 앞면 (상태 클래스 카드에 부여) */}
         <div
           ref={frontRef}
-          className={`flip-face flip-front card ${stateClass}`}
+          className={`flip-face flip-front card ${statusClass}`}
         >
           <div className="flex" style={{ justifyContent: 'space-between' }}>
             <h2 style={{ margin: 0 }}>{label} 총점</h2>
@@ -165,8 +163,8 @@ function RoundCard({ label, data, sid }) {
           )}
         </div>
 
-        {/* 뒷면: 동일한 상태 클래스 바인딩 */}
-        <div className={`flip-face flip-back card ${stateClass}`}>
+        {/* 뒷면 (여기도 동일한 상태 클래스 부여해서 색/버튼 틴트 복원) */}
+        <div className={`flip-face flip-back card ${statusClass}`}>
           {isInvalid ? (
             <div className="small" style={{ padding: 20, textAlign: 'center' }}>
               본 회차는 분석에서 제외됩니다.
