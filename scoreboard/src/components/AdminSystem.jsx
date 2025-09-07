@@ -41,16 +41,7 @@ const AdminSystem = () => {
     '09': '상지대', '10': '세명대', '11': '우석대', '12': '원광대'
   };
 
-  // 문항 번호로 과목을 찾는 함수 (로컬에서 구현)
-  const findSubjectByQuestionNum = (questionNum, session) => {
-    const ranges = SESSION_SUBJECT_RANGES[session] || [];
-    for (const range of ranges) {
-      if (questionNum >= range.from && questionNum <= range.to) {
-        return range.s;
-      }
-    }
-    return null;
-  };
+  // 문항 번호로 과목을 찾는 함수는 dataService에서 가져오므로 제거
 
   // 통계 데이터에서 문항별 정보를 가져오는 함수 (함수명 변경)
   const getQuestionStatistics = (questionNum) => {
