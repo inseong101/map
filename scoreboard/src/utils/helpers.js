@@ -120,28 +120,74 @@ function isValidStudentId(sid) {
 export async function getAverages(schoolName, roundLabel) {
   try {
     const { db } = await import('../services/firebase');
-    const { doc, getDoc } = await import('firebase/firestore');
+    const { collection, getDocs } = await import('firebase/firestore');
     
     // 학교 코드 추출
     const schoolCode = getSchoolCodeFromName(schoolName);
     
-    // 전국 평균 조회
-    const nationalRef = doc(db, 'averages', roundLabel, 'data', 'national');
-    const nationalSnap = await getDoc(nationalRef);
+    const sessions = ['1교시', '2교시', '3교시', '4교시'];
+    const allScores = {}; // sid -> totalScore
+    const schoolScores = []; // 해당 학교 점수들
+    const nationalScores = []; // 전국 점수들
     
-    // 학교 평균 조회
-    const schoolRef = doc(db, 'averages', roundLabel, 'data', `school_${schoolCode}`);
-    const schoolSnap = await getDoc(schoolRef);
+    // 교시별 데이터 수집하여 실제 점수 계산
+    for (const session of sessions) {
+      const sessionRef = collection(db, 'scores_raw', roundLabel, session);
+      const snapshot = await getDocs(sessionRef);
+      
+      snapshot.forEach(doc => {
+        const sid = doc.id;
+        
+        // 유효한 학수번호만 처리
+        if (!isValidStudentId(sid)) {
+          return;
+        }
+        
+        const data = doc.data();
+        const wrongQuestions = data.wrongQuestions || data.wrong || [];
+        
+        if (!allScores[sid]) {
+          allScores[sid] = 340; // 만점에서 시작
+        }
+        
+        // 오답 개수만큼 점수 차감
+        if (Array.isArray(wrongQuestions)) {
+          allScores[sid] = Math.max(0, allScores[sid] - wrongQuestions.length);
+        }
+      });
+    }
     
-    const nationalAvg = nationalSnap.exists() ? nationalSnap.data().avg : 204;
-    const schoolAvg = schoolSnap.exists() ? schoolSnap.data().avg : 211;
+    // 학교별/전국별로 점수 분류
+    Object.entries(allScores).forEach(([sid, score]) => {
+      if (!isValidStudentId(sid)) return;
+      
+      nationalScores.push(score);
+      
+      const studentSchoolCode = sid.slice(0, 2);
+      if (studentSchoolCode === schoolCode) {
+        schoolScores.push(score);
+      }
+    });
     
-    return { nationalAvg, schoolAvg };
+    // 평균 계산
+    const nationalAvg = nationalScores.length > 0 
+      ? Math.round(nationalScores.reduce((sum, score) => sum + score, 0) / nationalScores.length)
+      : null;
+      
+    const schoolAvg = schoolScores.length > 0
+      ? Math.round(schoolScores.reduce((sum, score) => sum + score, 0) / schoolScores.length)
+      : null;
+    
+    return { 
+      nationalAvg: nationalAvg || '-', 
+      schoolAvg: schoolAvg || '-' 
+    };
+    
   } catch (error) {
     console.error('평균 조회 오류:', error);
     return {
-      nationalAvg: 204,
-      schoolAvg: 211
+      nationalAvg: '-',
+      schoolAvg: '-'
     };
   }
 }
