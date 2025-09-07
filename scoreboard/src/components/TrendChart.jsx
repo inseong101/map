@@ -1,6 +1,12 @@
 // src/components/TrendChart.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { getAverages, getRealScoreDistribution, getParticipationStats, calculatePercentileStrict, calcPercentileFromScores } from '../utils/helpers';
+import {
+  getAverages,
+  getRealScoreDistribution,
+  getParticipationStats,
+  calcPercentileFromScores,
+} from '../utils/helpers';
+
 // 학교명 → 코드 변환
 const nameToCode = (name) => ({
   '가천대': '01', '경희대': '02', '대구한': '03', '대전대': '04',
@@ -14,16 +20,22 @@ const X_MAX = 340;
 const BIN_SIZE = 5;
 const CUTOFF_SCORE = 204;
 
-function TrendChart({ rounds = [], school = '', sid = '' }) {
+/**
+ * props:
+ * - rounds, school, sid (기존)
+ * - onReady?: (bundle) => void   // 첫 데이터 준비 + 최초 렌더 완료 시 호출
+ */
+function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
   const canvasRef = useRef(null);
 
   const [selectedRoundIdx, setSelectedRoundIdx] = useState(0);
   const [isSchoolMode, setIsSchoolMode] = useState(false); // false=전국, true=학교
-  const [bundle, setBundle] = useState([]); // 회차별 계산 결과
+  const [bundle, setBundle] = useState([]);                 // 회차별 계산 결과
+  const [isLoading, setIsLoading] = useState(true);         // 내부 로딩(스피너/스켈레톤)
 
   // 리사이즈시 재그리기
   useEffect(() => {
-    const onResize = () => drawCurrent(bundle);
+    const onResize = () => drawCurrent(bundle, selectedRoundIdx, isSchoolMode);
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, [bundle, isSchoolMode, selectedRoundIdx]);
@@ -31,8 +43,13 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
   // 데이터 준비
   useEffect(() => {
     (async () => {
-      if (!rounds.length) return;
+      if (!rounds.length) {
+        setBundle([]);
+        setIsLoading(false);
+        return;
+      }
 
+      setIsLoading(true);
       const schCode = nameToCode(school);
       const out = [];
 
@@ -49,22 +66,25 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
         // 실제 분포 (배열)
         const dist = await getRealScoreDistribution(label);
         const natScores = Array.isArray(dist?.national) ? dist.national : [];
-        const schScores = dist?.bySchool && Array.isArray(dist.bySchool[schCode])
-          ? dist.bySchool[schCode]
-          : [];
+        const schScores =
+          dist?.bySchool && Array.isArray(dist.bySchool[schCode])
+            ? dist.bySchool[schCode]
+            : [];
 
         // 참여 통계 (유효 = 4교시 completed만)
         const natStats = await getParticipationStats(label, null);
         const schStats = await getParticipationStats(label, schCode);
 
         // 본인 백분율 (1등=0.0%, 꼴등=100.0%)
-        const myNatPct = (studentScore != null && natStats.completedScores?.length > 0)
-          ? calcPercentileFromScores(natStats.completedScores, studentScore)
-          : null;
+        const myNatPct =
+          studentScore != null && natStats.completedScores?.length > 0
+            ? calcPercentileFromScores(natStats.completedScores, studentScore)
+            : null;
 
-        const mySchPct = (studentScore != null && schStats.completedScores?.length > 0)
-          ? calcPercentileFromScores(schStats.completedScores, studentScore)
-          : null;
+        const mySchPct =
+          studentScore != null && schStats.completedScores?.length > 0
+            ? calcPercentileFromScores(schStats.completedScores, studentScore)
+            : null;
 
         const natBins = buildDistribution(natScores, studentScore);
         const schBins = buildDistribution(schScores, studentScore);
@@ -94,13 +114,19 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
       }
 
       setBundle(out);
-      drawCurrent(out);
+      // 최초 그리기
+      requestAnimationFrame(() => {
+        drawCurrent(out, 0, false);
+        setIsLoading(false);
+        // 외부 onReady 알림
+        if (typeof onReady === 'function') onReady(out);
+      });
     })();
-  }, [rounds, school, sid]);
+  }, [rounds, school, sid, onReady]);
 
   // 재그리기 트리거
   useEffect(() => {
-    drawCurrent(bundle);
+    drawCurrent(bundle, selectedRoundIdx, isSchoolMode);
   }, [bundle, selectedRoundIdx, isSchoolMode]);
 
   // 분포 생성
@@ -108,30 +134,31 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
     const bins = [];
     // 0~335 구간
     for (let x = X_MIN; x < X_MAX; x += BIN_SIZE) {
-      const count = scores.filter(s => s >= x && s < x + BIN_SIZE).length;
+      const count = scores.filter((s) => s >= x && s < x + BIN_SIZE).length;
       bins.push({
         min: x,
         max: x + BIN_SIZE,
         count,
-        isStudent: studentScore != null && studentScore >= x && studentScore < x + BIN_SIZE,
-        percentage: scores.length > 0 ? (count / scores.length) * 100 : 0
+        isStudent:
+          studentScore != null && studentScore >= x && studentScore < x + BIN_SIZE,
+        percentage: scores.length > 0 ? (count / scores.length) * 100 : 0,
       });
     }
     // 마지막 340 단일 bin
-    const lastCount = scores.filter(s => s === X_MAX).length;
+    const lastCount = scores.filter((s) => s === X_MAX).length;
     bins.push({
       min: X_MAX,
       max: X_MAX,
       count: lastCount,
       isStudent: studentScore === X_MAX,
-      percentage: scores.length > 0 ? (lastCount / scores.length) * 100 : 0
+      percentage: scores.length > 0 ? (lastCount / scores.length) * 100 : 0,
     });
     return bins;
   }
 
   // 현재 회차 그리기
-  function drawCurrent(data) {
-    const cur = data[selectedRoundIdx];
+  function drawCurrent(data, roundIdx, schoolMode) {
+    const cur = data?.[roundIdx];
     if (!cur) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -142,6 +169,7 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
 
     canvas.width = rect.width * dpr;
     canvas.height = rect.height * dpr;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.scale(dpr, dpr);
 
     const W = rect.width;
@@ -154,10 +182,10 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
     const chartH = H - padding.top - padding.bottom;
 
     // 타이틀/평균
-    const title = isSchoolMode
+    const title = schoolMode
       ? `학교 분포 (총 ${cur.totalSchool}명)`
       : `전국 분포 (총 ${cur.totalNational}명)`;
-    const avg = isSchoolMode ? cur.schoolAvg : cur.nationalAvg;
+    const avg = schoolMode ? cur.schoolAvg : cur.nationalAvg;
 
     ctx.fillStyle = '#e8eeff';
     ctx.font = 'bold 14px system-ui';
@@ -168,12 +196,12 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
     ctx.fillText(`평균: ${avg}점`, W / 2, 40);
 
     // 활성 분포
-    const activeBins = isSchoolMode ? cur.schoolBins : cur.nationalBins;
+    const activeBins = schoolMode ? cur.schoolBins : cur.nationalBins;
     const yMax = drawAxes(ctx, padding, chartW, chartH, activeBins);
 
     // 막대
-    const color = isSchoolMode ? '#22c55e' : '#7ea2ff';
-    drawBarsWithLabels(ctx, padding, chartW, chartH, activeBins, color, yMax);
+    const color = schoolMode ? '#22c55e' : '#7ea2ff';
+    drawBarsWithLabels(ctx, padding, chartW, chartH, activeBins, color, yMax, data, roundIdx, schoolMode);
 
     // 커트라인
     drawCutoff(ctx, padding, chartW, chartH, CUTOFF_SCORE);
@@ -213,7 +241,7 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
     }
 
     // Y 눈금
-    const maxCount = Math.max(1, ...bins.map(b => b.count));
+    const maxCount = Math.max(1, ...bins.map((b) => b.count));
     const steps = 4;
     const niceStep = makeNiceStep(maxCount / steps);
     const yStep = Math.max(1, niceStep);
@@ -259,7 +287,7 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
     return base * 10;
   }
 
-  function drawBarsWithLabels(ctx, padding, chartW, chartH, bins, primaryColor, yMax) {
+  function drawBarsWithLabels(ctx, padding, chartW, chartH, bins, primaryColor, yMax, data, roundIdx, schoolMode) {
     const barCount = bins.length;
     const binWidth = chartW / barCount;
 
@@ -294,7 +322,7 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
 
         if (binIndex >= 0 && binIndex < bins.length) {
           const b = bins[binIndex];
-          drawCurrent(bundle);
+          drawCurrent(data, roundIdx, schoolMode);
           if (b.count > 0) {
             const x = padding.left + binIndex * binWidth;
             const h = yMax > 0 ? (b.count / yMax) * chartH : 0;
@@ -313,7 +341,7 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
         }
       };
       canvas.onmouseleave = () => {
-        drawCurrent(bundle);
+        drawCurrent(data, roundIdx, schoolMode);
       };
     }
   }
@@ -394,12 +422,14 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
       <LegendLine color="#f59e0b" label="합격선(204)" />
     </div>
   );
+
   const LegendItem = ({ color, label }) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
       <span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 2, background: color }} />
       <span style={{ color: 'var(--muted)' }}>{label}</span>
     </div>
   );
+
   const LegendLine = ({ color, label }) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
       <span style={{ display: 'inline-block', width: 18, height: 0, borderTop: `2px dashed ${color}` }} />
@@ -411,66 +441,101 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
 
   // 상단 상태 라인(토글에 따라 바뀜) — 중앙 배치 + 내부 좌/우 2열
   const SummaryLine = () => {
-  if (!current) return null;
-  const isNat = !isSchoolMode;
-  const pct = isNat ? current.myNatPct : current.mySchPct;
-  const stats = isNat ? current.natStats : current.schStats;
+    if (!current) return null;
+    const isNat = !isSchoolMode;
+    const pct = isNat ? current.myNatPct : current.mySchPct;
+    const stats = isNat ? current.natStats : current.schStats;
 
-  return (
-    <div
-      style={{
-        marginBottom: 8,
-        padding: 10,
-        background: 'rgba(21,29,54,0.5)',
-        borderRadius: 8,
-        fontSize: 14,
-        color: 'var(--muted)',
-        display: 'flex',
-        justifyContent: 'center',   // 전체 중앙
-        gap: 60,                    // 좌우 블록 사이 간격
-      }}
-    >
-      {/* 좌측 블록 */}
-      <div style={{ textAlign: 'center' }}>
-        <div>
-          <strong style={{ color: 'var(--ink)' }}>{rounds[selectedRoundIdx]?.label}</strong>
-          {' '}— 본인 점수:{' '}
-          <span style={{ color: '#ef4444', fontWeight: 'bold' }}>
-            {Number.isFinite(current.studentScore) ? `${current.studentScore}점` : '표시 안함'}
-          </span>
-          {' '}{pct != null ? `(상위 ${pct.toFixed(1)}%)` : ''}
+    return (
+      <div
+        style={{
+          marginBottom: 8,
+          padding: 10,
+          background: 'rgba(21,29,54,0.5)',
+          borderRadius: 8,
+          fontSize: 14,
+          color: 'var(--muted)',
+          display: 'flex',
+          justifyContent: 'center',   // 전체 중앙
+          gap: 60,                    // 좌우 블록 사이 간격
+        }}
+      >
+        {/* 좌측 블록 */}
+        <div style={{ textAlign: 'center' }}>
+          <div>
+            <strong style={{ color: 'var(--ink)' }}>{rounds[selectedRoundIdx]?.label}</strong>
+            {' '}— 본인 점수:{' '}
+            <span style={{ color: '#ef4444', fontWeight: 'bold' }}>
+              {Number.isFinite(current.studentScore) ? `${current.studentScore}점` : '표시 안함'}
+            </span>
+            {' '}{pct != null ? `(상위 ${pct.toFixed(1)}%)` : ''}
+          </div>
+          <div style={{ marginTop: 4 }}>응시대상자: {stats?.total ?? 0}</div>
         </div>
-        <div style={{ marginTop: 4 }}>응시대상자: {stats?.total ?? 0}</div>
-      </div>
 
-      {/* 우측 블록 */}
-      <div style={{ textAlign: 'center' }}>
-        <div>유효응시자: {stats?.completed ?? 0}</div>
-        <div>
-          무효응시자: {(stats?.absent ?? 0) + (stats?.dropout ?? 0)} 
-          (미응시자: {stats?.absent ?? 0} · 중도포기: {stats?.dropout ?? 0})
+        {/* 우측 블록 */}
+        <div style={{ textAlign: 'center' }}>
+          <div>유효응시자: {stats?.completed ?? 0}</div>
+          <div>
+            무효응시자: {(stats?.absent ?? 0) + (stats?.dropout ?? 0)}
+            {' '}(미응시자: {stats?.absent ?? 0} · 중도포기: {stats?.dropout ?? 0})
+          </div>
         </div>
       </div>
-    </div>
-  );
-};
-
+    );
+  };
 
   return (
     <div>
       <TopControls />
       <SummaryLine />
       <LegendRow />
+
       <div
         style={{
+          position: 'relative',
           background: 'rgba(0,0,0,0.1)',
           borderRadius: 8,
           border: '1px solid var(--line)',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          minHeight: 380,
         }}
       >
-        <canvas ref={canvasRef} style={{ width: '100%', height: 380, display: 'block' }} />
+        {/* 캔버스 */}
+        <canvas
+          ref={canvasRef}
+          style={{ width: '100%', height: 380, display: 'block', opacity: isLoading ? 0 : 1, transition: 'opacity .25s ease' }}
+        />
+
+        {/* 로딩 스켈레톤/스피너 */}
+        {isLoading && (
+          <div
+            style={{
+              position: 'absolute', inset: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.08), rgba(255,255,255,0.04))',
+              backgroundSize: '200% 100%',
+              animation: 'chart-skeleton 1.2s ease-in-out infinite',
+            }}
+          >
+            <div
+              style={{
+                width: 28, height: 28, borderRadius: '50%',
+                border: '3px solid rgba(255,255,255,0.2)',
+                borderTopColor: 'var(--primary)',
+                animation: 'spin 0.9s linear infinite',
+              }}
+              aria-label="차트 로딩 중"
+            />
+          </div>
+        )}
       </div>
+
+      {/* 키프레임 (인라인) */}
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes chart-skeleton { 0% { background-position: 0% 0; } 100% { background-position: -200% 0; } }
+      `}</style>
     </div>
   );
 }
