@@ -56,11 +56,7 @@ h2{margin:8px 0; font-size:18px; color:var(--muted); font-weight:700}
 
 /* Flex utils */
 .flex{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
-.flex-column {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
+.flex-column { display:flex; flex-direction:column; gap:12px; }
 
 /* KPI / Numbers */
 .kpi{display:flex; align-items:baseline; gap:10px}
@@ -120,8 +116,8 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
   pointer-events:none;
 }
 
-/* 라운드가 평락(불합격)이면 막대 색을 빨간 계열로 */
-.round.fail .progress > .bar{
+/* 불합격일 때 프로그레스 바 색 변환 (카드 상태 클래스 기준) */
+.rc-fail .progress > .bar{
   background:linear-gradient(90deg, var(--bad), #ff6b6b);
 }
 
@@ -153,27 +149,6 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 .flip-card .flip-back::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); border-radius: 6px; }
 .flip-card .flip-back::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.25); border-radius: 6px; }
 
-/* Accordion */
-.accordion { border-top: 1px solid var(--line); margin-top: 8px; }
-.accordion .session-group { margin-bottom: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); overflow: hidden; }
-.accordion .session-header { background: linear-gradient(90deg, var(--primary), #4cc9ff); color: white; padding: 10px 16px; font-weight: 800; font-size: 14px; text-align: center; border-bottom: 1px solid var(--line); }
-.accordion .session-content { padding: 8px; }
-.accordion .item { border-bottom: 1px solid var(--line); margin-bottom: 6px; }
-.accordion .item:last-child { border-bottom: none; margin-bottom: 0; }
-.accordion .acc-btn{ width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-weight: 700; cursor: pointer; color: var(--ink);}
-.accordion .acc-btn:hover { background: var(--surface-2); }
-.accordion .acc-btn .rotate{ transition: .2s transform ease; color: var(--primary); }
-.accordion .acc-btn.open .rotate{ transform: rotate(90deg); }
-.accordion .panel{ overflow: hidden; transition: max-height .25s ease; }
-
-/* Question grid */
-.qgrid{display:flex; flex-wrap:wrap; gap:6px; max-height: 120px; overflow-y: auto; padding-right: 4px}
-.qcell{ padding:3px 8px; border-radius:999px; border:1px solid var(--line); font-weight:700; background:#1a2240; }
-.qcell.bad{background:rgba(239,68,68,.17); border-color:rgba(239,68,68,.5)}
-.qgrid::-webkit-scrollbar { width: 4px; }
-.qgrid::-webkit-scrollbar-track { background: transparent; }
-.qgrid::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 4px; }
-
 /* Cards grid */
 .cards-grid { display: grid; gap: 12px; margin-top: 12px; }
 
@@ -189,26 +164,16 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
   .badge{border-color:#999}
 }
 
-/* RoundCard 내부 배경 박스(.round) */
-.round{
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 12px;
-}
-
-/* RoundCard 배경색 (상태) */
-.round.pass {
-  background: rgba(34,197,94,0.15);   /* 초록 */
+/* === 상태별 카드 배경색: flip-front 자체에 적용 === */
+.flip-front.rc-pass {
+  background: rgba(34,197,94,0.15);
   border: 1px solid rgba(34,197,94,0.45);
 }
-
-.round.fail {
-  background: rgba(239,68,68,0.15);   /* 빨강 */
+.flip-front.rc-fail {
+  background: rgba(239,68,68,0.15);
   border: 1px solid rgba(239,68,68,0.45);
 }
-
-.round.invalid {
-  background: rgba(107,33,168,0.15);  /* 보라 */
+.flip-front.rc-invalid {
+  background: rgba(107,33,168,0.15);
   border: 1px solid rgba(107,33,168,0.45);
 }
