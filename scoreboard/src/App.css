@@ -121,10 +121,7 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 .round.fail .progress > .bar{
   background:linear-gradient(90deg, var(--bad), #ff6b6b);
 }
-.round.absent {
-  background: #6b21a8; /* 보라색 계열 */
-  color: white;
-}
+
 /* Group boxes */
 .group-grid{display:grid; grid-template-columns:repeat(12,1fr); gap:12px}
 .group-box{border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--surface-2)}
@@ -191,3 +188,23 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 .btn.secondary{ background: rgba(126,162,255,.12); border-color: rgba(126,162,255,.45); }
 .btn.secondary:hover{ background: rgba(126,162,255,.18); }
 .badge.invalid{background:rgba(107,33,168,.18); border-color:rgba(107,33,168,.55); color:#e9d5ff}
+
+/* RoundCard 배경색 */
+.round.pass {
+  background: rgba(34,197,94,0.15);   /* 초록 */
+  border: 1px solid rgba(34,197,94,0.45);
+}
+
+.round.fail {
+  background: rgba(239,68,68,0.15);   /* 빨강 */
+  border: 1px solid rgba(239,68,68,0.45);
+}
+
+.round.invalid {
+  background: rgba(107,33,168,0.15);  /* 보라 */
+  border: 1px solid rgba(107,33,168,0.45);
+}
+
+
+
+
