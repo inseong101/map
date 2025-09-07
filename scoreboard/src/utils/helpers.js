@@ -414,3 +414,41 @@ export function calcPercentileFromScores(scores, myScore) {
   const p = (idx / (n - 1)) * 100;
   return Math.max(0, Math.min(100, +p.toFixed(1)));
 }
+// 01~12로 시작하는 6자리만 유효
+export function isValidSid(sid) {
+  return typeof sid === 'string' && /^(0[1-9]|1[0-2])\d{4}$/.test(sid);
+}
+
+// 4교시 모두 completed 여부
+export function isCompleted4(r) {
+  return r?.s1?.status === 'completed' &&
+         r?.s2?.status === 'completed' &&
+         r?.s3?.status === 'completed' &&
+         r?.s4?.status === 'completed';
+}
+
+/**
+ * 라운드별 학생 상태 판정
+ * 반환값: 'completed' | 'absent' | 'dropout' | 'invalid'
+ * - invalid: 학수번호 형식 위반(01~12 아님)
+ * - absent: 4교시 중 하나라도 'absent'
+ * - dropout: 4교시 중 하나라도 'dropout'
+ * - completed: 4교시 모두 completed
+ */
+export function deriveRoundStatus(roundData, sid) {
+  if (!isValidSid(sid)) return 'invalid';
+
+  const statuses = [
+    roundData?.s1?.status, roundData?.s2?.status,
+    roundData?.s3?.status, roundData?.s4?.status
+  ].filter(Boolean);
+
+  if (statuses.length < 4) return 'absent'; // 데이터 불완전은 absent 취급(원한다면 'unknown' 등 별도 분류)
+
+  if (statuses.some(s => s === 'dropout')) return 'dropout';
+  if (statuses.some(s => s === 'absent')) return 'absent';
+  if (statuses.every(s => s === 'completed')) return 'completed';
+
+  // 그 외 예외 상태가 섞여 있으면 미응시 취급
+  return 'absent';
+}
