@@ -183,3 +183,71 @@ export async function discoverRoundsFor(sid) {
   
   return found;
 }
+
+
+// dataService.js에 추가할 함수들
+
+/**
+ * 문항 번호와 교시로 과목을 찾습니다
+ * @param {number} questionNum - 문항 번호
+ * @param {string} session - 교시 (예: "1교시", "2교시")
+ * @returns {string|null} 과목명
+ */
+export function getSubjectByQuestion(questionNum, session) {
+  const ranges = SESSION_SUBJECT_RANGES[session] || [];
+  
+  for (const range of ranges) {
+    if (questionNum >= range.from && questionNum <= range.to) {
+      return range.s;
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * 문항 번호로 과목을 찾습니다 (교시를 모르는 경우)
+ * @param {number} questionNum - 문항 번호
+ * @returns {string|null} 과목명
+ */
+export function findSubjectByQuestionNum(questionNum) {
+  // 모든 교시에서 검색
+  const sessions = Object.keys(SESSION_SUBJECT_RANGES);
+  
+  for (const session of sessions) {
+    const ranges = SESSION_SUBJECT_RANGES[session] || [];
+    for (const range of ranges) {
+      if (questionNum >= range.from && questionNum <= range.to) {
+        return range.s;
+      }
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * 문항 번호로 교시를 찾습니다
+ * @param {number} questionNum - 문항 번호
+ * @returns {string|null} 교시명
+ */
+export function findSessionByQuestionNum(questionNum) {
+  // 교시별 문항 범위
+  const sessionRanges = {
+    "1교시": { min: 1, max: 80 },
+    "2교시": { min: 1, max: 100 },
+    "3교시": { min: 1, max: 80 },
+    "4교시": { min: 1, max: 80 }
+  };
+
+  // 더 정확한 매핑을 위해 SESSION_SUBJECT_RANGES 사용
+  for (const [session, ranges] of Object.entries(SESSION_SUBJECT_RANGES)) {
+    for (const range of ranges) {
+      if (questionNum >= range.from && questionNum <= range.to) {
+        return session;
+      }
+    }
+  }
+
+  return null;
+}
