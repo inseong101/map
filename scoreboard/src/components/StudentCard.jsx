@@ -135,21 +135,31 @@ function StudentCard({ sid, school, rounds }) {
     return () => { cancelled = true; };
   }, [sid, rounds]);
 
-  // 상단 배지 (합격/불합격)
-  const renderBadges = () => {
-    return rounds.map(({ label, data }) => {
-      const score = Number(data?.totalScore) || 0;
+  // 상단 배지 (합격/불합격/무효)
+const renderBadges = () => {
+  return rounds.map(({ label, data }) => {
+    const status = data?.status;
+    const score = Number(data?.totalScore) || 0;
+
+    let badgeClass = '';
+    let badgeText = '';
+
+    if (status === 'absent' || status === 'dropout') {
+      badgeClass = 'badge invalid';   // 보라색 배지
+      badgeText = '무효';
+    } else {
       const passOverall = score >= TOTAL_MAX * 0.6;
-      const badgeClass = passOverall ? 'badge pass' : 'badge fail';
-      const badgeText = passOverall ? '합격' : '불합격';
-      
-      return (
-        <span key={label} className={badgeClass}>
-          {label} {badgeText}
-        </span>
-      );
-    });
-  };
+      badgeClass = passOverall ? 'badge pass' : 'badge fail';
+      badgeText = passOverall ? '합격' : '불합격';
+    }
+
+    return (
+      <span key={label} className={badgeClass}>
+        {label} {badgeText}
+      </span>
+    );
+  });
+};
 
   // 회차별 “본인 점수 (전국 상위 x.x%) / 전체/유효/미응/중도”
   const renderRoundSummaries = () => {
