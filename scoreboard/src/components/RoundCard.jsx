@@ -40,7 +40,6 @@ function RoundCard({ label, data, sid }) {
   }, []);
 
   const getReasonText = () => {
-    if (overallPass) return '통과';
     if (!meets60 && anyGroupFail) return '과락 및 평락으로 인한 불합격';
     if (!meets60) return '평락으로 인한 불합격';
     return '과락으로 인한 불합격';
