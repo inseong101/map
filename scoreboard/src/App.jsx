@@ -1,8 +1,6 @@
-// src/App.jsx
 import React, { useState } from 'react';
 import StudentCard from './components/StudentCard';
 import RoundCard from './components/RoundCard';
-import AdminSystem from './components/AdminSystem';
 import './App.css';
 import { discoverRoundsFor, getSchoolFromSid } from './services/dataService';
 
@@ -34,18 +32,6 @@ function App() {
     }
   };
 
-  const goHome = () => {
-    setCurrentView('home');
-    setStudentId('');
-    setRounds([]);
-    setError('');
-  };
-
-  const goAdmin = () => {
-    setCurrentView('admin');
-    setError('');
-  };
-
   const handleInputChange = (e) => {
     const value = e.target.value.replace(/\D/g, '').slice(0, 6);
     setStudentId(value);
@@ -58,19 +44,7 @@ function App() {
 
     return (
       <div className="container">
-        <div className="header">
-          <div>
-            <h1>전졸협 모의고사 성적 조회</h1>
-            <div className="small">학수번호: {studentId} ({school})</div>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={goAdmin} className="btn" style={{ fontSize: 12, padding: '6px 12px' }}>
-              관리자
-            </button>
-            <button onClick={goHome} className="btn">다른 학생 조회</button>
-          </div>
-        </div>
-
+        <h1>전졸협 모의고사 성적 조회</h1>
         <div id="cards-grid" className="cards-grid">
           <StudentCard sid={studentId} school={school} rounds={rounds} />
           {roundLabels.map(label => (
@@ -86,31 +60,9 @@ function App() {
     );
   }
 
-  if (currentView === 'admin') {
-    return (
-      <div className="container">
-        <div className="header">
-          <div>
-            <h1>전졸협 모의고사 관리자 시스템</h1>
-            <div className="small">성적 데이터를 회차별/교시별로 확인할 수 있습니다.</div>
-          </div>
-          <button onClick={goHome} className="btn">홈으로</button>
-        </div>
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, marginTop: 16, minHeight: '70vh' }}>
-          <AdminSystem />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="container">
-      <div className="header">
-        <div>
-          <h1>전졸협 모의고사 성적 사이트</h1>
-          <div className="small">학수번호 6자리를 입력해 본인 성적을 확인하세요.</div>
-        </div>
-      </div>
+      <h1>전졸협 모의고사 성적 조회</h1>
       <div className="grid">
         <div className="col-12">
           <div className="card narrow">
