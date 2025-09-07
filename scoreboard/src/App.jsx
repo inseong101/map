@@ -184,7 +184,6 @@ function App() {
   rounds={normalizeRounds(hydratedRounds.length ? hydratedRounds : rounds)}
   loading={hydrating}
 />
-          />
 
           {(hydratedRounds.length ? hydratedRounds : rounds).map(({ label, data }) => (
             <RoundCard
