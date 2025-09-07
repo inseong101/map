@@ -304,12 +304,6 @@ function WrongAnswerPanel({ roundLabel, data }) {
           border-color: #adb5bd;
         }
 
-        .acc-btn.open {
-          background: #d1ecf1;
-          border-color: #bee5eb;
-          color: #0c5460;
-        }
-
         .rotate {
           transition: transform 0.3s ease;
           font-size: 0.8rem;
