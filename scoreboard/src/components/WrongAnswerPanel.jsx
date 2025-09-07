@@ -96,21 +96,18 @@ function WrongAnswerPanel({ roundLabel, data }) {
       <h2 style={{ marginTop: 0 }}>{roundLabel} 오답 보기</h2>
 
       {/* 설명 줄 + 실제 불타는 버튼 예시 */}
-      <div className="small" style={{ opacity: .85, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <span>색상: <b style={{color:'#ffd8d8'}}>빨강</b>=내 오답, 회색=정답(또는 데이터 없음), <b>🔥</b>=특별 해설 제공</span>
-        <span style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
-          <span className="small" style={{ opacity:.8 }}>예시</span>
-          <button
-            type="button"
-            className="qbtn fire"
-            style={{ transform:'scale(.9)', transformOrigin:'left center' }}
-            aria-label="특별 해설 제공 예시"
-          >
-            13
-            <span className="flame-emoji" aria-hidden>🔥</span>
-          </button>
-        </span>
-      </div>
+<div className="small" style={{ opacity: .85, marginBottom: 6 }}>
+  색상: <b style={{color:'#ffd8d8'}}>빨강</b>=내 오답, 회색=정답(또는 데이터 없음),
+  <button
+    type="button"
+    className="qbtn fire"
+    style={{ marginLeft: 8 }}
+    aria-label="특별 해설 제공 예시"
+  >
+    예시<span className="flame-emoji" aria-hidden></span>
+  </button>
+  =특별 해설 제공(클릭하여 확인)
+</div>
 
       <div className="accordion">
         {['1교시', '2교시', '3교시', '4교시'].map(renderSession)}
