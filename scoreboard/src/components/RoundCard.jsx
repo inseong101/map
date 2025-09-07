@@ -83,7 +83,7 @@ function RoundCard({ label, data, sid }) {
       }
 
       return (
-        <div key={group.name} className={`group-box ${pass ? 'ok' : 'fail'} span-12`}>
+        <div key={groupLabel} className={`group-box ${pass ? 'ok' : 'fail'} span-12`}>
           <div className="group-head">
             <div className="name" style={{ fontWeight: 800 }}>{groupLabel}</div>
             <div className="small">
@@ -101,6 +101,7 @@ function RoundCard({ label, data, sid }) {
   };
 
   const handleCardClick = (e) => {
+    // 내부 버튼 클릭 시 플립 방지
     if (e.target.closest('button')) return;
     setIsFlipped(prev => !prev);
   };
@@ -117,7 +118,7 @@ function RoundCard({ label, data, sid }) {
     >
       <div className={`flip-inner ${isFlipped ? 'is-flipped' : ''}`}>
 
-        {/* 앞면 (상태 클래스 카드에 부여) */}
+        {/* 앞면 */}
         <div
           ref={frontRef}
           className={`flip-face flip-front card ${statusClass}`}
@@ -132,9 +133,10 @@ function RoundCard({ label, data, sid }) {
             )}
           </div>
 
+          {/* ✅ 무효 차수: 앞면에는 안내만 표시 */}
           {isInvalid ? (
-            <div className="small" style={{ marginTop: 12 }}>
-              본 회차 {status === 'absent' ? '미응시' : '중도포기'}
+            <div className="small" style={{ marginTop: 12, fontWeight: 700 }}>
+              본 회차는 분석에서 제외됩니다.
             </div>
           ) : (
             <>
@@ -152,25 +154,17 @@ function RoundCard({ label, data, sid }) {
                   {getReasonText()}
                 </div>
               </div>
-            </>
-          )}
 
-          {!isInvalid && (
-            <div className="group-grid" style={{ marginTop: 12 }}>
-              {renderGroupBoxes()}
-            </div>
+              <div className="group-grid" style={{ marginTop: 12 }}>
+                {renderGroupBoxes()}
+              </div>
+            </>
           )}
         </div>
 
-        {/* 뒷면 (여기도 동일한 상태 클래스 부여해서 색/버튼 틴트 복원) */}
+        {/* 뒷면 */}
         <div className={`flip-face flip-back card ${statusClass}`}>
-          {isInvalid ? (
-            <div className="small" style={{ padding: 20, textAlign: 'center' }}>
-              본 회차는 분석에서 제외됩니다.
-            </div>
-          ) : (
-            <WrongAnswerPanel roundLabel={label} data={data} />
-          )}
+          <WrongAnswerPanel roundLabel={label} data={data} />
         </div>
       </div>
     </div>
