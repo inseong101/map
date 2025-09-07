@@ -1,4 +1,3 @@
-// src/components/WrongAnswerPanel.jsx
 import React, { useMemo, useState } from 'react';
 import './WrongPanel.css';
 
@@ -42,35 +41,36 @@ function WrongAnswerPanel({ roundLabel, data }) {
           className={`session-head ${open[session] ? 'open' : ''}`}
           onClick={() => toggle(session)}
           aria-expanded={open[session]}
+          aria-controls={`panel-${session}`}
         >
           <span>{session}</span>
           <span className="arrow">❯</span>
         </button>
 
-        <div
-          className="panel"
-          style={{
-            maxHeight: open[session] ? 'none' : 0,
-            padding: open[session] ? '10px 0 4px' : 0,
-            overflow: open[session] ? 'visible' : 'hidden',
-          }}
-        >
-          <div className="grid">
-            {Array.from({ length: total }, (_, i) => {
-              const qNum = i + 1;
-              const isWrong = wrongBySession[session]?.has(qNum);
-              return (
-                <button
-                  key={qNum}
-                  type="button"
-                  className={`qbtn${isWrong ? ' red' : ''}`}
-                >
-                  {qNum}
-                </button>
-              );
-            })}
+        {/* 닫힐 때는 아예 렌더 제거 → 확실한 “접힘” */}
+        {open[session] && (
+          <div
+            id={`panel-${session}`}
+            className="panel"
+            aria-hidden={!open[session]}
+          >
+            <div className="grid">
+              {Array.from({ length: total }, (_, i) => {
+                const qNum = i + 1;
+                const isWrong = wrongBySession[session]?.has(qNum);
+                return (
+                  <button
+                    key={qNum}
+                    type="button"
+                    className={`qbtn${isWrong ? ' red' : ''}`}
+                  >
+                    {qNum}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     );
   };
