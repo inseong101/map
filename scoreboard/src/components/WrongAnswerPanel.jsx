@@ -1,12 +1,9 @@
 // src/components/WrongAnswerPanel.jsx
-import React, { useState, useEffect } from 'react';
-import { getFirestore, doc, getDoc } from 'firebase/firestore';
+import React, { useState } from 'react';
 import { ALL_SUBJECTS, SESSION_SUBJECT_RANGES } from '../services/dataService';
 
 function WrongAnswerPanel({ roundLabel, data }) {
   const [openSections, setOpenSections] = useState({});
-  const [correctRateMap, setCorrectRateMap] = useState({}); // { [qNum]: number }
-  const [loading, setLoading] = useState(true);
 
   const toggleSection = (subject) => {
     setOpenSections((prev) => ({
@@ -15,7 +12,7 @@ function WrongAnswerPanel({ roundLabel, data }) {
     }));
   };
 
-  // 교시별 오답을 과목별 오답으로 변환
+  // 교시별 오답을 과목별 오답으로 변환 (중복 제거 + 정렬)
   const getWrongQuestionsBySubject = () => {
     const result = {};
     ALL_SUBJECTS.forEach((s) => (result[s] = []));
@@ -32,7 +29,6 @@ function WrongAnswerPanel({ roundLabel, data }) {
       });
     }
 
-    // 중복 제거 및 정렬
     Object.keys(result).forEach((subject) => {
       result[subject] = Array.from(new Set(result[subject])).sort((a, b) => a - b);
     });
@@ -40,61 +36,9 @@ function WrongAnswerPanel({ roundLabel, data }) {
     return result;
   };
 
-  // Firestore에서 analytics 로드 (4개 교시를 한 번씩만)
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadAnalytics() {
-      try {
-        setLoading(true);
-        const db = getFirestore();
-        const sessions = ['1교시', '2교시', '3교시', '4교시'];
-
-        const parts = await Promise.all(
-          sessions.map(async (sess) => {
-            const ref = doc(db, 'analytics', `${roundLabel}_${sess}`);
-            const snap = await getDoc(ref);
-            if (!snap.exists()) return {};
-            const a = snap.data() || {};
-            const qs = a.questionStats || {};
-            const map = {};
-            Object.entries(qs).forEach(([k, st]) => {
-              const q = parseInt(k, 10);
-              if (Number.isFinite(q) && typeof st?.correctRate === 'number') {
-                map[q] = st.correctRate; // 백엔드에서 소수점(%)로 저장됨
-              }
-            });
-            return map;
-          })
-        );
-
-        const merged = Object.assign({}, ...parts);
-
-        if (!cancelled) {
-          setCorrectRateMap(merged);
-        }
-      } catch (e) {
-        console.error('정답률 로드 실패:', e);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    loadAnalytics();
-    return () => {
-      cancelled = true;
-    };
-  }, [roundLabel]);
-
-  // Firestore에서 가져온 정답률 반환 (없으면 null)
-  const getCorrectRateForQuestion = (questionNum) => {
-    const v = correctRateMap[questionNum];
-    return typeof v === 'number' ? Math.round(v) : null; // 정수%로 표시
-  };
-
   const wrongBySubject = getWrongQuestionsBySubject();
 
-  // 교시별 과목 그룹화
+  // 교시별 과목 그룹
   const sessionGroups = {
     '1교시': ['간', '심', '비', '폐', '신'],
     '2교시': ['상한', '사상', '침구', '보건'],
@@ -102,33 +46,25 @@ function WrongAnswerPanel({ roundLabel, data }) {
     '4교시': ['소아', '예방', '생리', '본초'],
   };
 
-  // 오답 문항 셀 렌더링 (정답률만)
+  // 번호 칩만(정답률/보조문구 없음)
   const renderWrongQuestionCell = (questionNum) => {
-    const correctRate = getCorrectRateForQuestion(questionNum);
-
     return (
-      <div key={`wrong-${questionNum}`} className="qcell good" title={`문항 ${questionNum}`}>
-        <div className="question-num">{questionNum}</div>
-        <div className="rate">{loading ? '…' : correctRate == null ? '—' : `${correctRate}%`}</div>
-      </div>
+      <span key={`wrong-${questionNum}`} className="qcell">
+        {questionNum}
+      </span>
     );
   };
 
   const renderQuestionSection = (wrongNumbers) => {
-    if (wrongNumbers.length === 0) {
+    if (!wrongNumbers || wrongNumbers.length === 0) {
       return (
         <div className="small" style={{ opacity: 0.8, padding: '10px 0' }}>
           오답 없음
         </div>
       );
     }
-
-    return (
-      <div className="question-section">
-        <div className="section-title">내 오답 ({wrongNumbers.length}문항)</div>
-        <div className="qgrid">{wrongNumbers.map((num) => renderWrongQuestionCell(num))}</div>
-      </div>
-    );
+    // 🔥 제목(“내 오답(…문항)”) 제거, 번호만 나열
+    return <div className="qgrid">{wrongNumbers.map((n) => renderWrongQuestionCell(n))}</div>;
   };
 
   const renderSessionGroup = (sessionName, subjects) => {
@@ -148,9 +84,8 @@ function WrongAnswerPanel({ roundLabel, data }) {
                   className={`acc-btn ${isOpen ? 'open' : ''}`}
                   onClick={() => toggleSection(subject)}
                 >
-                  <span>
-                    {subject} 오답 ({totalWrongCount}문항)
-                  </span>
+                  <span style={{ fontWeight: 800 }}>{subject} 오답</span>
+                  <span className="small" style={{ opacity: 0.85 }}>{totalWrongCount}문항</span>
                   <span className={`rotate ${isOpen ? 'open' : ''}`}>❯</span>
                 </button>
 
@@ -176,7 +111,7 @@ function WrongAnswerPanel({ roundLabel, data }) {
     <div>
       <h2 style={{ marginTop: 0 }}>{roundLabel} 오답노트</h2>
       <div className="small" style={{ opacity: 0.8, marginBottom: '6px' }}>
-        과목명을 클릭하면 오답노트가 펼쳐집니다. 각 문항 아래 숫자는 전체 <b>정답률</b>입니다. (미응답 제외)
+        과목명을 클릭하면 오답 번호가 펼쳐집니다.
       </div>
 
       <div className="accordion">
@@ -184,120 +119,6 @@ function WrongAnswerPanel({ roundLabel, data }) {
           renderSessionGroup(sessionName, subjects)
         )}
       </div>
-
-      <style jsx>{`
-        .question-section {
-          display: flex;
-          flex-direction: column;
-          gap: 15px;
-        }
-
-        .section-title {
-          font-weight: 600;
-          font-size: 0.9rem;
-          color: #666;
-          margin-bottom: 5px;
-        }
-
-        .qgrid {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 4px;
-        }
-
-        .qcell {
-          display: inline-flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          min-width: 56px;
-          height: auto;
-          border-radius: 4px;
-          font-weight: 600;
-          color: white;
-          padding: 6px 6px;
-          text-align: center;
-        }
-
-        .qcell.good {
-          background-color: #28a745; /* 초록: 정답률 */
-        }
-
-        .question-num {
-          font-size: 0.8rem;
-          font-weight: 700;
-          line-height: 1;
-          margin-bottom: 2px;
-        }
-
-        .rate {
-          font-size: 0.8rem;
-          opacity: 0.98;
-          line-height: 1.1;
-        }
-
-        .panel {
-          transition: all 0.3s ease;
-          border-left: 3px solid #e9ecef;
-          padding-left: 10px;
-        }
-
-        .session-group {
-          margin-bottom: 8px;
-        }
-
-        .session-header {
-          font-weight: 600;
-          color: #495057;
-          margin-bottom: 8px;
-          padding: 8px 12px;
-          background: #f8f9fa;
-          border-radius: 6px;
-          font-size: 0.9rem;
-        }
-
-        .session-content {
-          padding-left: 8px;
-        }
-
-        .item {
-          margin-bottom: 6px;
-        }
-
-        .acc-btn {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          width: 100%;
-          padding: 10px 12px;
-          background: #f8f9fa;
-          border: 1px solid #dee2e6;
-          border-radius: 6px;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          font-size: 0.85rem;
-          color: #495057;
-        }
-
-        .acc-btn:hover {
-          background: #e9ecef;
-          border-color: #adb5bd;
-        }
-
-        .rotate {
-          transition: transform 0.3s ease;
-          font-size: 0.8rem;
-          color: #6c757d;
-        }
-
-        .rotate.open {
-          transform: rotate(90deg);
-        }
-
-        .small {
-          font-size: 0.8rem;
-        }
-      `}</style>
     </div>
   );
 }
