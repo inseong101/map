@@ -179,10 +179,11 @@ function App() {
 
         <div id="cards-grid" className="cards-grid">
           <StudentCard
-            sid={studentId}
-            school={school}
-            rounds={hydratedRounds.length ? hydratedRounds : rounds}
-            loading={hydrating}
+  sid={studentId}
+  school={school}
+  rounds={normalizeRounds(hydratedRounds.length ? hydratedRounds : rounds)}
+  loading={hydrating}
+/>
           />
 
           {(hydratedRounds.length ? hydratedRounds : rounds).map(({ label, data }) => (
