@@ -95,7 +95,8 @@ function RoundCard({ label, data, sid }) {
   };
 
   // absent / dropped 처리
-  const isAbsent = status === 'absent' || status === 'dropped';
+  const isInvalid = ['absent', 'dropout', 'dropped'].includes(status);
+
 
   return (
     <div 
@@ -107,7 +108,7 @@ function RoundCard({ label, data, sid }) {
         
         {/* 앞면 */}
         <div ref={frontRef} className="flip-face flip-front card">
-          <div className={`round ${isAbsent ? 'absent' : (overallPass ? "" : "fail")}`}>
+          <div className={`round ${isInvalid ? 'absent' : (overallPass ? "" : "fail")}`}>
             <div className="flex" style={{ justifyContent: 'space-between' }}>
               <h2 style={{ margin: 0 }}>{label} 총점</h2>
               {!isAbsent && (
@@ -118,11 +119,11 @@ function RoundCard({ label, data, sid }) {
               )}
             </div>
 
-            {isAbsent ? (
-              <div className="small" style={{ marginTop: 12 }}>
-                본 회차 {status === 'absent' ? "미응시" : "중도포기"}  
-              </div>
-            ) : (
+            {isInvalid ? (
+  <div className="small" style={{ marginTop: 12 }}>
+    본 회차 {status === 'absent' ? "미응시" : "중도포기"}
+  </div>
+) : (
               <>
                 <div className="progress" style={{ margin: '8px 0 2px 0' }}>
                   <div className="bar" style={{ width: `${overallRate}%` }}></div>
