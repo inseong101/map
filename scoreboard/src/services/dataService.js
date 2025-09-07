@@ -12,7 +12,7 @@ export const SUBJECT_MAX = {
 
 // 그룹 정의
 export const GROUPS = [
-  { id: "그룹1", label: "그룹 1", subjects: ["간","심","비","폐","신","상한","사상"], layoutChunks: [5,2] },
+  { id: "그룹1", label: "그룹 1", subjects: ["간","심","비","폐","신","상한","사상"]},
   { id: "그룹3", label: "그룹 3", subjects: ["침구"] },
   { id: "그룹2", label: "그룹 2", subjects: ["보건"] },
   { id: "그룹4", label: "그룹 4", subjects: ["외과","신경","안이비"] },
