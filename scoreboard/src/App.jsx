@@ -30,9 +30,9 @@ async function getRoundTotalFromFirestore(roundLabel, sid) {
         continue;
       }
 
+      completedCount++;
       const s = Number(d.totalScore);
       perSession.push(Number.isFinite(s) ? s : 0);
-      completedCount += 1;
     } catch (e) {
       console.error(`점수 조회 오류: ${roundLabel} ${session} ${sid}`, e);
       perSession.push(0);
@@ -40,11 +40,11 @@ async function getRoundTotalFromFirestore(roundLabel, sid) {
   }
 
   const total = perSession.reduce((a, b) => a + b, 0);
-   const roundStatus =
-   completedCount === 4 ? 'completed' :
-   completedCount === 0 ? 'absent' : 'dropout';
+  const roundStatus =
+    completedCount === 4 ? 'completed' :
+    completedCount === 0 ? 'absent' : 'dropout';
 
- return { total, sessionScores: perSession, roundStatus };
+  return { total, sessionScores: perSession, roundStatus };
 }
 
 function App() {
@@ -97,15 +97,16 @@ function App() {
       try {
         const out = [];
         for (const { label, data } of rounds) {
-          const { total, sessionScores, roundStatus } = await getRoundTotalFromFirestore(label, studentId);
+          const { total, sessionScores, roundStatus } =
+            await getRoundTotalFromFirestore(label, studentId);
           out.push({
             label,
             data: {
               ...(data || {}),
               sessionScores,
               totalScore: total,
-              totalMax: (data && data.totalMax) || 340
-              status: roundStatus       // ✅ 라운드 상태 주입 (absent / dropout / completed)
+              totalMax: (data && data.totalMax) || 340,
+              status: roundStatus   // ✅ 빌드 에러 났던 부분 고침 (콤마 추가)
             }
           });
         }
@@ -153,7 +154,6 @@ function App() {
 
     return (
       <div className="container">
-        {/* 🎯 중앙 제목만 남김 */}
         <h1>전졸협 모의고사 성적 조회</h1>
 
         <div id="cards-grid" className="cards-grid">
