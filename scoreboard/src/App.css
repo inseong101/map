@@ -1,4 +1,3 @@
-/* src/App.css */
 /* ===== 전졸협 성적 사이트 기본 테마 ===== */
 :root{
   --bg: #0b1020;
@@ -25,8 +24,11 @@ img{max-width:100%; display:block}
 
 /* Layout */
 .container{max-width:1100px; margin:24px auto; padding:0 16px}
-.header{display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap}
-h1{margin:0 0 6px 0; font-size:24px; font-weight:800}
+
+/* === 헤더 완전히 숨기기 === */
+.header{display:none !important}
+
+h1{margin:0 0 6px 0; font-size:24px; font-weight:800; text-align:center;}
 h2{margin:8px 0; font-size:18px; color:var(--muted); font-weight:700}
 .small{color:var(--muted); font-size:12px}
 
@@ -140,195 +142,43 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 .pill.warn{border-color:rgba(245,158,11,.6); color:#fff4d6}
 .pill.red{border-color:rgba(239,68,68,.7); color:#ffd8d8}
 
-/* Flip Cards - 높이 문제 해결 */
-.flip-card { 
-  perspective: 1200px; 
-  margin-bottom: 16px;
-  height: fit-content;
-}
+/* Flip Cards */
+.flip-card { perspective: 1200px; margin-bottom: 16px; height: fit-content; }
+.flip-card .flip-inner{ position: relative; width: 100%; transform-style: preserve-3d; transition: transform .6s ease; min-height: fit-content; }
+.flip-card.is-flipped .flip-inner, .flip-inner.is-flipped { transform: rotateY(180deg); }
+.flip-card .flip-face{ position: absolute; top: 0; left: 0; width: 100%; backface-visibility: hidden; border-radius: 16px; overflow: hidden; }
+.flip-card .flip-front{ transform: rotateY(0deg); position: relative; height: auto; }
+.flip-card .flip-back { transform: rotateY(180deg); position: absolute; color: var(--ink); height: 100%; box-sizing: border-box; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
+.flip-card .flip-back::-webkit-scrollbar { width: 6px; }
+.flip-card .flip-back::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); border-radius: 6px; }
+.flip-card .flip-back::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.25); border-radius: 6px; }
 
-.flip-card .flip-inner{
-  position: relative;
-  width: 100%;
-  transform-style: preserve-3d;
-  transition: transform .6s ease;
-  /* 높이를 앞면 기준으로 고정 */
-  min-height: fit-content;
-}
-
-.flip-card.is-flipped .flip-inner,
-.flip-inner.is-flipped { 
-  transform: rotateY(180deg); 
-}
-
-.flip-card .flip-face{
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  backface-visibility: hidden;
-  border-radius: 16px;
-  overflow: hidden;
-}
-
-.flip-card .flip-front{ 
-  transform: rotateY(0deg); 
-  position: relative;
-  /* 앞면은 자연스러운 높이 */
-  height: auto;
-}
-
-.flip-card .flip-back { 
-  transform: rotateY(180deg);
-  position: absolute;
-  /* 뒷면 글자색 앞면과 동일하게 */
-  color: var(--ink);
-  /* 뒷면 높이를 앞면과 동일하게 고정 */
-  height: 100%;
-  box-sizing: border-box;
-}
-
-/* 플립 카드 뒷면 스크롤 */
-.flip-card .flip-back {
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-  scroll-behavior: smooth;
-  /* max-height 제거 - 앞면 높이에 맞춤 */
-}
-
-.flip-card .flip-back::-webkit-scrollbar {
-  width: 6px;
-}
-
-.flip-card .flip-back::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 6px;
-}
-
-.flip-card .flip-back::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.25);
-  border-radius: 6px;
-}
-
-/* 높이 동기화를 위한 JavaScript 도움 클래스 */
-.flip-card.height-synced .flip-inner {
-  height: var(--front-height);
-}
-
-.flip-card.height-synced .flip-back {
-  height: var(--front-height);
-}
-
-/* Accordion - 교시별 그룹화 */
-.accordion {
-  border-top: 1px solid var(--line); 
-  margin-top: 8px;
-}
-
-.accordion .session-group {
-  margin-bottom: 16px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface-2);
-  overflow: hidden;
-}
-
-.accordion .session-header {
-  background: linear-gradient(90deg, var(--primary), #4cc9ff);
-  color: white;
-  padding: 10px 16px;
-  font-weight: 800;
-  font-size: 14px;
-  text-align: center;
-  border-bottom: 1px solid var(--line);
-}
-
-.accordion .session-content {
-  padding: 8px;
-}
-
-.accordion .item { 
-  border-bottom: 1px solid var(--line); 
-  margin-bottom: 6px;
-}
-
-.accordion .item:last-child {
-  border-bottom: none;
-  margin-bottom: 0;
-}
-
-.accordion .acc-btn{ 
-  width: 100%; 
-  display: flex; 
-  justify-content: space-between; 
-  align-items: center; 
-  gap: 8px; 
-  padding: 8px 12px; 
-  border: 1px solid var(--line); 
-  border-radius: 8px; 
-  background: var(--surface); 
-  font-weight: 700; 
-  cursor: pointer;
-  color: var(--ink);
-}
-
-.accordion .acc-btn:hover {
-  background: var(--surface-2);
-}
-
-.accordion .acc-btn .rotate{ 
-  transition: .2s transform ease; 
-  color: var(--primary);
-}
-
-.accordion .acc-btn.open .rotate{ 
-  transform: rotate(90deg); 
-}
-
-.accordion .panel{ 
-  overflow: hidden; 
-  transition: max-height .25s ease; 
-}
+/* Accordion */
+.accordion { border-top: 1px solid var(--line); margin-top: 8px; }
+.accordion .session-group { margin-bottom: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); overflow: hidden; }
+.accordion .session-header { background: linear-gradient(90deg, var(--primary), #4cc9ff); color: white; padding: 10px 16px; font-weight: 800; font-size: 14px; text-align: center; border-bottom: 1px solid var(--line); }
+.accordion .session-content { padding: 8px; }
+.accordion .item { border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+.accordion .item:last-child { border-bottom: none; margin-bottom: 0; }
+.accordion .acc-btn{ width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-weight: 700; cursor: pointer; color: var(--ink);}
+.accordion .acc-btn:hover { background: var(--surface-2); }
+.accordion .acc-btn .rotate{ transition: .2s transform ease; color: var(--primary); }
+.accordion .acc-btn.open .rotate{ transform: rotate(90deg); }
+.accordion .panel{ overflow: hidden; transition: max-height .25s ease; }
 
 /* Question grid */
 .qgrid{display:flex; flex-wrap:wrap; gap:6px; max-height: 120px; overflow-y: auto; padding-right: 4px}
-.qcell{
-  padding:3px 8px; border-radius:999px; border:1px solid var(--line); font-weight:700;
-  background:#1a2240; 
-}
+.qcell{ padding:3px 8px; border-radius:999px; border:1px solid var(--line); font-weight:700; background:#1a2240; }
 .qcell.bad{background:rgba(239,68,68,.17); border-color:rgba(239,68,68,.5)}
+.qgrid::-webkit-scrollbar { width: 4px; }
+.qgrid::-webkit-scrollbar-track { background: transparent; }
+.qgrid::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 4px; }
 
-.qgrid::-webkit-scrollbar {
-  width: 4px;
-}
-
-.qgrid::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.qgrid::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-}
-
-/* Cards grid - 간격 조정 */
-.cards-grid { 
-  display: grid; 
-  gap: 12px; 
-  margin-top: 12px;
-}
+/* Cards grid */
+.cards-grid { display: grid; gap: 12px; margin-top: 12px; }
 
 /* Alert */
-.alert{
-  margin-top:10px;
-  padding:10px 12px;
-  border-radius:10px;
-  border:1px solid rgba(239,68,68,.55);
-  background:rgba(239,68,68,.14);
-  color:#ffd8d8;
-  font-weight:700;
-}
+.alert{ margin-top:10px; padding:10px 12px; border-radius:10px; border:1px solid rgba(239,68,68,.55); background:rgba(239,68,68,.14); color:#ffd8d8; font-weight:700; }
 
 /* Print */
 @media print{
@@ -338,10 +188,5 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
   .card{box-shadow:none; border-color:#ddd; background:#fff}
   .badge{border-color:#999}
 }
-.btn.secondary{
-  background: rgba(126,162,255,.12);
-  border-color: rgba(126,162,255,.45);
-}
-.btn.secondary:hover{
-  background: rgba(126,162,255,.18);
-}
+.btn.secondary{ background: rgba(126,162,255,.12); border-color: rgba(126,162,255,.45); }
+.btn.secondary:hover{ background: rgba(126,162,255,.18); }
