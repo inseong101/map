@@ -1,3 +1,4 @@
+// src/components/WrongAnswerPanel.jsx
 import React, { useMemo, useState } from 'react';
 import './WrongPanel.css';
 
@@ -10,12 +11,12 @@ const SESSION_LENGTH = {
 };
 
 function WrongAnswerPanel({ roundLabel, data }) {
-  // 접힘 상태 (초기: 모두 펼침)
+  // ✅ 초기 상태: 1교시만 펼침, 나머지는 접힘
   const [open, setOpen] = useState({
     '1교시': true,
-    '2교시': true,
-    '3교시': true,
-    '4교시': true,
+    '2교시': false,
+    '3교시': false,
+    '4교시': false,
   });
 
   // 내 오답(교시별 Set)
