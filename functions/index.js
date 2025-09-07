@@ -436,6 +436,10 @@ async function analyzeOverallStatus(roundLabel) {
 /**
  * 특정 교시의 통계를 업데이트합니다
  */
+
+/**
+ * 특정 교시의 통계를 업데이트합니다
+ */
 async function updateSessionAnalytics(roundLabel, session) {
   try {
     console.log(`교시별 통계 업데이트: ${roundLabel} ${session}`);
@@ -451,7 +455,7 @@ async function updateSessionAnalytics(roundLabel, session) {
       attendedStudents: 0,
       absentStudents: 0,
       questionStats: {}, // 문항별 통계
-      choiceStats: {},   // 선택지별 통계
+      choiceStats: {},   // 선택지별 통계 (raw count)
       schoolStats: {},   // 학교별 통계
       subjectStats: {},  // 과목별 통계
       lastUpdated: admin.firestore.FieldValue.serverTimestamp()
@@ -486,7 +490,7 @@ async function updateSessionAnalytics(roundLabel, session) {
       
       // 문항별 통계 계산 (응답이 있는 문항만)
       Object.entries(responses).forEach(([questionNum, choice]) => {
-        const qNum = parseInt(questionNum);
+        const qNum = parseInt(questionNum, 10);
         
         if (!analytics.questionStats[qNum]) {
           analytics.questionStats[qNum] = {
@@ -543,6 +547,79 @@ async function updateSessionAnalytics(roundLabel, session) {
         }
       });
     });
+
+    // --- helper: 1~5번 선택 비율을 정수 퍼센트(합=100)로 정규화 ---
+    function normalizeTo100(choiceCounts) {
+      const keys = [1,2,3,4,5];
+      const total = keys.reduce((s,k)=>s + (choiceCounts?.[k] || 0), 0);
+      if (total <= 0) return {1:0,2:0,3:0,4:0,5:0};
+
+      const raw = keys.map(k => (choiceCounts[k] || 0) * 100 / total);
+      const floors = raw.map(v => Math.floor(v));
+      let rem = 100 - floors.reduce((a,b)=>a+b,0);
+
+      // 소수점 큰 순서대로 남은 1% 분배
+      const order = raw
+        .map((v,i)=>({i, frac: v - floors[i]}))
+        .sort((a,b)=>b.frac - a.frac)
+        .map(x=>x.i);
+
+      const out = floors.slice();
+      for (let i=0; i<rem; i++) out[order[i % order.length]] += 1;
+
+      return {1: out[0], 2: out[1], 3: out[2], 4: out[3], 5: out[4]};
+    }
+
+    // 오답률/정답률 및 선택 퍼센트 계산 (미응답 제외)
+    Object.keys(analytics.questionStats).forEach((qStr) => {
+      const q = parseInt(qStr, 10);
+      const stats = analytics.questionStats[q];
+
+      // 미응답(null) 제외한 실제 응답 수
+      const nonNullTotal =
+        (analytics.choiceStats[q]?.[1] || 0) +
+        (analytics.choiceStats[q]?.[2] || 0) +
+        (analytics.choiceStats[q]?.[3] || 0) +
+        (analytics.choiceStats[q]?.[4] || 0) +
+        (analytics.choiceStats[q]?.[5] || 0);
+
+      // 안전 보정
+      stats.actualResponses = nonNullTotal;
+
+      const wrongCount   = stats.wrongCount || 0;
+      const correctCount = Math.max(nonNullTotal - wrongCount, 0);
+
+      const correctRate = nonNullTotal > 0 ? (correctCount / nonNullTotal) * 100 : 0;
+      const errorRate   = nonNullTotal > 0 ? 100 - correctRate : 0;
+
+      // (선택) 응답률 계속 쓰면 유지
+      stats.responseRate = stats.totalResponses > 0
+        ? +((stats.actualResponses / stats.totalResponses) * 100).toFixed(2)
+        : 0;
+
+      stats.correctCount = correctCount;
+      stats.correctRate  = +correctRate.toFixed(2);
+      stats.errorRate    = +errorRate.toFixed(2);
+
+      // 1~5번 선택 분포(%). 미응답 제외, 합=100 (정수)
+      analytics.choicePercents = analytics.choicePercents || {};
+      analytics.choicePercents[q] = normalizeTo100(analytics.choiceStats[q]);
+    });
+
+    // 결과 저장 (여기 'await'가 async 함수 내부에 있도록 유지!)
+    const analyticsRef = db.collection('analytics').doc(`${roundLabel}_${session}`);
+    await analyticsRef.set(analytics);
+    
+    console.log(`${roundLabel} ${session} 통계 업데이트 완료: 총 ${analytics.totalStudents}명 (응시: ${analytics.attendedStudents}명, 미응시: ${analytics.absentStudents}명)`);
+    
+  } catch (error) {
+    console.error('교시별 통계 업데이트 실패:', error);
+    throw error;
+  }
+}
+
+
+
 
     // 오답률 계산
 // --- helper: 1~5번 선택 비율을 정수 퍼센트(합=100)로 정규화 ---
