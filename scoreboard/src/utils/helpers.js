@@ -47,7 +47,7 @@ export function drawLineChart(canvas, labels, series, maxValue) {
   const x = (i) => padL + (n <= 1 ? plotW / 2 : (i * (plotW / (n - 1))));
   const y = (v) => padT + (plotH * (1 - (v / Math.max(1, maxValue || 1))));
 
-  // 축 그리기
+  // 축
   ctx.strokeStyle = 'rgba(255,255,255,.25)';
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -62,12 +62,10 @@ export function drawLineChart(canvas, labels, series, maxValue) {
   ctx.textAlign = 'center';
   labels.forEach((lb, i) => ctx.fillText(lb, x(i), padT + plotH + 18));
 
-  // 시리즈 그리기
+  // 시리즈
   const colors = ['#7ea2ff', '#4cc9ff', '#22c55e'];
   series.forEach((s, si) => {
     const col = colors[si % colors.length];
-    
-    // 선 그리기
     ctx.strokeStyle = col;
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -81,8 +79,6 @@ export function drawLineChart(canvas, labels, series, maxValue) {
       }
     });
     ctx.stroke();
-    
-    // 포인트 그리기
     ctx.fillStyle = col;
     s.values.forEach((v, i) => {
       if (v == null) return;
@@ -106,164 +102,112 @@ export function drawLineChart(canvas, labels, series, maxValue) {
   });
 }
 
-/* =========================
-   점수/분포 계산 유틸 (프런트)
-   ========================= */
+// ---------------- 공통 유틸 ----------------
 
 // 유효한 학수번호인지 확인 (01~12로 시작하는 6자리)
 function isValidStudentId(sid) {
   if (!sid || typeof sid !== 'string') return false;
   if (sid.length !== 6) return false;
-  const schoolCode = sid.slice(0, 2);
-  const validCodes = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
-  return validCodes.includes(schoolCode);
+  const code = sid.slice(0, 2);
+  return ['01','02','03','04','05','06','07','08','09','10','11','12'].includes(code);
 }
 
-// 세션 최대 문항 수 (fallback용)
-// 1교시 80, 2교시 100, 3교시 80, 4교시 80 → 총 340
-const SESSION_MAX_QUESTIONS = {
-  '1교시': 80,
-  '2교시': 100,
-  '3교시': 80,
-  '4교시': 80
-};
-
-// 학교명 → 학교코드 변환
-function getSchoolCodeFromName(schoolName) {
-  const schoolMap = {
-    "가천대": "01", "경희대": "02", "대구한": "03", "대전대": "04",
-    "동국대": "05", "동신대": "06", "동의대": "07", "부산대": "08",
-    "상지대": "09", "세명대": "10", "우석대": "11", "원광대": "12"
+// 학교명 → 코드
+function getSchoolCodeFromName(name) {
+  const map = {
+    '가천대':'01','경희대':'02','대구한':'03','대전대':'04',
+    '동국대':'05','동신대':'06','동의대':'07','부산대':'08',
+    '상지대':'09','세명대':'10','우석대':'11','원광대':'12'
   };
-  return schoolMap[schoolName] || "01";
+  return map[name] || '01';
 }
 
-/**
- * 라운드별 평균 (전국/학교)
- * - 유효응시자(최소 1교시라도 completed)만 포함
- * - 각 학생의 라운드 총점 = 4개 교시 totalScore 합
- *   - totalScore 필드가 없을 경우 fallback: (세션문항수 - wrongQuestions.length)
- */
+// ---------------- Firestore 데이터 조회 ----------------
+
+// 평균 (전국/학교)
 export async function getAverages(schoolName, roundLabel) {
   try {
     const { db } = await import('../services/firebase');
     const { collection, getDocs } = await import('firebase/firestore');
-
     const schoolCode = getSchoolCodeFromName(schoolName);
-    const sessions = ['1교시', '2교시', '3교시', '4교시'];
 
-    // sid -> { sum: number, completedSessions: number }
-    const agg = {};
+    const sessions = ['1교시','2교시','3교시','4교시'];
+    const studentData = {}; // sid -> { completedSessions, wrongCount }
 
     for (const session of sessions) {
-      const sessionRef = collection(db, 'scores_raw', roundLabel, session);
-      const snap = await getDocs(sessionRef);
-
-      snap.forEach(docSnap => {
-        const sid = docSnap.id;
+      const snap = await getDocs(collection(db, 'scores_raw', roundLabel, session));
+      snap.forEach(doc => {
+        const sid = doc.id;
         if (!isValidStudentId(sid)) return;
-
-        const data = docSnap.data() || {};
-        if (data.status !== 'completed') return; // 미응시/중도포기 세션 제외
-
-        const wrongQuestions = Array.isArray(data.wrongQuestions) ? data.wrongQuestions : (Array.isArray(data.wrong) ? data.wrong : []);
-        const fallbackMax = SESSION_MAX_QUESTIONS[session] || 0;
-
-        // 세션 점수 결정
-        let sessionScore = Number.isFinite(data.totalScore) ? Number(data.totalScore) : (fallbackMax - (wrongQuestions?.length || 0));
-        if (!Number.isFinite(sessionScore)) sessionScore = 0;
-        sessionScore = Math.max(0, Math.min(fallbackMax, sessionScore));
-
-        if (!agg[sid]) agg[sid] = { sum: 0, completedSessions: 0 };
-        agg[sid].sum += sessionScore;
-        agg[sid].completedSessions += 1;
+        const data = doc.data();
+        if (!studentData[sid]) studentData[sid] = { completedSessions: 0, wrongCount: 0 };
+        if (data.status === 'completed') {
+          studentData[sid].completedSessions++;
+          studentData[sid].wrongCount += (data.wrongQuestions || []).length;
+        }
       });
     }
 
-    // 유효응시자(최소 1교시라도 completed)만 점수 배열로
     const nationalScores = [];
     const schoolScores = [];
-
-    Object.entries(agg).forEach(([sid, { sum, completedSessions }]) => {
-      if (completedSessions <= 0) return; // 완전 미응시 제거
-      nationalScores.push(sum);
-      if (sid.slice(0, 2) === schoolCode) schoolScores.push(sum);
+    Object.entries(studentData).forEach(([sid, info]) => {
+      if (info.completedSessions < 4) return; // 4교시 완주자만 포함
+      const score = Math.max(0, 340 - info.wrongCount);
+      nationalScores.push(score);
+      if (sid.slice(0,2) === schoolCode) schoolScores.push(score);
     });
 
     const nationalAvg = nationalScores.length > 0
-      ? Math.round(nationalScores.reduce((a, b) => a + b, 0) / nationalScores.length)
+      ? Math.round(nationalScores.reduce((a,b)=>a+b,0)/nationalScores.length)
       : null;
-
     const schoolAvg = schoolScores.length > 0
-      ? Math.round(schoolScores.reduce((a, b) => a + b, 0) / schoolScores.length)
+      ? Math.round(schoolScores.reduce((a,b)=>a+b,0)/schoolScores.length)
       : null;
 
-    return {
-      nationalAvg: nationalAvg ?? '-',
-      schoolAvg: schoolAvg ?? '-'
-    };
-  } catch (error) {
-    console.error('평균 조회 오류:', error);
+    return { nationalAvg: nationalAvg ?? '-', schoolAvg: schoolAvg ?? '-' };
+  } catch (e) {
+    console.error('평균 조회 오류:', e);
     return { nationalAvg: '-', schoolAvg: '-' };
   }
 }
 
-/**
- * 실제 점수 분포 (전국/학교)
- * - 유효응시자(최소 1교시라도 completed)만 포함
- * - 각 학생의 라운드 총점 = 4개 교시 합산 (위와 동일한 로직)
- */
+// 분포 (전국/학교별)
 export async function getRealScoreDistribution(roundLabel) {
   try {
     const { db } = await import('../services/firebase');
     const { collection, getDocs } = await import('firebase/firestore');
 
-    const sessions = ['1교시', '2교시', '3교시', '4교시'];
-    const agg = {}; // sid -> { sum, completedSessions }
+    const sessions = ['1교시','2교시','3교시','4교시'];
+    const studentData = {}; // sid -> { completedSessions, wrongCount }
 
     for (const session of sessions) {
-      const sessionRef = collection(db, 'scores_raw', roundLabel, session);
-      const snap = await getDocs(sessionRef);
-
-      snap.forEach(docSnap => {
-        const sid = docSnap.id;
+      const snap = await getDocs(collection(db, 'scores_raw', roundLabel, session));
+      snap.forEach(doc => {
+        const sid = doc.id;
         if (!isValidStudentId(sid)) return;
-
-        const data = docSnap.data() || {};
-        if (data.status !== 'completed') return; // 해당 세션 미응답 제외
-
-        const wrongQuestions = Array.isArray(data.wrongQuestions) ? data.wrongQuestions : (Array.isArray(data.wrong) ? data.wrong : []);
-        const fallbackMax = SESSION_MAX_QUESTIONS[session] || 0;
-
-        let sessionScore = Number.isFinite(data.totalScore) ? Number(data.totalScore) : (fallbackMax - (wrongQuestions?.length || 0));
-        if (!Number.isFinite(sessionScore)) sessionScore = 0;
-        sessionScore = Math.max(0, Math.min(fallbackMax, sessionScore));
-
-        if (!agg[sid]) agg[sid] = { sum: 0, completedSessions: 0 };
-        agg[sid].sum += sessionScore;
-        agg[sid].completedSessions += 1;
+        const data = doc.data();
+        if (!studentData[sid]) studentData[sid] = { completedSessions: 0, wrongCount: 0 };
+        if (data.status === 'completed') {
+          studentData[sid].completedSessions++;
+          studentData[sid].wrongCount += (data.wrongQuestions || []).length;
+        }
       });
     }
 
-    const bySchool = {}; // schoolCode -> scores[]
-    const national = [];
-
-    Object.entries(agg).forEach(([sid, { sum, completedSessions }]) => {
-      if (completedSessions <= 0) return; // 완전 미응시 제거
-      national.push(sum);
-      const sc = sid.slice(0, 2);
-      if (!bySchool[sc]) bySchool[sc] = [];
-      bySchool[sc].push(sum);
+    const nationalScores = [];
+    const schoolScores = {};
+    Object.entries(studentData).forEach(([sid, info]) => {
+      if (info.completedSessions < 4) return; // 4교시 완주자만 포함
+      const score = Math.max(0, 340 - info.wrongCount);
+      nationalScores.push(score);
+      const code = sid.slice(0,2);
+      if (!schoolScores[code]) schoolScores[code] = [];
+      schoolScores[code].push(score);
     });
 
-    return {
-      national,
-      school: bySchool,
-      bySchool
-    };
-  } catch (error) {
-    console.error('점수 분포 조회 오류:', error);
-    return { national: [], school: {}, bySchool: {} };
+    return { national: nationalScores, bySchool: schoolScores };
+  } catch (e) {
+    console.error('점수 분포 조회 오류:', e);
+    return { national: [], bySchool: {} };
   }
 }
-
