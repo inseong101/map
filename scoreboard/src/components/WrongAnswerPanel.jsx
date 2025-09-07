@@ -32,7 +32,7 @@ function WrongAnswerPanel({ roundLabel, data }) {
   }, [data]);
 
   // 정답률 맵(문항번호 → 정답률%)
-  const [correctRateMap, setCorrectRateMap] = useState({});
+  const [correctRateMap, setCorrectRateMap] = useState({'1교시': {}, '2교시': {}, '3교시': {}, '4교시': {}});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -43,7 +43,7 @@ function WrongAnswerPanel({ roundLabel, data }) {
         setLoading(true);
         const db = getFirestore();
         const sessions = ['1교시', '2교시', '3교시', '4교시'];
-        const rateMap = {};
+        const rateMap = { '1교시': {}, '2교시': {}, '3교시': {}, '4교시': {} };
 
         // 각 교시 analytics 로드해서 questionStats.correctRate 수집
         for (const sess of sessions) {
@@ -55,7 +55,7 @@ function WrongAnswerPanel({ roundLabel, data }) {
           Object.entries(qs).forEach(([k, st]) => {
             const q = parseInt(k, 10);
             if (Number.isFinite(q) && typeof st?.correctRate === 'number') {
-              rateMap[q] = Math.round(st.correctRate);
+              rateMap[sess][q] = Math.round(st.correctRate);
             }
           });
         }
@@ -77,7 +77,7 @@ function WrongAnswerPanel({ roundLabel, data }) {
   const QButton = ({ session, idx }) => {
     const qNum = idx; // 1-based
     const isWrong = wrongBySession[session]?.has(qNum);
-    const rate = correctRateMap[qNum];
+    const rate = correctRateMap?.[session]?.[qNum];
     const title = Number.isFinite(rate) ? `문항 ${qNum} · 정답률 ${rate}%` : `문항 ${qNum}`;
 
     return (
