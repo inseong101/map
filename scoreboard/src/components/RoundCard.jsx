@@ -1,4 +1,3 @@
-// src/components/RoundCard.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { fmt, pct, pill, chunk } from '../utils/helpers';
 import { SUBJECT_MAX } from '../services/dataService';
@@ -22,7 +21,7 @@ function RoundCard({ label, data, sid }) {
 
   const overallRate = totalMax > 0 ? pct(totalScore, totalMax) : 0;
 
-  // 높이 동기화
+  // 앞면 높이를 기준으로 카드 높이 동기화
   useEffect(() => {
     const syncHeight = () => {
       if (flipCardRef.current && frontRef.current) {
@@ -106,7 +105,7 @@ function RoundCard({ label, data, sid }) {
     setIsFlipped(prev => !prev);
   };
 
-  // invalid = 미응시/중도포기
+  // invalid = 미응시/중도포기/기타 무효 판정
   const isInvalid = status === 'absent' || status === 'dropout' || status === 'dropped';
 
   return (
@@ -117,46 +116,45 @@ function RoundCard({ label, data, sid }) {
     >
       <div className={`flip-inner ${isFlipped ? 'is-flipped' : ''}`}>
 
-        {/* 앞면 */}
-        <div ref={frontRef} className="flip-face flip-front card">
-          <div
-            className={`round ${
-              isInvalid ? 'invalid' : (overallPass ? 'pass' : 'fail')
-            }`}
-          >
-            <div className="flex" style={{ justifyContent: 'space-between' }}>
-              <h2 style={{ margin: 0 }}>{label} 총점</h2>
-              {!isInvalid && (
-                <div className="kpi">
-                  <div className="num">{fmt(totalScore)}</div>
-                  <div className="sub">/ {fmt(totalMax)}</div>
-                </div>
-              )}
-            </div>
-
-            {isInvalid ? (
-              <div className="small" style={{ marginTop: 12 }}>
-                본 회차 {status === 'absent' ? '미응시' : '중도포기'}
+        {/* 앞면 (카드 자체에 상태 클래스 부여) */}
+        <div
+          ref={frontRef}
+          className={`flip-face flip-front card ${
+            isInvalid ? 'rc-invalid' : (overallPass ? 'rc-pass' : 'rc-fail')
+          }`}
+        >
+          <div className="flex" style={{ justifyContent: 'space-between' }}>
+            <h2 style={{ margin: 0 }}>{label} 총점</h2>
+            {!isInvalid && (
+              <div className="kpi">
+                <div className="num">{fmt(totalScore)}</div>
+                <div className="sub">/ {fmt(totalMax)}</div>
               </div>
-            ) : (
-              <>
-                <div className="progress" style={{ margin: '8px 0 2px 0' }}>
-                  <div className="bar" style={{ width: `${overallRate}%` }} />
-                  <div className="cutline" />
-                </div>
-                <div className="small" style={{ marginTop: 10 }}>
-                  정답률 {overallRate}% (컷 60%: 204/340){' '}
-                  {overallPass
-                    ? <span dangerouslySetInnerHTML={{ __html: pill('통과', 'ok') }} />
-                    : <span dangerouslySetInnerHTML={{ __html: pill('불합격', 'red') }} />
-                  }
-                  <div className="small" style={{ marginTop: 6, opacity: 0.9 }}>
-                    {getReasonText()}
-                  </div>
-                </div>
-              </>
             )}
           </div>
+
+          {isInvalid ? (
+            <div className="small" style={{ marginTop: 12 }}>
+              본 회차 {status === 'absent' ? '미응시' : '중도포기'}
+            </div>
+          ) : (
+            <>
+              <div className="progress" style={{ margin: '8px 0 2px 0' }}>
+                <div className="bar" style={{ width: `${overallRate}%` }} />
+                <div className="cutline" />
+              </div>
+              <div className="small" style={{ marginTop: 10 }}>
+                정답률 {overallRate}% (컷 60%: 204/340){' '}
+                {overallPass
+                  ? <span dangerouslySetInnerHTML={{ __html: pill('통과', 'ok') }} />
+                  : <span dangerouslySetInnerHTML={{ __html: pill('불합격', 'red') }} />
+                }
+                <div className="small" style={{ marginTop: 6, opacity: 0.9 }}>
+                  {getReasonText()}
+                </div>
+              </div>
+            </>
+          )}
 
           {!isInvalid && (
             <div className="group-grid" style={{ marginTop: 12 }}>
