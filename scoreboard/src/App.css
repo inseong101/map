@@ -119,7 +119,10 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 .round.fail .progress > .bar{
   background:linear-gradient(90deg, var(--bad), #ff6b6b);
 }
-
+.round.absent {
+  background: #6b21a8; /* 보라색 계열 */
+  color: white;
+}
 /* Group boxes */
 .group-grid{display:grid; grid-template-columns:repeat(12,1fr); gap:12px}
 .group-box{border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--surface-2)}
