@@ -183,8 +183,8 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
 
     // 타이틀/평균
     const title = schoolMode
-      ? `학교 분포 (총 ${cur.totalSchool}명)`
-      : `전국 분포 (총 ${cur.totalNational}명)`;
+      ? `학교 분포 (무효응시자 제외 총 ${cur.totalSchool}명)`
+      : `전국 분포 (무효응시자 제외 총 ${cur.totalNational}명)`;
     const avg = schoolMode ? cur.schoolAvg : cur.nationalAvg;
 
     ctx.fillStyle = '#e8eeff';
