@@ -1,14 +1,25 @@
 // src/components/AdminSystem.jsx - 백엔드 변경사항 반영된 관리자 시스템
+import React, { useState, useEffect } from 'react';
 import { 
   ALL_SUBJECTS, 
   SUBJECT_MAX, 
   GROUPS, 
   ROUND_LABELS,
-  SESSION_SUBJECT_RANGES,
-  getSubjectByQuestion,  // 이 함수 추가
-  findSubjectByQuestionNum,  // 이 함수도 추가 (필요한 경우)
-  findSessionByQuestionNum   // 이 함수도 추가 (필요한 경우)
+  SESSION_SUBJECT_RANGES
 } from '../services/dataService';
+
+// getSubjectByQuestion 함수 정의 (dataService.js에 없는 경우)
+const getSubjectByQuestion = (questionNum, session) => {
+  const ranges = SESSION_SUBJECT_RANGES[session] || [];
+  
+  for (const range of ranges) {
+    if (questionNum >= range.from && questionNum <= range.to) {
+      return range.s;
+    }
+  }
+  
+  return null;
+};
 
 const AdminSystem = () => {
   const [currentView, setCurrentView] = useState('rounds'); // 'rounds' | 'sessions' | 'answers'
