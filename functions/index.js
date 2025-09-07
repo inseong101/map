@@ -543,7 +543,7 @@ async function updateSessionAnalytics(roundLabel, session) {
         }
       });
     });
-    
+
     // 오답률 계산
 // --- helper: 1~5번 선택 비율을 정수 퍼센트(합=100)로 정규화 ---
 function normalizeTo100(choiceCounts) {
@@ -594,6 +594,19 @@ Object.keys(analytics.questionStats).forEach(qStr => {
   analytics.choicePercents = analytics.choicePercents || {};
   analytics.choicePercents[q] = normalizeTo100(analytics.choiceStats[q]);
 });
+
+    
+    // 결과 저장
+    const analyticsRef = db.collection('analytics').doc(`${roundLabel}_${session}`);
+    await analyticsRef.set(analytics);
+    
+    console.log(`${roundLabel} ${session} 통계 업데이트 완료: 총 ${analytics.totalStudents}명 (응시: ${analytics.attendedStudents}명, 미응시: ${analytics.absentStudents}명)`);
+    
+  } catch (error) {
+    console.error('교시별 통계 업데이트 실패:', error);
+    throw error;
+  }
+} 여기를 대치하는거야?
 
     
     // 결과 저장
