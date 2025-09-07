@@ -1,0 +1,34 @@
+.session-block { margin-bottom: 24px; }
+.session-block h3 { margin-bottom: 8px; color: var(--muted); }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+  gap: 6px;
+}
+
+.btn-q {
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px;
+  cursor: default;
+  background: var(--surface-2); /* 무채색 기본 */
+  color: var(--ink);
+}
+
+.btn-q.wrong {
+  background: #ef4444;
+  color: #fff;
+}
+
+.btn-q.top {
+  background: #f472b6; /* 핑크 */
+  color: #fff;
+}
+
+.btn-q.half {
+  background: linear-gradient(90deg, #ef4444 50%, #f472b6 50%);
+  color: #fff;
+}
