@@ -115,9 +115,8 @@ function RoundCard({ label, data, sid }) {
   };
 
   // ✅ invalid 판정(보라색 처리 대상)
-  const isAbsent = status === 'absent';
-  const isDropout = status === 'dropout' || status === 'dropped';
-  const isInvalid = isAbsent || isDropout;
+ const isInvalid = ['absent', 'dropout', 'dropped', 'invalid'].includes(status);
+ const isAbsent  = status === 'absent';
 
   return (
     <div ref={flipCardRef} className="flip-card" onClick={handleCardClick}>
