@@ -7,27 +7,67 @@ function WrongAnswerPanel({ roundLabel, data }) {
   const [highErrorQuestions, setHighErrorQuestions] = useState({});
   const [loading, setLoading] = useState(true);
 
+  // Firebase Functions URL - 프로젝트 ID를 실제 ID로 변경하세요
+  const FUNCTIONS_BASE_URL = 'https://us-central1-jeonjolhyup.cloudfunctions.net';
+
   // 고오답률 문항 데이터 가져오기
   useEffect(() => {
     const loadHighErrorQuestions = async () => {
       try {
         setLoading(true);
-        // API 또는 서비스에서 고오답률 문항 가져오기
-        const response = await fetch(`${process.env.REACT_APP_API_URL}/getHighErrorRateQuestions?roundLabel=${roundLabel}`);
+        
+        // 올바른 Firebase Functions URL 사용
+        const apiUrl = `${FUNCTIONS_BASE_URL}/getHighErrorRateQuestions?roundLabel=${roundLabel}`;
+        console.log('API 요청 URL:', apiUrl); // 디버깅용
+        
+        const response = await fetch(apiUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const result = await response.json();
         
         if (result.success) {
           setHighErrorQuestions(result.data || {});
+        } else {
+          console.warn('API 응답 오류:', result.message);
+          setHighErrorQuestions({});
         }
       } catch (error) {
         console.error('고오답률 문항 로딩 실패:', error);
-        // 네트워크 오류 시 임시 테스트 데이터
+        
+        // 네트워크 오류 시 임시 테스트 데이터 (개발용)
+        console.log('임시 테스트 데이터 사용');
         setHighErrorQuestions({
-          "간": [12, 5, 8],
-          "심": [23, 17],
-          "침구": [45, 52, 61],
-          "보건": [85, 92],
-          "외과": [3, 11, 15]
+          "간": [
+            { questionNum: 12, errorRate: 75 },
+            { questionNum: 5, errorRate: 68 },
+            { questionNum: 8, errorRate: 62 }
+          ],
+          "심": [
+            { questionNum: 23, errorRate: 71 },
+            { questionNum: 17, errorRate: 58 }
+          ],
+          "침구": [
+            { questionNum: 45, errorRate: 82 },
+            { questionNum: 52, errorRate: 77 },
+            { questionNum: 61, errorRate: 65 }
+          ],
+          "보건": [
+            { questionNum: 85, errorRate: 69 },
+            { questionNum: 92, errorRate: 54 }
+          ],
+          "외과": [
+            { questionNum: 3, errorRate: 73 },
+            { questionNum: 11, errorRate: 67 },
+            { questionNum: 15, errorRate: 55 }
+          ]
         });
       } finally {
         setLoading(false);
