@@ -7,7 +7,6 @@ import './App.css';
 import { discoverRoundsFor, getSchoolFromSid } from './services/dataService';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 
-
 // === 모든 회차 라벨(프로젝트 규칙에 맞게 수정 가능) ===
 const ALL_ROUND_LABELS = ['1차', '2차'];
 
@@ -171,9 +170,9 @@ function App() {
 
   if (currentView === 'result') {
     const school = getSchoolFromSid(studentId);
-    // ✅ 한 번만 정규화해서 StudentCard와 RoundCard 모두 사용
+    // ✅ StudentCard와 RoundCard 모두 normalize된 라운드 사용
     const base = hydratedRounds.length ? hydratedRounds : rounds;
-    const normalized = normalizeRounds(base);
+    const effectiveRounds = normalizeRounds(base);
 
     return (
       <div className="container">
@@ -183,11 +182,11 @@ function App() {
           <StudentCard
             sid={studentId}
             school={school}
-            rounds={normalized}
+            rounds={effectiveRounds}
             loading={hydrating}
           />
 
-          {normalized.map(({ label, data }) => (
+          {effectiveRounds.map(({ label, data }) => (
             <RoundCard
               key={label}
               label={label}
