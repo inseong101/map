@@ -606,7 +606,7 @@ Object.keys(analytics.questionStats).forEach(qStr => {
     console.error('교시별 통계 업데이트 실패:', error);
     throw error;
   }
-} 여기를 대치하는거야?
+}
 
     
     // 결과 저장
