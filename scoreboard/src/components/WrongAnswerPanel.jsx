@@ -1,9 +1,13 @@
 // src/components/WrongAnswerPanel.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { ALL_SUBJECTS, SESSION_SUBJECT_RANGES } from '../services/dataService';
 
 function WrongAnswerPanel({ roundLabel, data }) {
   const [openSections, setOpenSections] = useState({});
+  const [errorRateMap, setErrorRateMap] = useState({});   // { [qNum]: number }
+  const [choicePercMap, setChoicePercMap] = useState({}); // { [qNum]: {1..5} }
+  const [showChoices, setShowChoices] = useState(true);
 
   const toggleSection = (subject) => {
     setOpenSections(prev => ({
@@ -20,7 +24,6 @@ function WrongAnswerPanel({ roundLabel, data }) {
     if (data.wrongBySession) {
       Object.entries(data.wrongBySession).forEach(([session, wrongList]) => {
         const ranges = SESSION_SUBJECT_RANGES[session] || [];
-        
         wrongList.forEach(questionNum => {
           const range = ranges.find(r => questionNum >= r.from && questionNum <= r.to);
           if (range && result[range.s]) {
@@ -38,21 +41,52 @@ function WrongAnswerPanel({ roundLabel, data }) {
     return result;
   };
 
-  // 간단한 오답률 계산 (임시 데이터 - 실제로는 통계 서비스에서 가져와야 함)
+  // Firestore에서 analytics 로드 (4개 교시를 한 번씩만)
+  useEffect(() => {
+    let cancelled = false;
+    async function loadAnalytics() {
+      try {
+        const db = getFirestore();
+        const sessions = ["1교시", "2교시", "3교시", "4교시"];
+
+        const parts = await Promise.all(
+          sessions.map(async (sess) => {
+            const ref = doc(db, 'analytics', `${roundLabel}_${sess}`);
+            const snap = await getDoc(ref);
+            if (!snap.exists()) return { err: {}, cho: {} };
+            const a = snap.data() || {};
+            const qs = a.questionStats || {};
+            const cp = a.choicePercents || {};
+            const err = {};
+            Object.entries(qs).forEach(([k, st]) => {
+              const q = parseInt(k, 10);
+              if (Number.isFinite(q) && typeof st?.errorRate === 'number') {
+                err[q] = st.errorRate;
+              }
+            });
+            return { err, cho: cp };
+          })
+        );
+
+        const mergedErr = Object.assign({}, ...parts.map(p => p.err));
+        const mergedCho = Object.assign({}, ...parts.map(p => p.cho));
+
+        if (!cancelled) {
+          setErrorRateMap(mergedErr);
+          setChoicePercMap(mergedCho);
+        }
+      } catch (e) {
+        console.error('오답률/선지 분포 로드 실패:', e);
+      }
+    }
+    loadAnalytics();
+    return () => { cancelled = true; };
+  }, [roundLabel]);
+
+  // Firestore에서 가져온 오답률 반환 (없으면 null)
   const getErrorRateForQuestion = (questionNum) => {
-    // 임시로 랜덤한 오답률 반환 (실제로는 통계 데이터에서 계산)
-    const mockErrorRates = {
-      1: 15, 2: 23, 3: 67, 4: 34, 5: 78, 6: 12, 7: 45, 8: 89,
-      9: 23, 10: 56, 11: 34, 12: 71, 13: 28, 14: 82, 15: 19,
-      17: 73, 18: 29, 19: 64, 20: 41, 21: 85, 22: 17, 23: 58,
-      33: 76, 34: 42, 35: 69, 36: 33, 37: 81, 38: 25, 39: 57,
-      45: 83, 46: 37, 47: 72, 48: 26, 49: 68, 50: 44, 51: 79,
-      52: 91, 53: 35, 54: 62, 55: 18, 56: 74, 57: 48, 58: 86,
-      61: 77, 62: 31, 63: 65, 64: 39, 65: 84, 66: 22, 67: 59,
-      85: 69, 86: 43, 87: 76, 88: 27, 89: 82, 90: 38, 91: 75, 92: 54
-    };
-    
-    return mockErrorRates[questionNum] || Math.floor(Math.random() * 40) + 30; // 30-70% 범위
+    const v = errorRateMap[questionNum];
+    return typeof v === 'number' ? Math.round(v) : null;
   };
 
   const wrongBySubject = getWrongQuestionsBySubject();
@@ -65,13 +99,21 @@ function WrongAnswerPanel({ roundLabel, data }) {
     "4교시": ["소아", "예방", "생리", "본초"]
   };
 
-  // 오답 문항 셀 렌더링 (오답률 포함)
+  // 오답 문항 셀 렌더링 (오답률 + 선택 분포)
   const renderWrongQuestionCell = (questionNum) => {
     const errorRate = getErrorRateForQuestion(questionNum);
+    const choices = choicePercMap?.[questionNum]; // {1..5}
+    const choiceText = choices
+      ? `①${choices[1] ?? 0}% ②${choices[2] ?? 0}% ③${choices[3] ?? 0}% ④${choices[4] ?? 0}% ⑤${choices[5] ?? 0}%`
+      : null;
+
     return (
-      <div key={`wrong-${questionNum}`} className="qcell bad">
+      <div key={`wrong-${questionNum}`} className="qcell bad" title={`문항 ${questionNum}`}>
         <div className="question-num">{questionNum}</div>
-        <div className="error-rate">{errorRate}%</div>
+        <div className="error-rate">{errorRate == null ? '—' : `${errorRate}%`}</div>
+        {showChoices && (
+          <div className="choice-row">{choiceText || '—'}</div>
+        )}
       </div>
     );
   };
@@ -138,6 +180,19 @@ function WrongAnswerPanel({ roundLabel, data }) {
       <div className="small" style={{ opacity: 0.8, marginBottom: '6px' }}>
         과목명을 클릭하면 오답노트가 펼쳐집니다. 각 문항 아래 숫자는 전체 오답률입니다.
       </div>
+
+      {/* 선지 분포 토글 */}
+      <div style={{ margin: '6px 0 10px' }}>
+        <label className="small" style={{ cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={showChoices}
+            onChange={(e) => setShowChoices(e.target.checked)}
+            style={{ marginRight: 6 }}
+          />
+          선지 분포 표시
+        </label>
+      </div>
       
       <div className="accordion">
         {Object.entries(sessionGroups).map(([sessionName, subjects]) => 
@@ -170,12 +225,13 @@ function WrongAnswerPanel({ roundLabel, data }) {
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          width: 45px;
-          height: 40px;
+          min-width: 56px; /* 선지 줄 표시 위해 약간 넓힘 */
+          height: auto;    /* 내용 높이에 맞춤 */
           border-radius: 4px;
           font-weight: 600;
           color: white;
-          padding: 2px;
+          padding: 4px 3px;
+          text-align: center;
         }
 
         .qcell.bad {
@@ -186,13 +242,21 @@ function WrongAnswerPanel({ roundLabel, data }) {
           font-size: 0.8rem;
           font-weight: 600;
           line-height: 1;
+          margin-bottom: 1px;
         }
 
         .error-rate {
           font-size: 0.7rem;
-          opacity: 0.9;
+          opacity: 0.95;
           line-height: 1;
-          margin-top: 1px;
+        }
+
+        .choice-row {
+          margin-top: 2px;
+          font-size: 0.65rem;
+          line-height: 1.1;
+          opacity: 0.95;
+          word-spacing: 2px;
         }
 
         .panel {
