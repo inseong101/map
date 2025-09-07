@@ -332,14 +332,13 @@ function getSchoolCodeFromName(name) {
   return map[name] || '01';
 }
 
-
-// ✅ 4교시 모두 completed 학생만 유효로 집계
+// ✅ 4교시 모두 completed 학생만 집계한 참여/분포/백분위용 통계
 export async function getParticipationStats(roundLabel, schoolCodeOrNull = null) {
   const { db } = await import('../services/firebase');
   const { collection, getDocs } = await import('firebase/firestore');
 
   const sessions = ['1교시', '2교시', '3교시', '4교시'];
-  const perSid = {}; // sid -> {completed:0..4, hasAny:true/false}
+  const perSid = {}; // sid -> {completed:0..4, any:boolean, sum: number}
 
   for (const session of sessions) {
     const ref = collection(db, 'scores_raw', roundLabel, session);
@@ -347,21 +346,59 @@ export async function getParticipationStats(roundLabel, schoolCodeOrNull = null)
 
     snap.forEach(doc => {
       const sid = doc.id;
-      // 학교 필터
-      if (schoolCodeOrNull) {
-        if (String(sid).slice(0,2) !== schoolCodeOrNull) return;
-      }
+      const code = String(sid).slice(0, 2);
 
-      // 유효 학번만 (01~12)
-      const code = String(sid).slice(0,2);
+      // 유효 학번 + (학교 필터가 있으면 해당 학교만)
       if (!['01','02','03','04','05','06','07','08','09','10','11','12'].includes(code)) return;
+      if (schoolCodeOrNull && code !== schoolCodeOrNull) return;
 
       const data = doc.data() || {};
       const st = data.status; // 'completed' | 'absent'
+      const sc = Number.isFinite(data.totalScore) ? Number(data.totalScore) : 0;
 
-      if (!perSid[sid]) perSid[sid] = { completed: 0, any: false, scoreSum: 0 };
-      perSid[sid].any = perSid[sid].any || (st === 'completed');
+      if (!perSid[sid]) perSid[sid] = { completed: 0, any: false, sum: 0 };
       if (st === 'completed') {
-        perSid[sid].completed++;
-        // score_raw 저장 시 totalScore가 있으므로 이용 (없을 경우 0)
-        const sc = Number.isFinite(data.totalScore)
+        perSid[sid].any = true;
+        perSid[sid].completed += 1;
+        perSid[sid].sum += sc; // 교시별 totalScore 합산(총점)
+      }
+    });
+  }
+
+  let total = 0, completed = 0, absent = 0, dropout = 0;
+  const completedScores = [];
+
+  Object.values(perSid).forEach(v => {
+    total += 1;
+    if (v.completed === 4) {
+      completed += 1;
+      completedScores.push(v.sum);
+    } else if (v.completed === 0) {
+      absent += 1;
+    } else {
+      dropout += 1;
+    }
+  });
+
+  return { total, completed, absent, dropout, completedScores };
+}
+
+// ✅ 백분위(1등=0.0%, 꼴등=100.0%) — 유효 응시자 점수 배열 기준
+export function calculatePercentileStrict(scores, myScore) {
+  if (!Array.isArray(scores) || scores.length === 0 || !Number.isFinite(myScore)) return null;
+
+  // 내림차순 정렬 (높은 점수가 1등)
+  const sorted = [...scores].sort((a, b) => b - a);
+
+  // 내 점수 이하가 처음으로 나오는 인덱스(0-based)
+  let idx = sorted.findIndex(s => s <= myScore);
+  if (idx === -1) idx = sorted.length - 1; // 모두 내 점수보다 큼 → 최하위 취급
+
+  if (sorted.length === 1) return 0.0;
+
+  // 0.0 ~ 100.0로 선형 맵핑 (1등=0.0, 꼴등=100.0)
+  const pct = (idx / (sorted.length - 1)) * 100;
+  const clamped = Math.min(100, Math.max(0, pct));
+
+  return +clamped.toFixed(1);
+}
