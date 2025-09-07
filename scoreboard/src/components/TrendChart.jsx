@@ -1,5 +1,6 @@
-// src/components/TrendChart.jsx - 모든 기능 복원
+// src/components/TrendChart.jsx - 모든 기능 반영(상위 %, 전체/유효/미응시/중도포기 표시)
 import React, { useState, useEffect, useRef } from 'react';
+import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { getAverages, getRealScoreDistribution } from '../utils/helpers';
 
 // 학교명 → 코드 변환 (helpers의 bySchool 키와 일치시켜야 함)
@@ -17,6 +18,17 @@ const CUTOFF_SCORE = 204;
 
 // 0~340까지 5점 간격 + 마지막 340 단일 bin 개수
 const BIN_COUNT = Math.floor((X_MAX - X_MIN) / BIN_SIZE) + 1; // (0~335 5점간격=68개) + 마지막 340 = 69
+
+// 상위 % 계산 (1등=0.0%, 꼴등=100.0%, 동점은 최고순위로 처리)
+function calculatePercentile(scores, myScore) {
+  if (!Array.isArray(scores) || scores.length === 0 || myScore == null) return null;
+  const sorted = [...scores].sort((a, b) => b - a); // 내림차순
+  const rank = sorted.findIndex((s) => s <= myScore); // 나보다 "엄격히 큰" 개수만큼 뒤에서 시작
+  if (rank <= 0) return 0.0; // 1등 또는 이상치 보호
+  if (rank >= sorted.length - 1) return 100.0; // 꼴등
+  const pct = (rank / (sorted.length - 1)) * 100;
+  return +pct.toFixed(1); // 소수1자리
+}
 
 function TrendChart({ rounds = [], school = '', sid = '' }) {
   const canvasRef = useRef(null);
@@ -39,9 +51,11 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
 
       const schCode = nameToCode(school);
       const out = [];
+      const db = getFirestore();
 
       for (const round of rounds) {
         const { label, data: roundData } = round;
+
         // 본인 점수: roundData.totalScore가 숫자면 표시
         const studentScore = Number.isFinite(roundData?.totalScore)
           ? Number(roundData.totalScore)
@@ -50,15 +64,30 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
         // 평균
         const averages = await getAverages(school, label);
 
-        // 실제 분포
+        // 실제 분포(전국/학교) - 유효 응시자 점수 배열만 반환된다고 가정
         const dist = await getRealScoreDistribution(label);
         const natScores = Array.isArray(dist?.national) ? dist.national : [];
         const schScores = dist?.bySchool && Array.isArray(dist.bySchool[schCode])
           ? dist.bySchool[schCode]
           : [];
 
+        // 전국/학교 분포 bins
         const nat = buildDistribution(natScores, studentScore);
         const sch = buildDistribution(schScores, studentScore);
+
+        // 상위 % (전국 기준)
+        const topPct = calculatePercentile(natScores, studentScore);
+
+        // 회차 전체 응시 상태(총원/유효/미응시/중도포기)
+        const statusRef = doc(db, 'analytics', `${label}_overall_status`);
+        const statusSnap = await getDoc(statusRef);
+        const overall = statusSnap.exists() ? statusSnap.data() : null;
+
+        const totalStudents = overall?.totalStudents ?? 0;
+        const completed = overall?.byStatus?.completed ?? 0;
+        const dropout = overall?.byStatus?.dropout ?? 0;
+        const absent = overall?.byStatus?.absent ?? 0;
+        const validCount = completed + dropout;
 
         out.push({
           label,
@@ -68,7 +97,14 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
           nationalBins: nat,
           schoolBins: sch,
           totalNational: natScores.length,
-          totalSchool: schScores.length
+          totalSchool: schScores.length,
+          percentile: topPct, // 전국 상위 %
+          stats: {
+            totalStudents,
+            validCount,
+            absent,
+            dropout
+          }
         });
       }
 
@@ -88,7 +124,7 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
 
     // 0~335 (5점 간격)
     for (let x = X_MIN; x < X_MAX; x += BIN_SIZE) {
-      const count = scores.filter(s => s >= x && s < x + BIN_SIZE).length;
+      const count = scores.filter((s) => s >= x && s < x + BIN_SIZE).length;
       bins.push({
         min: x,
         max: x + BIN_SIZE,
@@ -99,7 +135,7 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
     }
 
     // 마지막 340점
-    const lastCount = scores.filter(s => s === X_MAX).length;
+    const lastCount = scores.filter((s) => s === X_MAX).length;
     bins.push({
       min: X_MAX,
       max: X_MAX,
@@ -199,7 +235,7 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
     }
 
     // Y축 눈금: bins 최대 count 기준으로 "보기 좋은" yMax 산출
-    const maxCount = Math.max(1, ...bins.map(b => b.count));
+    const maxCount = Math.max(1, ...bins.map((b) => b.count));
     const steps = 4;
 
     // 예쁜 눈금 올림 (1,2,5 스텝)
@@ -287,36 +323,37 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
       canvas.onmousemove = (e) => {
         const rect = canvas.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
-        
+
         // 어떤 bin 위에 있는지 계산
         const binIndex = Math.floor((mouseX - padding.left) / binWidth);
-        
+
         if (binIndex >= 0 && binIndex < bins.length) {
           const b = bins[binIndex];
-          
+
           // 기존 캔버스 다시 그리기
           drawCurrent(bundle);
-          
+
           // 호버된 bin의 레이블만 표시
           if (b.count > 0) {
             const x = padding.left + binIndex * binWidth;
             const h = yMax > 0 ? (b.count / yMax) * chartH : 0;
             const y = padding.top + chartH - h;
-            
+
             const pctText = `${b.percentage.toFixed(1)}%`;
             const cx = x + binWidth / 2;
             const ty = y - 6;
 
-            ctx.fillStyle = '#d6def7';
-            ctx.font = '10px system-ui';
-            ctx.textAlign = 'center';
+            const ctx2 = canvas.getContext('2d');
+            ctx2.fillStyle = '#d6def7';
+            ctx2.font = '10px system-ui';
+            ctx2.textAlign = 'center';
 
-            ctx.fillText(`${b.count}명`, cx, ty);
-            ctx.fillText(`(${pctText})`, cx, ty + 12);
+            ctx2.fillText(`${b.count}명`, cx, ty);
+            ctx2.fillText(`(${pctText})`, cx, ty + 12);
           }
         }
       };
-      
+
       canvas.onmouseleave = () => {
         // 마우스가 벗어나면 레이블 제거
         drawCurrent(bundle);
@@ -457,28 +494,46 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
 
   const current = bundle[selectedRoundIdx];
 
+  // 상단 카드 텍스트 (요청 형식: 1차 — 본인 점수: 163점 (전국 상위 88.8%) / 전체응시자: 116 유효응시자: 116 미응시자: 0 중도포기자: 0)
+  const HeaderInfo = () => {
+    if (!current) return null;
+    const { label, studentScore, percentile, stats } = current;
+    const percentileText = Number.isFinite(percentile) ? ` (전국 상위 ${percentile}%)` : '';
+    return (
+      <div style={{
+        marginBottom: 8,
+        padding: 10,
+        background: 'rgba(21,29,54,0.5)',
+        borderRadius: 8,
+        fontSize: 14,
+        color: 'var(--muted)'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <strong style={{ color: 'var(--ink)' }}>{label}</strong>
+          {' '}— 본인 점수:{' '}
+          <span style={{ color: '#ef4444', fontWeight: 'bold' }}>
+            {Number.isFinite(studentScore) ? `${studentScore}점` : '표시 안함'}
+          </span>
+          {percentileText}
+        </div>
+
+        {stats && (
+          <div style={{ marginTop: 6, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+            전체응시자: <b style={{ color: 'var(--ink)' }}>{stats.totalStudents}</b>
+            {'  '}유효응시자: <b style={{ color: 'var(--ink)' }}>{stats.validCount}</b>
+            {'  '}미응시자: <b style={{ color: 'var(--ink)' }}>{stats.absent}</b>
+            {'  '}중도포기자: <b style={{ color: 'var(--ink)' }}>{stats.dropout}</b>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div>
       <TopControls />
 
-      {/* 현재 선택된 회차 + 본인 점수 */}
-      {current && (
-        <div style={{
-          marginBottom: 8,
-          padding: 10,
-          background: 'rgba(21,29,54,0.5)',
-          borderRadius: 8,
-          textAlign: 'center',
-          fontSize: 14,
-          color: 'var(--muted)'
-        }}>
-          <strong style={{ color: 'var(--ink)' }}>{rounds[selectedRoundIdx]?.label}</strong>
-          {' '}— 본인 점수:{' '}
-          <span style={{ color: '#ef4444', fontWeight: 'bold' }}>
-            {Number.isFinite(current.studentScore) ? `${current.studentScore}점` : '표시 안함'}
-          </span>
-        </div>
-      )}
+      <HeaderInfo />
 
       {/* 범례: 카드 안(캔버스 바깥) */}
       <LegendRow />
