@@ -1,4 +1,4 @@
-/* ==== WrongAnswerPanel (always-open buttons, collapsible by session) ==== */
+/* ==== WrongAnswerPanel (collapsible by session) ==== */
 .accordion { 
   display: flex; 
   flex-direction: column; 
@@ -30,11 +30,9 @@
 .session-head .arrow { transition: transform .25s ease; }
 .session-head.open .arrow { transform: rotate(90deg); }
 
-/* 접힘 영역 */
+/* 패널: 닫힘 시 렌더 제거로 접힘 처리 → 높이/오버플로 고민 X */
 .panel { 
-  transition: all .25s ease; 
-  border-top: 1px solid var(--line); 
-  overflow: hidden; 
+  border-top: 1px solid var(--line);
 }
 
 /* 번호 버튼 그리드 */
@@ -63,11 +61,4 @@
   background: rgba(239,68,68,.16);
   border-color: rgba(239,68,68,.45);
   color: #ffd8d8;
-}
-
-/* 정답률 로딩 문구 */
-.panel .loading {
-  padding: 8px 12px;
-  color: var(--muted);
-  font-size: 12px;
 }
