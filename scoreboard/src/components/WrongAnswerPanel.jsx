@@ -4,15 +4,15 @@ import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { ALL_SUBJECTS, SESSION_SUBJECT_RANGES } from '../services/dataService';
 
 /**
- * 과목별 오답을 항상 펼쳐서 보여주는 패널
- * - 토글/아코디언 제거
- * - "내 오답(…문항)" 제거
- * - per-subject 스크롤 제거
- * - 각 문항 옆에 전체 정답률(%) 표시
+ * 항상 펼쳐진 오답 패널 (초록색 버튼형 칩)
+ * - 토글/아코디언 제거 (항상 open)
+ * - "내 오답(…문항)" 문구 제거, 과목명 섹션만 남김
+ * - per-subject 스크롤 제거 (내용 많으면 자연스럽게 늘어남)
+ * - 각 오답 칩: 초록 버튼형(번호 + 정답률%)
  */
 function WrongAnswerPanel({ roundLabel, data }) {
   const [correctRateMap, setCorrectRateMap] = useState({}); // { [qNum]: number }
-  const [loadingRates, setLoadingRates] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   // 교시별 오답을 과목별 배열로 변환
   const wrongBySubject = useMemo(() => {
@@ -24,9 +24,7 @@ function WrongAnswerPanel({ roundLabel, data }) {
         const ranges = SESSION_SUBJECT_RANGES[session] || [];
         wrongList.forEach((qNum) => {
           const range = ranges.find((r) => qNum >= r.from && qNum <= r.to);
-          if (range && result[range.s]) {
-            result[range.s].push(qNum);
-          }
+          if (range && result[range.s]) result[range.s].push(qNum);
         });
       });
     }
@@ -39,25 +37,17 @@ function WrongAnswerPanel({ roundLabel, data }) {
     return result;
   }, [data]);
 
-  // 화면에 묶어 보여줄 교시별 과목 그룹
-  const sessionGroups = {
-    '1교시': ['간', '심', '비', '폐', '신'],
-    '2교시': ['상한', '사상', '침구', '보건'],
-    '3교시': ['외과', '신경', '안이비', '부인과'],
-    '4교시': ['소아', '예방', '생리', '본초'],
-  };
-
-  // Firestore analytics에서 문항별 정답률(%) 로드
+  // Firestore에서 각 문항 정답률 로드 (4개 교시를 한 번씩만)
   useEffect(() => {
     let cancelled = false;
 
-    (async () => {
+    async function loadAnalytics() {
       try {
-        setLoadingRates(true);
+        setLoading(true);
         const db = getFirestore();
         const sessions = ['1교시', '2교시', '3교시', '4교시'];
 
-        const partials = await Promise.all(
+        const parts = await Promise.all(
           sessions.map(async (sess) => {
             const ref = doc(db, 'analytics', `${roundLabel}_${sess}`);
             const snap = await getDoc(ref);
@@ -68,32 +58,41 @@ function WrongAnswerPanel({ roundLabel, data }) {
             Object.entries(qs).forEach(([k, st]) => {
               const q = parseInt(k, 10);
               if (Number.isFinite(q) && typeof st?.correctRate === 'number') {
-                map[q] = st.correctRate; // 소수점(%) 형태
+                map[q] = st.correctRate; // 정답률(%) 저장됨
               }
             });
             return map;
           })
         );
 
-        const merged = Object.assign({}, ...partials);
+        const merged = Object.assign({}, ...parts);
         if (!cancelled) setCorrectRateMap(merged);
       } catch (e) {
         console.error('정답률 로드 실패:', e);
       } finally {
-        if (!cancelled) setLoadingRates(false);
+        if (!cancelled) setLoading(false);
       }
-    })();
+    }
 
+    loadAnalytics();
     return () => { cancelled = true; };
   }, [roundLabel]);
 
+  // 정답률 가져오기(정수%)
   const getCorrectRate = (qNum) => {
     const v = correctRateMap[qNum];
-    if (typeof v !== 'number') return null;
-    return Math.round(v); // 정수%로
+    return typeof v === 'number' ? Math.round(v) : null;
   };
 
-  const renderSubjectAlwaysOpen = (subject) => {
+  // 화면에 묶어 보여줄 교시별 과목 그룹
+  const sessionGroups = {
+    '1교시': ['간', '심', '비', '폐', '신'],
+    '2교시': ['상한', '사상', '침구', '보건'],
+    '3교시': ['외과', '신경', '안이비', '부인과'],
+    '4교시': ['소아', '예방', '생리', '본초'],
+  };
+
+  const renderSubjectBlock = (subject) => {
     const wrongNumbers = wrongBySubject[subject] || [];
     const count = wrongNumbers.length;
 
@@ -110,12 +109,10 @@ function WrongAnswerPanel({ roundLabel, data }) {
             {wrongNumbers.map((n) => {
               const rate = getCorrectRate(n);
               return (
-                <span key={n} className="qnum">
-                  {n}
-                  <span className="qrate">
-                    {loadingRates ? '…' : (rate == null ? ' —' : ` ${rate}%`)}
-                  </span>
-                </span>
+                <div key={n} className="qcell good" title={`문항 ${n}`}>
+                  <div className="question-num">{n}</div>
+                  <div className="rate">{loading ? '…' : rate == null ? '—' : `${rate}%`}</div>
+                </div>
               );
             })}
           </div>
@@ -124,22 +121,20 @@ function WrongAnswerPanel({ roundLabel, data }) {
     );
   };
 
-  const renderSessionGroup = (sessionName, subjects) => {
-    return (
-      <div key={sessionName} className="session-group plain">
-        <div className="session-header">{sessionName}</div>
-        <div className="session-content no-scroll">
-          {subjects.map(renderSubjectAlwaysOpen)}
-        </div>
+  const renderSessionGroup = (sessionName, subjects) => (
+    <div key={sessionName} className="session-group plain">
+      <div className="session-header">{sessionName}</div>
+      <div className="session-content no-scroll">
+        {subjects.map(renderSubjectBlock)}
       </div>
-    );
-  };
+    </div>
+  );
 
   return (
     <div>
       <h2 style={{ marginTop: 0 }}>{roundLabel} 오답노트</h2>
       <div className="small" style={{ opacity: 0.8, marginBottom: '6px' }}>
-        과목별로 오답 번호와 전체 정답률(%)만 표시합니다.
+        과목별 오답을 초록 버튼으로 표시합니다. 숫자는 문항 번호, 아래는 전체 <b>정답률</b>%입니다.
       </div>
 
       <div className="accordion always-open">
@@ -148,7 +143,7 @@ function WrongAnswerPanel({ roundLabel, data }) {
         )}
       </div>
 
-      {/* 컴포넌트 전용 최소 스타일 */}
+      {/* 전용 스타일 (전역과 충돌 최소화) */}
       <style jsx>{`
         .accordion.always-open {
           border-top: 1px solid var(--line);
@@ -160,9 +155,10 @@ function WrongAnswerPanel({ roundLabel, data }) {
           border: 1px solid var(--line);
           border-radius: 12px;
           background: var(--surface-2);
-          overflow: visible;
+          overflow: visible; /* 내부 스크롤 제거 */
         }
 
+        /* 교시 헤더: 고정 파란 그라데이션 */
         .session-header {
           background: linear-gradient(90deg, var(--primary), #4cc9ff);
           color: #fff;
@@ -174,37 +170,58 @@ function WrongAnswerPanel({ roundLabel, data }) {
         }
 
         .session-content.no-scroll {
-          padding: 8px 10px 10px;
-          overflow: visible;      /* ✅ per-subject 스크롤 제거 */
+          padding: 10px 12px 12px;
+          overflow: visible;  /* per-subject 스크롤 제거 */
         }
 
-        .sub-block { margin-bottom: 8px; }
+        .sub-block { margin-bottom: 10px; }
 
         .sub-title {
-          font-weight: 700;
+          font-weight: 800;
           color: var(--ink);
-          margin: 6px 2px;
+          margin: 4px 2px 8px;
           font-size: 0.95rem;
         }
 
-        /* 번호만 보이는 칩 + 정답률 (배경/테두리 없음) */
+        /* 번호 칩: 초록 버튼형 (번호 + 정답률) */
         .qgrid.no-scroll {
           display: flex;
           flex-wrap: wrap;
-          gap: 6px 10px;
+          gap: 6px;
           padding-right: 0;
-          overflow: visible;
-          max-height: none;
+          overflow: visible;   /* 스크롤 제거 */
+          max-height: none;    /* 높이 제한 없음 */
         }
-        .qnum {
+
+        .qcell {
+          display: inline-flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          min-width: 56px;
+          height: auto;
+          padding: 6px 6px;
+          border-radius: 6px;
+          font-weight: 700;
+          text-align: center;
+          color: #fff;
+          user-select: none;
+        }
+        .qcell.good {
+          background-color: #28a745; /* ✅ 초록 버튼형 */
+        }
+
+        .question-num {
+          font-size: 0.86rem;
           font-weight: 800;
-          padding: 2px 4px;      /* 숫자 간 살짝 여백 */
-          line-height: 1.3;
+          line-height: 1;
+          margin-bottom: 2px;
         }
-        .qnum .qrate {
-          font-weight: 600;
-          opacity: .8;
-          margin-left: 2px;
+
+        .rate {
+          font-size: 0.8rem;
+          opacity: 0.98;
+          line-height: 1.1;
         }
       `}</style>
     </div>
