@@ -411,58 +411,50 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
 
   // 상단 상태 라인(토글에 따라 바뀜) — 중앙 배치 + 내부 좌/우 2열
   const SummaryLine = () => {
-    if (!current) return null;
-    const isNat = !isSchoolMode;
-    const pct = isNat ? current.myNatPct : current.mySchPct;
-    const stats = isNat ? current.natStats : current.schStats;
+  if (!current) return null;
+  const isNat = !isSchoolMode;
+  const pct = isNat ? current.myNatPct : current.mySchPct;
+  const stats = isNat ? current.natStats : current.schStats;
 
-    return (
-      <div
-        style={{
-          marginBottom: 8,
-          padding: 10,
-          background: 'rgba(21,29,54,0.5)',
-          borderRadius: 8,
-          fontSize: 14,
-          color: 'var(--muted)'
-        }}
-      >
-        {/* 중앙 정렬된 내부 래퍼 + 최대폭 제한으로 좌우로 과도하게 벌어지지 않도록 */}
-        <div style={{
-          maxWidth: 560,
-          margin: '0 auto',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          gap: 12
-        }}>
-          {/* 좌측 */}
-          <div>
-            <div>
-              <strong style={{ color: 'var(--ink)' }}>{rounds[selectedRoundIdx]?.label}</strong>
-              {' '}— 본인 점수:{' '}
-              <span style={{ color: '#ef4444', fontWeight: 'bold' }}>
-                {Number.isFinite(current.studentScore) ? `${current.studentScore}점` : '표시 안함'}
-              </span>
-              {' '}{pct != null ? `(상위 ${pct.toFixed(1)}%)` : ''}
-            </div>
-            <div style={{ marginTop: 4 }}>
-              전체응시자: {stats?.total ?? 0}명
-            </div>
-          </div>
+  return (
+    <div
+      style={{
+        marginBottom: 8,
+        padding: 10,
+        background: 'rgba(21,29,54,0.5)',
+        borderRadius: 8,
+        fontSize: 14,
+        color: 'var(--muted)',
+        display: 'flex',
+        justifyContent: 'center',   // 전체 중앙
+        gap: 60,                    // 좌우 블록 사이 간격
+      }}
+    >
+      {/* 좌측 블록 */}
+      <div style={{ textAlign: 'center' }}>
+        <div>
+          <strong style={{ color: 'var(--ink)' }}>{rounds[selectedRoundIdx]?.label}</strong>
+          {' '}— 본인 점수:{' '}
+          <span style={{ color: '#ef4444', fontWeight: 'bold' }}>
+            {Number.isFinite(current.studentScore) ? `${current.studentScore}점` : '표시 안함'}
+          </span>
+          {' '}{pct != null ? `(상위 ${pct.toFixed(1)}%)` : ''}
+        </div>
+        <div style={{ marginTop: 4 }}>전체응시자: {stats?.total ?? 0}명</div>
+      </div>
 
-          {/* 우측 (두 줄) */}
-          <div style={{ textAlign: 'right' }}>
-            <div>유효응시자: {stats?.completed ?? 0}</div>
-            <div>
-              무효응시자: {(stats?.absent ?? 0) + (stats?.dropout ?? 0)}{' '}
-              (미응시자: {stats?.absent ?? 0} · 중도포기: {stats?.dropout ?? 0})
-            </div>
-          </div>
+      {/* 우측 블록 */}
+      <div style={{ textAlign: 'center' }}>
+        <div>유효응시자: {stats?.completed ?? 0}</div>
+        <div>
+          무효응시자: {(stats?.absent ?? 0) + (stats?.dropout ?? 0)} 
+          (미응시자: {stats?.absent ?? 0} · 중도포기: {stats?.dropout ?? 0})
         </div>
       </div>
-    );
-  };
+    </div>
+  );
+};
+
 
   return (
     <div>
