@@ -22,6 +22,7 @@ function RoundCard({ label, data, sid }) {
 
   const overallRate = totalMax > 0 ? pct(totalScore, totalMax) : 0;
 
+  // 높이 동기화
   useEffect(() => {
     const syncHeight = () => {
       if (flipCardRef.current && frontRef.current) {
@@ -118,11 +119,11 @@ function RoundCard({ label, data, sid }) {
 
         {/* 앞면 */}
         <div ref={frontRef} className="flip-face flip-front card">
-  <div
-    className={`round ${
-      isInvalid ? 'invalid' : overallPass ? 'pass' : 'fail'
-    }`}
-  >
+          <div
+            className={`round ${
+              isInvalid ? 'invalid' : (overallPass ? 'pass' : 'fail')
+            }`}
+          >
             <div className="flex" style={{ justifyContent: 'space-between' }}>
               <h2 style={{ margin: 0 }}>{label} 총점</h2>
               {!isInvalid && (
