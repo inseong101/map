@@ -1,6 +1,6 @@
 // src/components/RoundCard.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { fmt, pct, pill, chunk } from '../utils/helpers';
+import { fmt, pct, pill, chunk, enrichRoundData } from '../utils/helpers';
 import { SUBJECT_MAX } from '../services/dataService';
 import WrongAnswerPanel from './WrongAnswerPanel';
 
@@ -9,10 +9,12 @@ function RoundCard({ label, data, sid }) {
   const flipCardRef = useRef(null);
   const frontRef = useRef(null);
 
-  const { totalScore, totalMax, overallPass, meets60, anyGroupFail, groupResults } = data;
+  // 🔥 data가 혹시 비어있거나 subjectScores/groupResults 누락된 경우 보강
+  const safeData = enrichRoundData(data || {});
+  const { totalScore, totalMax, overallPass, meets60, anyGroupFail, groupResults } = safeData;
   const overallRate = pct(totalScore, totalMax);
 
-  // 높이 동기화 함수
+  // 높이 동기화
   useEffect(() => {
     const syncHeight = () => {
       if (flipCardRef.current && frontRef.current) {
@@ -21,13 +23,8 @@ function RoundCard({ label, data, sid }) {
         flipCardRef.current.classList.add('height-synced');
       }
     };
-
-    // 컴포넌트 마운트 후 높이 동기화
     const timer = setTimeout(syncHeight, 100);
-    
-    // 윈도우 리사이즈 시에도 동기화
     window.addEventListener('resize', syncHeight);
-    
     return () => {
       clearTimeout(timer);
       window.removeEventListener('resize', syncHeight);
@@ -44,16 +41,15 @@ function RoundCard({ label, data, sid }) {
   const renderGroupBoxes = () => {
     return groupResults.map((group) => {
       const { label: groupLabel, subjects, layoutChunks, score, max, rate, pass } = group;
-      
+
       let chipsHtml = "";
       if (layoutChunks && layoutChunks.length) {
         const rows = chunk(subjects, layoutChunks);
         chipsHtml = rows.map((row, rowIndex) => (
           <div key={rowIndex} className="subj-row">
             {row.map(subject => {
-              const subjectScore = data.subjectScores[subject] || 0;
+              const subjectScore = safeData.subjectScores[subject] || 0;
               const subjectMax = SUBJECT_MAX[subject] || 0;
-              
               return (
                 <span key={subject} className="subj-chip">
                   {subject} <span className="muted">{fmt(subjectScore)}/{fmt(subjectMax)}</span>
@@ -66,9 +62,8 @@ function RoundCard({ label, data, sid }) {
         chipsHtml = (
           <div className="subj-row">
             {subjects.map(subject => {
-              const subjectScore = data.subjectScores[subject] || 0;
+              const subjectScore = safeData.subjectScores[subject] || 0;
               const subjectMax = SUBJECT_MAX[subject] || 0;
-              
               return (
                 <span key={subject} className="subj-chip">
                   {subject} <span className="muted">{fmt(subjectScore)}/{fmt(subjectMax)}</span>
@@ -98,8 +93,7 @@ function RoundCard({ label, data, sid }) {
   };
 
   const handleCardClick = (e) => {
-    // 버튼 클릭은 무시
-    if (e.target.closest('button')) return;
+    if (e.target.closest('button')) return; // 버튼 클릭은 무시
     setIsFlipped(!isFlipped);
   };
 
@@ -145,7 +139,8 @@ function RoundCard({ label, data, sid }) {
 
         {/* 뒷면 - 오답 */}
         <div className="flip-face flip-back card">
-          <WrongAnswerPanel roundLabel={label} data={data} />
+          {/* safeData에 wrongBySession이 보강되어 있어도 그대로 전달 */}
+          <WrongAnswerPanel roundLabel={label} data={safeData} />
         </div>
       </div>
     </div>
