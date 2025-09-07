@@ -545,15 +545,56 @@ async function updateSessionAnalytics(roundLabel, session) {
     });
     
     // 오답률 계산
-    Object.keys(analytics.questionStats).forEach(questionNum => {
-      const stats = analytics.questionStats[questionNum];
-      stats.errorRate = stats.actualResponses > 0 
-        ? (stats.wrongCount / stats.actualResponses * 100) 
-        : 0;
-      stats.responseRate = stats.totalResponses > 0
-        ? (stats.actualResponses / stats.totalResponses * 100)
-        : 0;
-    });
+// --- helper: 1~5번 선택 비율을 정수 퍼센트(합=100)로 정규화 ---
+function normalizeTo100(choiceCounts) {
+  const keys = [1,2,3,4,5];
+  const total = keys.reduce((s,k)=>s + (choiceCounts?.[k] || 0), 0);
+  if (total <= 0) return {1:0,2:0,3:0,4:0,5:0};
+
+  const raw = keys.map(k => (choiceCounts[k] || 0) * 100 / total);
+  const floors = raw.map(v => Math.floor(v));
+  let rem = 100 - floors.reduce((a,b)=>a+b,0);
+
+  // 소수점 큰 순서대로 1%씩 분배
+  const order = raw
+    .map((v,i)=>({i, frac: v - floors[i]}))
+    .sort((a,b)=>b.frac - a.frac)
+    .map(x=>x.i);
+
+  const out = floors.slice();
+  for (let i=0; i<rem; i++) out[order[i % order.length]] += 1;
+  return {1: out[0], 2: out[1], 3: out[2], 4: out[3], 5: out[4]};
+}
+
+// 오답률/정답률 및 선택 퍼센트 계산 (미응답 제외)
+Object.keys(analytics.questionStats).forEach(qStr => {
+  const q = parseInt(qStr, 10);
+  const stats = analytics.questionStats[q];
+
+  const nonNullTotal =
+    (analytics.choiceStats[q]?.[1] || 0) +
+    (analytics.choiceStats[q]?.[2] || 0) +
+    (analytics.choiceStats[q]?.[3] || 0) +
+    (analytics.choiceStats[q]?.[4] || 0) +
+    (analytics.choiceStats[q]?.[5] || 0);
+
+  stats.actualResponses = nonNullTotal;
+
+  const wrongCount   = stats.wrongCount || 0;
+  const correctCount = Math.max(nonNullTotal - wrongCount, 0);
+
+  const correctRate = nonNullTotal > 0 ? (correctCount / nonNullTotal) * 100 : 0;
+  const errorRate   = nonNullTotal > 0 ? 100 - correctRate : 0;
+
+  stats.correctCount = correctCount;
+  stats.correctRate  = +correctRate.toFixed(2);
+  stats.errorRate    = +errorRate.toFixed(2);
+
+  // 1~5번 선택 분포(%). 미응답 제외, 합=100
+  analytics.choicePercents = analytics.choicePercents || {};
+  analytics.choicePercents[q] = normalizeTo100(analytics.choiceStats[q]);
+});
+
     
     // 결과 저장
     const analyticsRef = db.collection('analytics').doc(`${roundLabel}_${session}`);
