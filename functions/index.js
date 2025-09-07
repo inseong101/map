@@ -1,4 +1,4 @@
-// functions/index.js
+// functions/index.js - 정리된 완전한 통계 분석 함수들
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const XLSX = require('xlsx');
@@ -723,61 +723,4 @@ async function processExcelData(jsonData, roundLabel, session) {
     console.log(`처리된 학생 수: ${processedData.length}, 오류 수: ${errors.length}`);
     
     if (processedData.length === 0) {
-      throw new Error('처리할 수 있는 유효한 학수번호가 없습니다.');
-   }
-   
-   // Firebase에 일괄 저장 (배치 단위로 나누어 저장)
-   const batchSize = 500; // Firestore 배치 제한
-   const batches = [];
-   
-   for (let i = 0; i < processedData.length; i += batchSize) {
-     const batch = db.batch();
-     const chunk = processedData.slice(i, i + batchSize);
-     
-     chunk.forEach(student => {
-       const docRef = db.collection('scores_raw')
-         .doc(roundLabel)
-         .collection(session)
-         .doc(student.sid);
-       
-       batch.set(docRef, {
-         sid: student.sid,
-         roundLabel,
-         session,
-         responses: student.responses,
-         wrongQuestions: student.wrongQuestions,
-         hasResponses: student.hasResponses,
-         status: student.status,
-         uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
-         lastUpdated: admin.firestore.FieldValue.serverTimestamp()
-       });
-     });
-     
-     batches.push(batch);
-   }
-   
-   // 모든 배치 실행
-   for (const batch of batches) {
-     await batch.commit();
-   }
-   
-   console.log(`총 ${totalStudents}명의 응시 대상자 데이터가 Firebase에 저장되었습니다.`);
-   console.log(`(응시: ${attendedStudents}명, 미응시: ${absentStudents}명)`);
-   
-   // 통계 업데이트
-   await updateSessionAnalytics(roundLabel, session);
-   await updateRoundAnalytics(roundLabel);
-   
-   return {
-     processedCount: totalStudents,
-     attendedCount: attendedStudents,
-     absentCount: absentStudents,
-     errorCount: errors.length,
-     errors: errors.slice(0, 10) // 최대 10개 오류만 반환
-   };
-   
- } catch (error) {
-   console.error('Excel 데이터 처리 실패:', error);
-   throw error;
- }
-}
+      throw new Error('처리할 수 있는 유효한 데이터가
