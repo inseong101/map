@@ -1,6 +1,6 @@
 // src/components/RoundCard.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { fmt, pct, pill, chunk, enrichRoundData } from '../utils/helpers';
+import { fmt, pct, pill, chunk } from '../utils/helpers';
 import { SUBJECT_MAX } from '../services/dataService';
 import WrongAnswerPanel from './WrongAnswerPanel';
 
@@ -9,10 +9,8 @@ function RoundCard({ label, data, sid }) {
   const flipCardRef = useRef(null);
   const frontRef = useRef(null);
 
-  // 🔥 data가 혹시 비어있거나 subjectScores/groupResults 누락된 경우 보강
-  const safeData = enrichRoundData(data || {});
-  const { totalScore, totalMax, overallPass, meets60, anyGroupFail, groupResults } = safeData;
-  const overallRate = pct(totalScore, totalMax);
+  const { totalScore, totalMax, overallPass, meets60, anyGroupFail, groupResults, status } = data || {};
+  const overallRate = totalMax > 0 ? pct(totalScore, totalMax) : 0;
 
   // 높이 동기화
   useEffect(() => {
@@ -39,16 +37,16 @@ function RoundCard({ label, data, sid }) {
   };
 
   const renderGroupBoxes = () => {
+    if (!groupResults) return null;
     return groupResults.map((group) => {
       const { label: groupLabel, subjects, layoutChunks, score, max, rate, pass } = group;
-
       let chipsHtml = "";
       if (layoutChunks && layoutChunks.length) {
         const rows = chunk(subjects, layoutChunks);
         chipsHtml = rows.map((row, rowIndex) => (
           <div key={rowIndex} className="subj-row">
             {row.map(subject => {
-              const subjectScore = safeData.subjectScores[subject] || 0;
+              const subjectScore = data.subjectScores[subject] || 0;
               const subjectMax = SUBJECT_MAX[subject] || 0;
               return (
                 <span key={subject} className="subj-chip">
@@ -62,7 +60,7 @@ function RoundCard({ label, data, sid }) {
         chipsHtml = (
           <div className="subj-row">
             {subjects.map(subject => {
-              const subjectScore = safeData.subjectScores[subject] || 0;
+              const subjectScore = data.subjectScores[subject] || 0;
               const subjectMax = SUBJECT_MAX[subject] || 0;
               return (
                 <span key={subject} className="subj-chip">
@@ -73,7 +71,6 @@ function RoundCard({ label, data, sid }) {
           </div>
         );
       }
-
       return (
         <div key={group.name} className={`group-box ${pass ? 'ok' : 'fail'} span-12`}>
           <div className="group-head">
@@ -93,9 +90,12 @@ function RoundCard({ label, data, sid }) {
   };
 
   const handleCardClick = (e) => {
-    if (e.target.closest('button')) return; // 버튼 클릭은 무시
+    if (e.target.closest('button')) return;
     setIsFlipped(!isFlipped);
   };
+
+  // absent / dropped 처리
+  const isAbsent = status === 'absent' || status === 'dropped';
 
   return (
     <div 
@@ -104,43 +104,60 @@ function RoundCard({ label, data, sid }) {
       onClick={handleCardClick}
     >
       <div className={`flip-inner ${isFlipped ? 'is-flipped' : ''}`}>
-        {/* 앞면 - 성적 */}
+        
+        {/* 앞면 */}
         <div ref={frontRef} className="flip-face flip-front card">
-          <div className={`round ${overallPass ? "" : "fail"}`}>
+          <div className={`round ${isAbsent ? 'absent' : (overallPass ? "" : "fail")}`}>
             <div className="flex" style={{ justifyContent: 'space-between' }}>
               <h2 style={{ margin: 0 }}>{label} 총점</h2>
-              <div className="kpi">
-                <div className="num">{fmt(totalScore)}</div>
-                <div className="sub">/ {fmt(totalMax)}</div>
+              {!isAbsent && (
+                <div className="kpi">
+                  <div className="num">{fmt(totalScore)}</div>
+                  <div className="sub">/ {fmt(totalMax)}</div>
+                </div>
+              )}
+            </div>
+
+            {isAbsent ? (
+              <div className="small" style={{ marginTop: 12 }}>
+                본 회차 {status === 'absent' ? "미응시" : "중도포기"}  
               </div>
-            </div>
-            
-            <div className="progress" style={{ margin: '8px 0 2px 0' }}>
-              <div className="bar" style={{ width: `${overallRate}%` }}></div>
-              <div className="cutline"></div>
-            </div>
-            
-            <div className="small" style={{ marginTop: 10 }}>
-              정답률 {overallRate}% (컷 60%: 204/340) · 
-              {overallPass ? 
-                <span dangerouslySetInnerHTML={{__html: pill("통과", "ok")}} /> : 
-                <span dangerouslySetInnerHTML={{__html: pill("불합격", "red")}} />
-              }
-              <div className="small" style={{ marginTop: '6px', opacity: 0.9 }}>
-                {getReasonText()}
-              </div>
-            </div>
+            ) : (
+              <>
+                <div className="progress" style={{ margin: '8px 0 2px 0' }}>
+                  <div className="bar" style={{ width: `${overallRate}%` }}></div>
+                  <div className="cutline"></div>
+                </div>
+                <div className="small" style={{ marginTop: 10 }}>
+                  정답률 {overallRate}% (컷 60%: 204/340) · 
+                  {overallPass ? 
+                    <span dangerouslySetInnerHTML={{__html: pill("통과", "ok")}} /> : 
+                    <span dangerouslySetInnerHTML={{__html: pill("불합격", "red")}} />
+                  }
+                  <div className="small" style={{ marginTop: '6px', opacity: 0.9 }}>
+                    {getReasonText()}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
-          
-          <div className="group-grid" style={{ marginTop: 12 }}>
-            {renderGroupBoxes()}
-          </div>
+
+          {!isAbsent && (
+            <div className="group-grid" style={{ marginTop: 12 }}>
+              {renderGroupBoxes()}
+            </div>
+          )}
         </div>
 
-        {/* 뒷면 - 오답 */}
+        {/* 뒷면 */}
         <div className="flip-face flip-back card">
-          {/* safeData에 wrongBySession이 보강되어 있어도 그대로 전달 */}
-          <WrongAnswerPanel roundLabel={label} data={safeData} />
+          {isAbsent ? (
+            <div className="small" style={{ padding: 20, textAlign: 'center' }}>
+              본 회차는 분석에서 제외됩니다.
+            </div>
+          ) : (
+            <WrongAnswerPanel roundLabel={label} data={data} />
+          )}
         </div>
       </div>
     </div>
