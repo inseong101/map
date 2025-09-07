@@ -80,7 +80,7 @@ function WrongAnswerPanel({ roundLabel, data }) {
     <div>
       <h2 style={{ marginTop: 0 }}>{roundLabel} 오답 보기</h2>
       <div className="small" style={{ opacity: .85, marginBottom: 6 }}>
-        색상: <b style={{color:'#ffd8d8'}}>빨강</b>=내 오답, 회색=정답(또는 데이터 없음)
+        색상: <b style={{color:'#ffd8d8'}}>빨강</b>=내 오답, 회색=정답(또는 무응답, 미응시)
       </div>
 
       <div className="accordion">
