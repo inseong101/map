@@ -9,7 +9,7 @@ import { getFirestore, doc, getDoc } from 'firebase/firestore';
 
 
 // === 모든 회차 라벨(프로젝트 규칙에 맞게 수정 가능) ===
-const ALL_ROUND_LABELS = ['1차', '2차', '3차', '4차', '5차', '6차', '7차', '8차'];
+const ALL_ROUND_LABELS = ['1차', '2차'];
 
 // === rounds 보정: 누락된 회차는 미응시(status:'absent')로 채워서 항상 보이게 ===
 function normalizeRounds(inputRounds) {
