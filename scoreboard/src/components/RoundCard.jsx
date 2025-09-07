@@ -1,15 +1,15 @@
 // src/components/RoundCard.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { fmt, pct, pill, chunk } from '../utils/helpers';
 import { SUBJECT_MAX } from '../services/dataService';
 import WrongAnswerPanel from './WrongAnswerPanel';
 
+const INVALID_CARD_HEIGHT = 360; // ✅ 무효 카드 고정 높이(px) — 필요시 조절
+
 function RoundCard({ label, data, sid }) {
   const [isFlipped, setIsFlipped] = useState(false);
-
   const flipCardRef = useRef(null);
   const frontRef = useRef(null);
-  const backRef = useRef(null);
 
   const {
     totalScore = 0,
@@ -25,32 +25,14 @@ function RoundCard({ label, data, sid }) {
   const overallRate = totalMax > 0 ? pct(totalScore, totalMax) : 0;
 
   // invalid = 미응시/중도포기/기타 무효 판정
-  const isInvalid =
-    status === 'absent' || status === 'dropout' || status === 'dropped';
+  const isInvalid = status === 'absent' || status === 'dropout' || status === 'dropped';
   const statusClass = isInvalid ? 'rc-invalid' : (overallPass ? 'rc-pass' : 'rc-fail');
 
-  // 앞/뒤면 높이 동기화
-  // - 유효차수: 앞면 높이 기준
-  // - 무효차수: 뒷면 높이 기준 (오답 패널을 보여주기 때문)
-  useEffect(() => {
-    const syncHeight = () => {
-      if (!flipCardRef.current) return;
-      const basisEl = isInvalid ? backRef.current : frontRef.current;
-      if (!basisEl) return;
-
-      // 강제로 레이아웃 반영 후 측정
-      const h = basisEl.offsetHeight || 0;
-      flipCardRef.current.style.setProperty('--front-height', `${h}px`);
-      flipCardRef.current.classList.add('height-synced');
-    };
-
-    const timer = setTimeout(syncHeight, 100);
-    window.addEventListener('resize', syncHeight);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('resize', syncHeight);
-    };
-  }, [isInvalid, totalScore, totalMax, overallPass, meets60, anyGroupFail, groupResults, label]);
+  const handleCardClick = (e) => {
+    // 내부 버튼 클릭 시 플립 방지
+    if (e.target.closest('button')) return;
+    setIsFlipped(prev => !prev);
+  };
 
   const getReasonText = () => {
     if (!meets60 && anyGroupFail) return '과락 및 평락으로 인한 불합격';
@@ -113,17 +95,15 @@ function RoundCard({ label, data, sid }) {
     });
   };
 
-  const handleCardClick = (e) => {
-    // 내부 버튼 클릭 시 플립 방지
-    if (e.target.closest('button')) return;
-    setIsFlipped(prev => !prev);
-  };
+  // 무효 카드일 때만 고정 높이 적용 (앞/뒤 동일)
+  const fixedHeightStyle = isInvalid ? { height: INVALID_CARD_HEIGHT } : undefined;
 
   return (
     <div
       ref={flipCardRef}
       className="flip-card"
       onClick={handleCardClick}
+      style={fixedHeightStyle} // ✅ 무효 카드 고정 높이
     >
       <div className={`flip-inner ${isFlipped ? 'is-flipped' : ''}`}>
 
@@ -131,6 +111,7 @@ function RoundCard({ label, data, sid }) {
         <div
           ref={frontRef}
           className={`flip-face flip-front card ${statusClass}`}
+          style={fixedHeightStyle} // ✅ 앞면도 동일 고정
         >
           <div className="flex" style={{ justifyContent: 'space-between' }}>
             <h2 style={{ margin: 0 }}>{label} 총점</h2>
@@ -143,17 +124,23 @@ function RoundCard({ label, data, sid }) {
           </div>
 
           {isInvalid ? (
-            // ✅ 무효 차수: 앞면에 “분석 제외 + 사유” 안내 표시
-            <div className="small" style={{ marginTop: 12, fontWeight: 700 }}>
-              본 회차는 분석에서 제외됩니다.
-              <br />
-              (
-              {status === 'absent'
-                ? '미응시'
-                : status === 'dropout'
-                ? '중도포기'
-                : '기타 무효'}
-              )
+            // ✅ 무효 카드: 중앙 정렬 큰 텍스트
+            <div
+              style={{
+                height: `calc(${INVALID_CARD_HEIGHT}px - 56px)`, // 카드 패딩·헤더 여백 감안
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                textAlign: 'center',
+                padding: 12
+              }}
+            >
+              <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.6 }}>
+                본 회차는 분석에서 제외됩니다.
+                <div style={{ fontSize: 14, fontWeight: 700, opacity: 0.9, marginTop: 6 }}>
+                  ({status === 'absent' ? '미응시' : status === 'dropout' ? '중도포기' : '기타 무효'})
+                </div>
+              </div>
             </div>
           ) : (
             <>
@@ -161,7 +148,6 @@ function RoundCard({ label, data, sid }) {
                 <div className="bar" style={{ width: `${overallRate}%` }} />
                 <div className="cutline" />
               </div>
-
               <div className="small" style={{ marginTop: 10 }}>
                 정답률 {overallRate}% (컷 60%: 204/340){' '}
                 {overallPass
@@ -181,7 +167,7 @@ function RoundCard({ label, data, sid }) {
         </div>
 
         {/* 뒷면 — 무효 차수여도 오답 패널은 그대로 표시 */}
-        <div ref={backRef} className={`flip-face flip-back card ${statusClass}`}>
+        <div className={`flip-face flip-back card ${statusClass}`} style={fixedHeightStyle}>
           <WrongAnswerPanel roundLabel={label} data={data} />
         </div>
       </div>
