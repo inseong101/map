@@ -440,7 +440,7 @@ function TrendChart({ rounds = [], school = '', sid = '' }) {
           </span>
           {' '}{pct != null ? `(상위 ${pct.toFixed(1)}%)` : ''}
         </div>
-        <div style={{ marginTop: 4 }}>전체응시자: {stats?.total ?? 0}명</div>
+        <div style={{ marginTop: 4 }}>응시대상자: {stats?.total ?? 0}명</div>
       </div>
 
       {/* 우측 블록 */}
