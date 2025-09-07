@@ -190,8 +190,6 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 }
 .btn.secondary{ background: rgba(126,162,255,.12); border-color: rgba(126,162,255,.45); }
 .btn.secondary:hover{ background: rgba(126,162,255,.18); }
-.badge.invalid {
-  background: rgba(107,33,168,.18);   /* 보라색 계열 */
-  border-color: rgba(107,33,168,.55);
-  color: #e9d5ff;
+.badge.invalid{background:rgba(107,33,168,.18); border-color:rgba(107,33,168,.55); color:#e9d5ff}
+
 }
