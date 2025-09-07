@@ -106,7 +106,7 @@ function WrongAnswerPanel({ roundLabel, data }) {
   >
     ㅤ예시ㅤ<span className="flame-emoji" aria-hidden></span>
   </button>
-  =특별 해설 제공(클릭하여 학습)
+  =고난도 문항/헷갈리는 선지(클릭하여 학습)
 </div>
 
       <div className="accordion">
