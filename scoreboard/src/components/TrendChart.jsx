@@ -263,16 +263,6 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
       }
     }
 
-    // 축 제목
-    ctx.textAlign = 'center';
-    ctx.font = '11px system-ui';
-    ctx.fillText('점수', padding.left + chartW / 2, padding.top + chartH + 36);
-    ctx.save();
-    ctx.translate(16, padding.top + chartH / 2);
-    ctx.rotate(-Math.PI / 2);
-    ctx.fillText('학생 수', 0, 0);
-    ctx.restore();
-
     return yMax;
   }
 
