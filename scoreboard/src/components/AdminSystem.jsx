@@ -85,6 +85,52 @@ const getQuestionStats = async (roundLabel, session, questionNum) => {
     };
   }
 };
+// AdminSystem.jsx에서 기존 getQuestionStats 함수 아래에 추가하세요:
+
+// 헤더용 간단한 통계 함수
+const getQuestionStats = (questionNum) => {
+  if (!sessionAnalytics[selectedSession]) {
+    return {
+      actualResponses: 0,
+      totalResponses: 0,
+      responseRate: 0,
+      errorRate: 0,
+      choiceRates: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+    };
+  }
+
+  const analytics = sessionAnalytics[selectedSession];
+  const questionStats = analytics.questionStats?.[questionNum];
+  const choiceStats = analytics.choiceStats?.[questionNum];
+
+  if (!questionStats || !choiceStats) {
+    return {
+      actualResponses: 0,
+      totalResponses: 0,
+      responseRate: 0,
+      errorRate: 0,
+      choiceRates: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+    };
+  }
+
+  // 선택률 계산
+  const total = questionStats.totalResponses || 0;
+  const choiceRates = {};
+  
+  for (let i = 1; i <= 5; i++) {
+    const count = choiceStats[i] || 0;
+    choiceRates[i] = total > 0 ? Math.round((count / total) * 100) : 0;
+  }
+
+  return {
+    actualResponses: questionStats.totalResponses - (choiceStats.null || 0),
+    totalResponses: questionStats.totalResponses || 0,
+    responseRate: Math.round(questionStats.responseRate || 0),
+    errorRate: Math.round(questionStats.errorRate || 0),
+    choiceRates
+  };
+};
+  
 
 // 또는 더 간단하게 사용 중인 곳에서 직접 처리하려면:
 // getQuestionStats(selectedRound, selectedSession, q) 대신
