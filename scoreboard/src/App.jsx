@@ -94,8 +94,10 @@ function App() {
         return;
       }
 
-      setRounds(foundRounds);
+      // 💡 결과 화면 진입 즉시 로딩 화면 먼저 띄우기 (플리커 방지)
       setCurrentView('result');
+      setHydrating(true);
+      setRounds(foundRounds);
     } catch (err) {
       console.error('데이터 조회 오류:', err);
       setError('데이터 조회 중 오류가 발생했습니다.');
@@ -109,6 +111,7 @@ function App() {
       if (currentView !== 'result') return;
       if (!studentId || rounds.length === 0) {
         setHydratedRounds([]);
+        setHydrating(false);
         return;
       }
 
@@ -170,10 +173,23 @@ function App() {
 
   if (currentView === 'result') {
     const school = getSchoolFromSid(studentId);
-    // ✅ StudentCard와 RoundCard 모두 normalize된 라운드 사용
     const base = hydratedRounds.length ? hydratedRounds : rounds;
     const effectiveRounds = normalizeRounds(base);
 
+    // ⏳ 로딩 중엔 스피너만 보여주기
+    if (hydrating) {
+      return (
+        <div className="container">
+          <h1>전졸협 모의고사 성적 조회</h1>
+          <div style={{ textAlign: 'center', marginTop: 40 }}>
+            <div className="spinner" />
+            <div className="small">데이터 불러오는 중…</div>
+          </div>
+        </div>
+      );
+    }
+
+    // ✅ 로딩 끝나면 한 번에 렌더
     return (
       <div className="container">
         <h1>전졸협 모의고사 성적 조회</h1>
@@ -183,7 +199,7 @@ function App() {
             sid={studentId}
             school={school}
             rounds={effectiveRounds}
-            loading={hydrating}
+            loading={false}
           />
 
           {effectiveRounds.map(({ label, data }) => (
