@@ -27,7 +27,6 @@ function normalizeRounds(inputRounds) {
   });
 }
 
-
 const SESSIONS = ['1교시', '2교시', '3교시', '4교시'];
 
 async function getRoundTotalFromFirestore(roundLabel, sid) {
@@ -127,7 +126,7 @@ function App() {
               sessionScores,
               totalScore: total,
               totalMax: (data && data.totalMax) || 340,
-              status: roundStatus   // ✅ 빌드 에러 났던 부분 고침 (콤마 추가)
+              status: roundStatus
             }
           });
         }
@@ -172,6 +171,9 @@ function App() {
 
   if (currentView === 'result') {
     const school = getSchoolFromSid(studentId);
+    // ✅ 한 번만 정규화해서 StudentCard와 RoundCard 모두 사용
+    const base = hydratedRounds.length ? hydratedRounds : rounds;
+    const normalized = normalizeRounds(base);
 
     return (
       <div className="container">
@@ -179,13 +181,13 @@ function App() {
 
         <div id="cards-grid" className="cards-grid">
           <StudentCard
-  sid={studentId}
-  school={school}
-  rounds={normalizeRounds(hydratedRounds.length ? hydratedRounds : rounds)}
-  loading={hydrating}
-/>
+            sid={studentId}
+            school={school}
+            rounds={normalized}
+            loading={hydrating}
+          />
 
-          {(hydratedRounds.length ? hydratedRounds : rounds).map(({ label, data }) => (
+          {normalized.map(({ label, data }) => (
             <RoundCard
               key={label}
               label={label}
