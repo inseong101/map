@@ -217,5 +217,485 @@ async function processExcelData(jsonData, roundLabel, session) {
   }
 }
 
-// ---------------- 이후 Analytics 함수들 (생략 없이 기존 그대로) ----------------
-// ... (updateSessionAnalytics, updateRoundAnalytics, analyzeOverallStatus 등 기존 코드 유지)
+// ---------------- Analytics helpers & functions (ADD BELOW) ----------------
+
+// 과목 찾기 (교시 주어지면 해당 교시에서만, 없으면 전 교시 검색)
+function findSubjectByQuestionNum(questionNum, session = null) {
+  const sessionsToCheck = session ? [session] : Object.keys(SESSION_SUBJECT_RANGES);
+  for (const sess of sessionsToCheck) {
+    const ranges = SESSION_SUBJECT_RANGES[sess] || [];
+    for (const range of ranges) {
+      if (questionNum >= range.from && questionNum <= range.to) return range.s;
+    }
+  }
+  return null;
+}
+
+// 문항번호로 교시 찾기
+function findSessionByQuestionNum(questionNum) {
+  for (const [session, ranges] of Object.entries(SESSION_SUBJECT_RANGES)) {
+    for (const range of ranges) {
+      if (questionNum >= range.from && questionNum <= range.to) return session;
+    }
+  }
+  return null;
+}
+
+// 1~5 선택 분포를 정수 퍼센트(합=100)로 정규화 (미응답 제외)
+function normalizeTo100(choiceCounts) {
+  const keys = [1,2,3,4,5];
+  const total = keys.reduce((s,k)=>s + (choiceCounts?.[k] || 0), 0);
+  if (total <= 0) return {1:0,2:0,3:0,4:0,5:0};
+
+  const raw = keys.map(k => (choiceCounts[k] || 0) * 100 / total);
+  const floors = raw.map(v => Math.floor(v));
+  let rem = 100 - floors.reduce((a,b)=>a+b,0);
+
+  // 소수점 큰 순서대로 1%씩 분배
+  const order = raw
+    .map((v,i)=>({i, frac: v - floors[i]}))
+    .sort((a,b)=>b.frac - a.frac)
+    .map(x=>x.i);
+
+  const out = floors.slice();
+  for (let i=0; i<rem; i++) out[order[i % order.length]] += 1;
+  return {1: out[0], 2: out[1], 3: out[2], 4: out[3], 5: out[4]};
+}
+
+/**
+ * 교시별 통계를 생성/갱신합니다.
+ * 결과 저장 위치: analytics/{roundLabel}_{session}
+ */
+async function updateSessionAnalytics(roundLabel, session) {
+  console.log(`교시별 통계 업데이트 시작: ${roundLabel} ${session}`);
+
+  // 해당 교시의 모든 학생 원자료
+  const sessionRef = db.collection('scores_raw').doc(roundLabel).collection(session);
+  const snapshot = await sessionRef.get();
+
+  const analytics = {
+    roundLabel,
+    session,
+    totalStudents: 0,
+    attendedStudents: 0,
+    absentStudents: 0,
+    questionStats: {}, // { qNum: { totalResponses, actualResponses, wrongCount, correctCount, errorRate, correctRate, responseRate, choices } }
+    choiceStats: {},   // { qNum: {1,2,3,4,5,null} }
+    choicePercents: {},// { qNum: {1..5} (합 100, 미응답 제외) }
+    schoolStats: {},   // { schoolCode: {...} }  (필요시 확장)
+    subjectStats: {},  // { subject: { totalQuestions, wrongCount, questions: [] } }
+    lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+  };
+
+  snapshot.forEach(doc => {
+    const data = doc.data() || {};
+    const { sid, responses = {}, wrongQuestions = [], status } = data;
+
+    analytics.totalStudents++;
+
+    if (status === 'completed') analytics.attendedStudents++;
+    else analytics.absentStudents++;
+
+    // 학교 코드 (상위 2자리)
+    const schoolCode = String(sid || '').substring(0, 2) || '00';
+    if (!analytics.schoolStats[schoolCode]) {
+      analytics.schoolStats[schoolCode] = {
+        totalStudents: 0,
+        attendedStudents: 0,
+        totalWrong: 0,
+        questionStats: {}
+      };
+    }
+    analytics.schoolStats[schoolCode].totalStudents++;
+    if (status === 'completed') analytics.schoolStats[schoolCode].attendedStudents++;
+
+    // 각 문항별 집계
+    Object.entries(responses).forEach(([qStr, choice]) => {
+      const qNum = parseInt(qStr, 10);
+      if (!Number.isFinite(qNum)) return;
+
+      // 초기화
+      if (!analytics.questionStats[qNum]) {
+        analytics.questionStats[qNum] = {
+          totalResponses: 0,    // null 포함
+          actualResponses: 0,   // null 제외
+          wrongCount: 0,
+          correctCount: 0,
+          choices: { 1:0, 2:0, 3:0, 4:0, 5:0, null:0 }
+        };
+      }
+      if (!analytics.choiceStats[qNum]) {
+        analytics.choiceStats[qNum] = { 1:0, 2:0, 3:0, 4:0, 5:0, null:0 };
+      }
+
+      // 총 응답(실제 제출된 학생 수 기준) — null 포함
+      analytics.questionStats[qNum].totalResponses++;
+      analytics.choiceStats[qNum][choice ?? 'null']++;
+
+      // 실제 응답(미응답 제외)
+      if (choice !== null && choice !== undefined) {
+        analytics.questionStats[qNum].actualResponses++;
+      }
+
+      // 정오답 계산 (오답 리스트에 있으면 오답)
+      if (Array.isArray(wrongQuestions) && wrongQuestions.includes(qNum)) {
+        analytics.questionStats[qNum].wrongCount++;
+        analytics.schoolStats[schoolCode].totalWrong++;
+        if (!analytics.schoolStats[schoolCode].questionStats[qNum]) {
+          analytics.schoolStats[schoolCode].questionStats[qNum] = { wrongCount: 0 };
+        }
+        analytics.schoolStats[schoolCode].questionStats[qNum].wrongCount++;
+      } else if (choice !== null && choice !== undefined) {
+        // 응답했고 오답 리스트에 없다 → 정답
+        analytics.questionStats[qNum].correctCount++;
+      }
+
+      // 과목 통계 (선택적)
+      const subject = findSubjectByQuestionNum(qNum, session);
+      if (subject) {
+        if (!analytics.subjectStats[subject]) {
+          analytics.subjectStats[subject] = {
+            totalQuestions: 0,
+            wrongCount: 0,
+            questions: []
+          };
+        }
+        if (!analytics.subjectStats[subject].questions.includes(qNum)) {
+          analytics.subjectStats[subject].questions.push(qNum);
+          analytics.subjectStats[subject].totalQuestions++;
+        }
+        if (Array.isArray(wrongQuestions) && wrongQuestions.includes(qNum)) {
+          analytics.subjectStats[subject].wrongCount++;
+        }
+      }
+    });
+  });
+
+  // 비율 계산 (미응답 제외)
+  Object.keys(analytics.questionStats).forEach(qStr => {
+    const q = parseInt(qStr, 10);
+    const stats = analytics.questionStats[q];
+
+    const nonNull =
+      (analytics.choiceStats[q]?.[1] || 0) +
+      (analytics.choiceStats[q]?.[2] || 0) +
+      (analytics.choiceStats[q]?.[3] || 0) +
+      (analytics.choiceStats[q]?.[4] || 0) +
+      (analytics.choiceStats[q]?.[5] || 0);
+
+    stats.actualResponses = nonNull;
+
+    const correctCount = stats.correctCount || 0;
+    const wrongCount   = stats.wrongCount   || 0;
+
+    const correctRate = nonNull > 0 ? (correctCount / nonNull) * 100 : 0;
+    const errorRate   = nonNull > 0 ? (wrongCount   / nonNull) * 100 : 0;
+    const responseRate = stats.totalResponses > 0
+      ? (nonNull / stats.totalResponses) * 100
+      : 0;
+
+    stats.correctRate  = +correctRate.toFixed(2);
+    stats.errorRate    = +errorRate.toFixed(2);
+    stats.responseRate = +responseRate.toFixed(2);
+
+    // 선택 퍼센트 (합=100, 미응답 제외)
+    analytics.choicePercents[q] = normalizeTo100(analytics.choiceStats[q]);
+  });
+
+  // 저장
+  const analyticsRef = db.collection('analytics').doc(`${roundLabel}_${session}`);
+  await analyticsRef.set(analytics);
+
+  console.log(`교시별 통계 업데이트 완료: ${roundLabel} ${session} (응시 ${analytics.attendedStudents} / 총 ${analytics.totalStudents})`);
+}
+
+/**
+ * 회차 요약 통계를 생성/갱신합니다.
+ * 결과 저장 위치: analytics/{roundLabel}_summary
+ */
+async function updateRoundAnalytics(roundLabel) {
+  console.log(`회차 요약 통계 업데이트 시작: ${roundLabel}`);
+
+  const sessions = ['1교시', '2교시', '3교시', '4교시'];
+  const round = {
+    roundLabel,
+    sessions: {},
+    overall: {
+      totalStudents: 0,
+      topWrongQuestions: [],     // [{questionNum, errorRate, wrongCount, totalResponses}]
+      highErrorRateQuestions: {},// { subject: [qNum,...] }
+      schoolComparison: {}       // 집계 값 (간단 합산/최댓값)
+    },
+    lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+  };
+
+  const allQuestions = {};
+  const schoolTotals = {};
+
+  for (const sess of sessions) {
+    const ref = db.collection('analytics').doc(`${roundLabel}_${sess}`);
+    const snap = await ref.get();
+    if (!snap.exists) continue;
+
+    const data = snap.data();
+    round.sessions[sess] = data;
+
+    // 전체 학생 수는 교시 중 최댓값 사용
+    round.overall.totalStudents = Math.max(round.overall.totalStudents, data.totalStudents || 0);
+
+    // 문항 병합
+    Object.entries(data.questionStats || {}).forEach(([qNum, stats]) => {
+      if (!allQuestions[qNum]) allQuestions[qNum] = { ...stats };
+    });
+
+    // 학교 병합 (간단 합산/최대)
+    Object.entries(data.schoolStats || {}).forEach(([schoolCode, st]) => {
+      if (!schoolTotals[schoolCode]) {
+        schoolTotals[schoolCode] = { totalStudents: 0, attendedStudents: 0, totalWrong: 0 };
+      }
+      schoolTotals[schoolCode].totalStudents = Math.max(schoolTotals[schoolCode].totalStudents, st.totalStudents || 0);
+      schoolTotals[schoolCode].attendedStudents = Math.max(schoolTotals[schoolCode].attendedStudents, st.attendedStudents || 0);
+      schoolTotals[schoolCode].totalWrong += st.totalWrong || 0;
+    });
+  }
+
+  // 상위 오답 (오답률 50% 이상만 추려 Top 50)
+  round.overall.topWrongQuestions = Object.entries(allQuestions)
+    .map(([qNum, st]) => ({
+      questionNum: parseInt(qNum, 10),
+      errorRate: Math.round(st.errorRate || 0),
+      wrongCount: st.wrongCount || 0,
+      totalResponses: st.actualResponses || 0
+    }))
+    .filter(q => q.errorRate >= 50 && q.totalResponses > 0)
+    .sort((a, b) => b.errorRate - a.errorRate)
+    .slice(0, 50);
+
+  // 과목별 고오답률 분류
+  round.overall.topWrongQuestions.forEach(q => {
+    const subject = findSubjectByQuestionNum(q.questionNum);
+    if (!subject) return;
+    if (!round.overall.highErrorRateQuestions[subject]) round.overall.highErrorRateQuestions[subject] = [];
+    round.overall.highErrorRateQuestions[subject].push(q.questionNum);
+  });
+
+  round.overall.schoolComparison = schoolTotals;
+
+  await db.collection('analytics').doc(`${roundLabel}_summary`).set(round);
+
+  // 전체 통합 상태 문서도 갱신
+  await analyzeOverallStatus(roundLabel);
+
+  console.log(`회차 요약 통계 업데이트 완료: ${roundLabel}`);
+}
+
+/**
+ * 전체 시험 통합 상태 (완전응시/중도포기/미응시) 분석
+ * 결과 저장 위치: analytics/{roundLabel}_overall_status
+ */
+async function analyzeOverallStatus(roundLabel) {
+  console.log(`전체 응시 상태 분석 시작: ${roundLabel}`);
+
+  const sessions = ["1교시", "2교시", "3교시", "4교시"];
+  const allStudents = {}; // { sid: { sessions: { '1교시': docData, ... } } }
+
+  // 모든 교시 데이터 수집
+  for (const session of sessions) {
+    const sessionRef = db.collection('scores_raw').doc(roundLabel).collection(session);
+    const snap = await sessionRef.get();
+    snap.forEach(doc => {
+      const sid = doc.id;
+      if (!allStudents[sid]) allStudents[sid] = { sid, sessions: {} };
+      allStudents[sid].sessions[session] = doc.data();
+    });
+  }
+
+  // 집계
+  const analysis = {
+    roundLabel,
+    totalStudents: 0,
+    byStatus: { completed: 0, dropout: 0, absent: 0 },
+    bySession: {},
+    lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+  };
+  sessions.forEach(s => analysis.bySession[s] = { attended: 0, absent: 0 });
+
+  Object.entries(allStudents).forEach(([sid, st]) => {
+    analysis.totalStudents++;
+    let completedCnt = 0;
+
+    sessions.forEach(s => {
+      const d = st.sessions[s];
+      const isAttended = d && d.status === 'completed';
+      if (isAttended) {
+        completedCnt++;
+        analysis.bySession[s].attended++;
+      } else {
+        analysis.bySession[s].absent++;
+      }
+    });
+
+    if (completedCnt === 4) analysis.byStatus.completed++;
+    else if (completedCnt === 0) analysis.byStatus.absent++;
+    else analysis.byStatus.dropout++;
+  });
+
+  await db.collection('analytics').doc(`${roundLabel}_overall_status`).set(analysis);
+  console.log(`전체 응시 상태 분석 완료: ${roundLabel}`);
+}
+
+// ---------------- Cloud Functions (Triggers / HTTP) ----------------
+
+// 점수/응답 저장 시마다 자동으로 통계 재계산 (권장)
+exports.updateAnalyticsOnSubmission = functions.firestore
+  .document('scores_raw/{roundLabel}/{session}/{sid}')
+  .onWrite(async (change, context) => {
+    const { roundLabel, session } = context.params;
+    try {
+      console.log(`통계 트리거 작동: ${roundLabel} ${session}`);
+      await updateSessionAnalytics(roundLabel, session);
+      await updateRoundAnalytics(roundLabel);
+      console.log('통계 트리거 완료');
+    } catch (e) {
+      console.error('통계 트리거 실패:', e);
+    }
+  });
+
+// 수동으로 특정 회차(또는 교시) 통계 재계산
+exports.manualUpdateAnalytics = functions.https.onRequest(async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+
+  try {
+    const { roundLabel, session } = req.method === 'POST' ? req.body : req.query;
+    if (!roundLabel) return res.status(400).json({ error: 'roundLabel은 필수입니다.' });
+
+    if (session) {
+      await updateSessionAnalytics(roundLabel, session);
+    } else {
+      const sessions = ['1교시', '2교시', '3교시', '4교시'];
+      for (const s of sessions) await updateSessionAnalytics(roundLabel, s);
+    }
+    await updateRoundAnalytics(roundLabel);
+
+    res.json({ success: true, message: `${roundLabel} ${session || '전체'} 통계 갱신 완료` });
+  } catch (e) {
+    console.error('manualUpdateAnalytics 실패:', e);
+    res.status(500).json({ error: '서버 오류', details: e.message });
+  }
+});
+
+// 고오답률 문항 조회
+exports.getHighErrorRateQuestions = functions.https.onRequest(async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+
+  try {
+    const { roundLabel } = req.query;
+    if (!roundLabel) return res.status(400).json({ error: 'roundLabel은 필수입니다.' });
+
+    const snap = await db.collection('analytics').doc(`${roundLabel}_summary`).get();
+    if (!snap.exists) {
+      return res.json({ success: true, data: {}, topQuestions: [], message: '데이터 없음' });
+    }
+    const data = snap.data() || {};
+    res.json({
+      success: true,
+      data: data.overall?.highErrorRateQuestions || {},
+      topQuestions: data.overall?.topWrongQuestions || []
+    });
+  } catch (e) {
+    console.error('getHighErrorRateQuestions 실패:', e);
+    res.status(500).json({ error: '서버 오류', details: e.message });
+  }
+});
+
+// 문항별 선택률/정답률 조회
+exports.getQuestionChoiceStats = functions.https.onRequest(async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+
+  try {
+    const { roundLabel, questionNum } = req.query;
+    if (!roundLabel || !questionNum) {
+      return res.status(400).json({ error: 'roundLabel, questionNum은 필수입니다.' });
+    }
+    const qNum = parseInt(questionNum, 10);
+    const session = findSessionByQuestionNum(qNum);
+    if (!session) return res.status(400).json({ error: '유효하지 않은 문항번호' });
+
+    const ref = db.collection('analytics').doc(`${roundLabel}_${session}`);
+    const snap = await ref.get();
+    if (!snap.exists) return res.json({ success: true, data: null, message: '통계 없음' });
+    const data = snap.data();
+
+    const qStats = data.questionStats?.[qNum];
+    const choiceStats = data.choiceStats?.[qNum];
+    const choicePerc = data.choicePercents?.[qNum];
+
+    // 정답 조회
+    const ansSnap = await db.collection('answer_keys').doc(`${roundLabel}_${session}`).get();
+    const correctAnswer = ansSnap.exists ? ansSnap.data()?.[qNum] : null;
+
+    if (!qStats || !choiceStats) {
+      return res.json({ success: true, data: null, message: '해당 문항 통계 없음' });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        questionNum: qNum,
+        choices: choiceStats,       // raw count (1~5, null)
+        choicePercents: choicePerc, // % (1~5, 합=100)
+        totalResponses: qStats.totalResponses,
+        actualResponses: qStats.actualResponses,
+        wrongCount: qStats.wrongCount,
+        correctCount: qStats.correctCount,
+        errorRate: qStats.errorRate,
+        correctRate: qStats.correctRate,
+        responseRate: qStats.responseRate,
+        correctAnswer
+      }
+    });
+  } catch (e) {
+    console.error('getQuestionChoiceStats 실패:', e);
+    res.status(500).json({ error: '서버 오류', details: e.message });
+  }
+});
+
+// 전체 응시 상태 조회 (TrendChart 등에서 사용)
+exports.getOverallStatus = functions.https.onRequest(async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+
+  try {
+    const { roundLabel } = req.query;
+    if (!roundLabel) return res.status(400).json({ error: 'roundLabel은 필수입니다.' });
+
+    const ref = db.collection('analytics').doc(`${roundLabel}_overall_status`);
+    const snap = await ref.get();
+
+    if (!snap.exists) {
+      await analyzeOverallStatus(roundLabel);
+      const snap2 = await ref.get();
+      if (!snap2.exists) return res.json({ success: true, data: null, message: '데이터 없음' });
+      return res.json({ success: true, data: snap2.data() });
+    }
+    return res.json({ success: true, data: snap.data() });
+  } catch (e) {
+    console.error('getOverallStatus 실패:', e);
+    res.status(500).json({ error: '서버 오류', details: e.message });
+  }
+});
+
+
+
+
