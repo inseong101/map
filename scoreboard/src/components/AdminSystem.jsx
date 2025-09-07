@@ -1,4 +1,4 @@
-// src/components/AdminSystem.jsx - 통계 정보 추가된 관리자 시스템
+// src/components/AdminSystem.jsx - 백엔드 변경사항 반영된 관리자 시스템
 import React, { useState, useEffect } from 'react';
 import { collection, doc, getDocs, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -11,7 +11,8 @@ const AdminSystem = () => {
   const [availableSessions, setAvailableSessions] = useState([]);
   const [answerData, setAnswerData] = useState([]);
   const [answerKey, setAnswerKey] = useState({});
-  const [roundStats, setRoundStats] = useState(null); // 🎯 회차별 통계 추가
+  const [overallStatus, setOverallStatus] = useState(null); // 전체 응시 상태
+  const [sessionAnalytics, setSessionAnalytics] = useState({}); // 교시별 통계
   const [loading, setLoading] = useState(false);
 
   const rounds = ['1차', '2차', '3차', '4차', '5차', '6차', '7차', '8차'];
@@ -33,7 +34,8 @@ const AdminSystem = () => {
   useEffect(() => {
     if (selectedRound) {
       checkAvailableSessions(selectedRound);
-      loadRoundStatistics(selectedRound); // 🎯 회차별 통계 로드
+      loadOverallStatus(selectedRound);
+      loadSessionAnalytics(selectedRound);
     }
   }, [selectedRound]);
 
@@ -77,107 +79,85 @@ const AdminSystem = () => {
     setAvailableSessions(available);
   };
 
-  // 🎯 회차별 통계 계산
-  const loadRoundStatistics = async (round) => {
+  // 전체 응시 상태 로드 (백엔드 analytics/{roundLabel}_overall_status 사용)
+  const loadOverallStatus = async (round) => {
     try {
-      const allStudents = new Set();
-      const attendanceData = {}; // sid -> Set of attended sessions
-      const schoolData = {}; // schoolCode -> stats
-      let totalScores = [];
-
-      // 모든 교시 데이터 수집
-      for (const session of sessions) {
-        try {
-          const sessionRef = collection(db, 'scores_raw', round, session);
-          const snapshot = await getDocs(sessionRef);
-          
-          snapshot.forEach(doc => {
-            const sid = doc.id;
-            allStudents.add(sid);
-            
-            if (!attendanceData[sid]) {
-              attendanceData[sid] = new Set();
-            }
-            attendanceData[sid].add(session);
-
-            // 학교별 분류
+      const statusRef = doc(db, 'analytics', `${round}_overall_status`);
+      const statusSnap = await getDoc(statusRef);
+      
+      if (statusSnap.exists()) {
+        const data = statusSnap.data();
+        
+        // 학교별 데이터 변환
+        const schoolStats = Object.entries(data.studentDetails || {})
+          .reduce((acc, [sid, details]) => {
             const schoolCode = sid.slice(0, 2);
-            if (!schoolData[schoolCode]) {
-              schoolData[schoolCode] = {
+            if (!acc[schoolCode]) {
+              acc[schoolCode] = {
+                code: schoolCode,
                 name: schoolCodes[schoolCode] || `학교${schoolCode}`,
-                totalTargets: new Set(),
-                validAttendees: new Set(),
-                absentees: new Set(),
-                dropouts: new Set()
+                totalStudents: 0,
+                completed: 0,
+                dropout: 0,
+                absent: 0
               };
             }
-            schoolData[schoolCode].totalTargets.add(sid);
-          });
-        } catch (error) {
-          console.warn(`${session} 통계 계산 실패:`, error);
-        }
+            
+            acc[schoolCode].totalStudents++;
+            acc[schoolCode][details.overallStatus]++;
+            
+            return acc;
+          }, {});
+
+        setOverallStatus({
+          overall: {
+            totalStudents: data.totalStudents || 0,
+            completed: data.byStatus?.completed || 0,
+            dropout: data.byStatus?.dropout || 0,
+            absent: data.byStatus?.absent || 0,
+            attendanceRate: data.totalStudents > 0 
+              ? Math.round(((data.byStatus?.completed || 0) / data.totalStudents) * 100) 
+              : 0
+          },
+          bySession: data.bySession || {},
+          schools: Object.values(schoolStats),
+          lastUpdated: data.lastUpdated
+        });
+      } else {
+        setOverallStatus(null);
       }
-
-      // 응시자 분류
-      let totalTargets = allStudents.size;
-      let validAttendees = 0;
-      let absentees = 0;
-      let dropouts = 0;
-
-      Array.from(allStudents).forEach(sid => {
-        const attendedCount = attendanceData[sid]?.size || 0;
-        const schoolCode = sid.slice(0, 2);
-        
-        if (schoolData[schoolCode]) {
-          if (attendedCount === 0) {
-            absentees++;
-            schoolData[schoolCode].absentees.add(sid);
-          } else if (attendedCount === 4) {
-            validAttendees++;
-            schoolData[schoolCode].validAttendees.add(sid);
-          } else {
-            dropouts++;
-            schoolData[schoolCode].dropouts.add(sid);
-          }
-        }
-      });
-
-      // 학교별 통계를 숫자로 변환
-      const schoolStats = Object.entries(schoolData).map(([code, data]) => ({
-        code,
-        name: data.name,
-        totalTargets: data.totalTargets.size,
-        validAttendees: data.validAttendees.size,
-        absentees: data.absentees.size,
-        dropouts: data.dropouts.size,
-        attendanceRate: data.totalTargets.size > 0 
-          ? Math.round((data.validAttendees.size / data.totalTargets.size) * 100) 
-          : 0
-      })).filter(school => school.totalTargets > 0);
-
-      setRoundStats({
-        overall: {
-          totalTargets,
-          validAttendees,
-          absentees,
-          dropouts,
-          attendanceRate: totalTargets > 0 ? Math.round((validAttendees / totalTargets) * 100) : 0
-        },
-        schools: schoolStats
-      });
-
     } catch (error) {
-      console.error('통계 계산 실패:', error);
-      setRoundStats(null);
+      console.error('전체 응시 상태 로드 실패:', error);
+      setOverallStatus(null);
     }
+  };
+
+  // 교시별 통계 로드
+  const loadSessionAnalytics = async (round) => {
+    const analyticsData = {};
+    
+    for (const session of sessions) {
+      try {
+        const analyticsRef = doc(db, 'analytics', `${round}_${session}`);
+        const analyticsSnap = await getDoc(analyticsRef);
+        
+        if (analyticsSnap.exists()) {
+          analyticsData[session] = analyticsSnap.data();
+        }
+      } catch (error) {
+        console.warn(`${session} 통계 로드 실패:`, error);
+      }
+    }
+    
+    setSessionAnalytics(analyticsData);
   };
 
   const loadAnswerData = async (round, session) => {
     setLoading(true);
     
     try {
-      // 정답지 로드
-      const answerKeyRef = doc(db, 'answer_keys', round);
+      // 교시별 정답지 로드 (수정된 경로)
+      const answerKeyRef = doc(db, 'answer_keys', `${round}_${session}`);
       const answerKeySnap = await getDoc(answerKeyRef);
       const keyData = answerKeySnap.exists() ? answerKeySnap.data() : {};
       setAnswerKey(keyData);
@@ -193,16 +173,17 @@ const AdminSystem = () => {
         const data = doc.data();
         const responses = data.responses || {};
         
-        // 🎯 모든 문항에 대해 응답 확인, 없으면 null 처리
+        // 모든 문항에 대해 응답 확인 (미응답은 null로 표시)
         const completeResponses = {};
         questionNumbers.forEach(qNum => {
-          completeResponses[qNum] = responses[qNum] || null;
+          completeResponses[qNum] = responses[qNum] !== undefined ? responses[qNum] : null;
         });
         
         students.push({
           sid: doc.id,
           responses: completeResponses,
-          wrongQuestions: data.wrongQuestions || []
+          wrongQuestions: data.wrongQuestions || [],
+          status: data.status || 'unknown'
         });
       });
 
@@ -227,10 +208,13 @@ const AdminSystem = () => {
     return ranges[session] || [];
   };
 
-  const getCellColor = (sid, questionNum, selectedAnswer) => {
-    const correctAnswer = answerKey[questionNum];
+  const getCellColor = (sid, questionNum, selectedAnswer, status) => {
+    // 미응시자는 전체적으로 다른 색상
+    if (status === 'absent') return '#374151'; // 어두운 회색
     
     if (selectedAnswer === null) return '#6b7280'; // 회색 (미응답)
+    
+    const correctAnswer = answerKey[questionNum];
     if (!correctAnswer) return '#2a2a2a'; // 기본색
     
     return selectedAnswer === correctAnswer ? '#22c55e' : '#ef4444'; // 초록/빨강
@@ -255,7 +239,8 @@ const AdminSystem = () => {
       setCurrentView('rounds');
       setSelectedRound('');
       setAvailableSessions([]);
-      setRoundStats(null);
+      setOverallStatus(null);
+      setSessionAnalytics({});
     }
   };
 
@@ -309,7 +294,7 @@ const AdminSystem = () => {
     );
   }
 
-  // 교시 선택 화면 + 🎯 통계 정보 표시
+  // 교시 선택 화면 + 통계 정보 표시
   if (currentView === 'sessions') {
     return (
       <div style={{ padding: 20 }}>
@@ -328,8 +313,8 @@ const AdminSystem = () => {
           <h2 style={{ display: 'inline', color: 'var(--ink)' }}>{selectedRound} - 교시 선택</h2>
         </div>
         
-        {/* 🎯 전체 통계 */}
-        {roundStats && (
+        {/* 전체 응시 현황 (백엔드 데이터 사용) */}
+        {overallStatus && (
           <div style={{ 
             marginBottom: 24, 
             padding: 16, 
@@ -346,37 +331,75 @@ const AdminSystem = () => {
             }}>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 24, fontWeight: 'bold', color: 'var(--ink)' }}>
-                  {roundStats.overall.totalTargets}
+                  {overallStatus.overall.totalStudents}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>시험대상자</div>
               </div>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 24, fontWeight: 'bold', color: '#22c55e' }}>
-                  {roundStats.overall.validAttendees}
+                  {overallStatus.overall.completed}
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--muted)' }}>유효응시자</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>완전응시자</div>
               </div>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 24, fontWeight: 'bold', color: '#a855f7' }}>
-                  {roundStats.overall.absentees}
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--muted)' }}>미응시자</div>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 24, fontWeight: 'bold', color: '#ef4444' }}>
-                  {roundStats.overall.dropouts}
+                <div style={{ fontSize: 24, fontWeight: 'bold', color: '#f59e0b' }}>
+                  {overallStatus.overall.dropout}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>중도포기자</div>
               </div>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 24, fontWeight: 'bold', color: 'var(--primary)' }}>
-                  {roundStats.overall.attendanceRate}%
+                <div style={{ fontSize: 24, fontWeight: 'bold', color: '#ef4444' }}>
+                  {overallStatus.overall.absent}
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--muted)' }}>출석률</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>미응시자</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 24, fontWeight: 'bold', color: 'var(--primary)' }}>
+                  {overallStatus.overall.attendanceRate}%
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>완전응시율</div>
               </div>
             </div>
 
-            {/* 🎯 학교별 통계 */}
+            {/* 교시별 응시 현황 */}
+            <h4 style={{ margin: '16px 0 8px 0', color: 'var(--ink)' }}>교시별 응시 현황</h4>
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+              gap: 8,
+              marginBottom: 16
+            }}>
+              {sessions.map(session => {
+                const sessionData = overallStatus.bySession[session];
+                if (!sessionData) return null;
+                
+                const total = sessionData.attended + sessionData.absent;
+                const rate = total > 0 ? Math.round((sessionData.attended / total) * 100) : 0;
+                
+                return (
+                  <div key={session} style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    padding: '8px 12px',
+                    background: 'var(--surface)',
+                    borderRadius: 6,
+                    fontSize: 12
+                  }}>
+                    <span style={{ fontWeight: 'bold', color: 'var(--ink)' }}>
+                      {session}
+                    </span>
+                    <div style={{ display: 'flex', gap: 8, color: 'var(--muted)' }}>
+                      <span style={{ color: '#22c55e' }}>응시: {sessionData.attended}</span>
+                      <span style={{ color: '#ef4444' }}>미응시: {sessionData.absent}</span>
+                      <span style={{ color: 'var(--primary)' }}>({rate}%)</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 학교별 통계 */}
             <h4 style={{ margin: '16px 0 8px 0', color: 'var(--ink)' }}>학교별 현황</h4>
             <div style={{ 
               display: 'grid', 
@@ -385,28 +408,34 @@ const AdminSystem = () => {
               maxHeight: 200,
               overflowY: 'auto'
             }}>
-              {roundStats.schools.map(school => (
-                <div key={school.code} style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'center',
-                  padding: '8px 12px',
-                  background: 'var(--surface)',
-                  borderRadius: 6,
-                  fontSize: 12
-                }}>
-                  <span style={{ fontWeight: 'bold', color: 'var(--ink)' }}>
-                    {school.name}
-                  </span>
-                  <div style={{ display: 'flex', gap: 12, color: 'var(--muted)' }}>
-                    <span>대상: {school.totalTargets}</span>
-                    <span style={{ color: '#22c55e' }}>유효: {school.validAttendees}</span>
-                    <span style={{ color: '#ef4444' }}>포기: {school.dropouts}</span>
-                    <span style={{ color: '#a855f7' }}>미응시: {school.absentees}</span>
-                    <span style={{ color: 'var(--primary)' }}>({school.attendanceRate}%)</span>
+              {overallStatus.schools.map(school => {
+                const rate = school.totalStudents > 0 
+                  ? Math.round((school.completed / school.totalStudents) * 100) 
+                  : 0;
+                
+                return (
+                  <div key={school.code} style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    padding: '8px 12px',
+                    background: 'var(--surface)',
+                    borderRadius: 6,
+                    fontSize: 12
+                  }}>
+                    <span style={{ fontWeight: 'bold', color: 'var(--ink)' }}>
+                      {school.name}
+                    </span>
+                    <div style={{ display: 'flex', gap: 12, color: 'var(--muted)' }}>
+                      <span>대상: {school.totalStudents}</span>
+                      <span style={{ color: '#22c55e' }}>완료: {school.completed}</span>
+                      <span style={{ color: '#f59e0b' }}>포기: {school.dropout}</span>
+                      <span style={{ color: '#ef4444' }}>미응시: {school.absent}</span>
+                      <span style={{ color: 'var(--primary)' }}>({rate}%)</span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -421,6 +450,8 @@ const AdminSystem = () => {
         }}>
           {sessions.map(session => {
             const isAvailable = availableSessions.includes(session);
+            const analytics = sessionAnalytics[session];
+            
             return (
               <button
                 key={session}
@@ -439,6 +470,11 @@ const AdminSystem = () => {
                 }}
               >
                 {session}
+                {analytics && (
+                  <div style={{fontSize: 10, marginTop: 4}}>
+                    {analytics.attendedStudents}/{analytics.totalStudents}명
+                  </div>
+                )}
                 {!isAvailable && <div style={{fontSize: 10, marginTop: 4}}>데이터 없음</div>}
               </button>
             );
@@ -470,10 +506,11 @@ const AdminSystem = () => {
             {selectedRound} {selectedSession} - 답안 현황
           </h2>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>
-            총 {answerData.length}명 응시 • 
+            총 {answerData.length}명 • 
             <span style={{ color: '#22c55e', marginLeft: 8 }}>■</span> 정답 
             <span style={{ color: '#ef4444', marginLeft: 8 }}>■</span> 오답
             <span style={{ color: '#6b7280', marginLeft: 8 }}>■</span> 미응답
+            <span style={{ color: '#374151', marginLeft: 8 }}>■</span> 미응시자
           </div>
         </div>
 
@@ -504,6 +541,17 @@ const AdminSystem = () => {
                   zIndex: 11
                 }}>
                   학수번호
+                </th>
+                <th style={{
+                  padding: '12px 8px',
+                  border: '1px solid var(--line)',
+                  background: 'var(--surface-2)',
+                  color: 'var(--ink)',
+                  fontWeight: 700,
+                  fontSize: 11,
+                  minWidth: 50
+                }}>
+                  상태
                 </th>
                 {questions.map(q => (
                   <th key={q} style={{
@@ -537,9 +585,20 @@ const AdminSystem = () => {
                   }}>
                     {student.sid}
                   </td>
+                  <td style={{
+                    padding: '6px 4px',
+                    border: '1px solid var(--line)',
+                    background: student.status === 'completed' ? '#22c55e' : '#ef4444',
+                    color: '#fff',
+                    textAlign: 'center',
+                    fontSize: 10,
+                    fontWeight: 600
+                  }}>
+                    {student.status === 'completed' ? '응시' : '미응시'}
+                  </td>
                   {questions.map(q => {
                     const answer = student.responses[q];
-                    const bgColor = getCellColor(student.sid, q, answer);
+                    const bgColor = getCellColor(student.sid, q, answer, student.status);
                     
                     return (
                       <td key={q} style={{
