@@ -172,7 +172,7 @@ function WrongAnswerPanel({ roundLabel, data }) {
     <div>
       <h2 style={{ marginTop: 0 }}>{roundLabel} 오답노트</h2>
       <div className="small" style={{ opacity: 0.8, marginBottom: '6px' }}>
-        과목명을 클릭하면 오답노트가 펼쳐집니다. 각 문항 아래 숫자는 전체 <b>정답률</b>입니다. (미응답 제외)
+        각 문항 번호 아래 숫자는 <b>정답률</b>입니다.
       </div>
 
       <div className="accordion">
