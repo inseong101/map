@@ -304,4 +304,15 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
   border-color: #33416f;
   color: var(--muted);
 }
+/* 오답 번호 그리드: 스크롤 제거, 자동 높이 */
+.qgrid{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  max-height:none;      /* 높이 제한 해제 */
+  overflow:visible;     /* 스크롤 없애기 */
+  padding-right:0;
+  scrollbar-width:none;             /* Firefox */
+}
+.qgrid::-webkit-scrollbar{ display:none; }  /* WebKit */
 
