@@ -7,6 +7,29 @@ import './App.css';
 import { discoverRoundsFor, getSchoolFromSid } from './services/dataService';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 
+
+// === 모든 회차 라벨(프로젝트 규칙에 맞게 수정 가능) ===
+const ALL_ROUND_LABELS = ['1차', '2차']; // 필요하면 '3차','4차' 추가
+
+// === rounds 보정: 누락된 회차는 미응시(status:'absent')로 채워서 항상 보이게 ===
+function normalizeRounds(inputRounds) {
+  const arr = Array.isArray(inputRounds) ? inputRounds : [];
+  const byLabel = new Map(arr.map(r => [r.label, r]));
+
+  return ALL_ROUND_LABELS.map(label => {
+    const found = byLabel.get(label);
+    if (found) {
+      // data가 비어 있어도 최소한 status는 absent로 보강
+      return { label, data: { status: 'absent', ...(found.data || {}) } };
+    }
+    // 아예 없는 회차는 플레이스홀더(미응시)
+    return { label, data: { status: 'absent' } };
+  });
+}
+
+
+
+
 const SESSIONS = ['1교시', '2교시', '3교시', '4교시'];
 
 async function getRoundTotalFromFirestore(roundLabel, sid) {
