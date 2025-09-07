@@ -43,7 +43,7 @@ const AdminSystem = () => {
 
   // 문항 번호로 과목을 찾는 함수는 dataService에서 가져오므로 제거
 
-  // 통계 데이터에서 문항별 정보를 가져오는 함수 (선택률 계산 수정)
+  // 통계 데이터에서 문항별 정보를 가져오는 함수 (함수명 변경)
   const getQuestionStatistics = (questionNum) => {
     if (!sessionAnalytics[selectedSession]) {
       return {
@@ -69,24 +69,21 @@ const AdminSystem = () => {
       };
     }
 
-    // 실제 응답자 수 계산 (1~5번 선택의 합, null 제외)
-    const actualResponses = (choiceStats[1] || 0) + (choiceStats[2] || 0) + 
-                           (choiceStats[3] || 0) + (choiceStats[4] || 0) + 
-                           (choiceStats[5] || 0);
-    
-    // 선택률 계산 (실제 응답자 기준으로 계산하여 합이 100%가 되도록)
+    // 선택률 계산
+    const total = questionStats.totalResponses || 0;
     const choiceRates = {};
+    
     for (let i = 1; i <= 5; i++) {
       const count = choiceStats[i] || 0;
-      choiceRates[i] = actualResponses > 0 ? Math.round((count / actualResponses) * 100) : 0;
+      choiceRates[i] = total > 0 ? Math.round((count / total) * 100) : 0;
     }
 
     return {
-      actualResponses, // 실제 응답자 수 (null 제외)
-      totalResponses: questionStats.totalResponses || 0, // 전체 대상자 수 (null 포함)
-      responseRate: questionStats.totalResponses > 0 ? Math.round((actualResponses / questionStats.totalResponses) * 100) : 0,
+      actualResponses: questionStats.totalResponses - (choiceStats.null || 0),
+      totalResponses: questionStats.totalResponses || 0,
+      responseRate: Math.round(questionStats.responseRate || 0),
       errorRate: Math.round(questionStats.errorRate || 0),
-      choiceRates // 1~5번 선택률의 합이 100%가 됨
+      choiceRates
     };
   };
 
