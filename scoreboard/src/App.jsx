@@ -1,14 +1,13 @@
-// src/App.jsx - 관리자 시스템 추가 (enrichRoundData 적용)
+// src/App.jsx
 import React, { useState } from 'react';
 import StudentCard from './components/StudentCard';
 import RoundCard from './components/RoundCard';
 import AdminSystem from './components/AdminSystem';
 import './App.css';
 import { discoverRoundsFor, getSchoolFromSid } from './services/dataService';
-import { enrichRoundData } from './utils/helpers';
 
 function App() {
-  const [currentView, setCurrentView] = useState('home'); // 'home' | 'result' | 'admin'
+  const [currentView, setCurrentView] = useState('home');
   const [studentId, setStudentId] = useState('');
   const [rounds, setRounds] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -17,30 +16,15 @@ function App() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    
     const id = studentId.replace(/\D/g, '').slice(0, 6);
-    
     if (id.length !== 6) {
       setError('학수번호는 숫자 6자리여야 합니다.');
       return;
     }
-
     setLoading(true);
     try {
       const foundRounds = await discoverRoundsFor(id);
-      
-      if (foundRounds.length === 0) {
-        setError('존재하지 않는 학수번호거나 미응시자입니다.');
-        return;
-      }
-
-      // 🔥 라운드 데이터 보강 (과목점수/그룹점수/총점/통과여부 등 채워 넣기)
-      const enrichedRounds = foundRounds.map(r => ({
-        ...r,
-        data: enrichRoundData(r.data || {})
-      }));
-      
-      setRounds(enrichedRounds);
+      setRounds(foundRounds);
       setCurrentView('result');
     } catch (err) {
       console.error('데이터 조회 오류:', err);
@@ -67,40 +51,10 @@ function App() {
     setStudentId(value);
   };
 
-  // 관리자 시스템 화면
-  if (currentView === 'admin') {
-    return (
-      <div className="container">
-        <div className="header">
-          <div>
-            <h1>전졸협 모의고사 관리자 시스템</h1>
-            <div className="small">성적 데이터를 회차별/교시별로 확인할 수 있습니다.</div>
-          </div>
-          <button 
-            onClick={goHome}
-            className="btn"
-            style={{ alignSelf: 'flex-start' }}
-          >
-            홈으로
-          </button>
-        </div>
-        
-        <div style={{ 
-          background: 'var(--surface)', 
-          border: '1px solid var(--line)', 
-          borderRadius: 16, 
-          marginTop: 16,
-          minHeight: '70vh'
-        }}>
-          <AdminSystem />
-        </div>
-      </div>
-    );
-  }
-
-  // 학생 결과 화면
   if (currentView === 'result') {
     const school = getSchoolFromSid(studentId);
+    const roundLabels = Array.from({ length: 8 }, (_, i) => `${i + 1}차`);
+    const roundMap = Object.fromEntries(rounds.map(r => [r.label, r.data]));
 
     return (
       <div className="container">
@@ -113,24 +67,17 @@ function App() {
             <button onClick={goAdmin} className="btn" style={{ fontSize: 12, padding: '6px 12px' }}>
               관리자
             </button>
-            <button onClick={goHome} className="btn">
-              다른 학생 조회
-            </button>
+            <button onClick={goHome} className="btn">다른 학생 조회</button>
           </div>
         </div>
 
         <div id="cards-grid" className="cards-grid">
-          <StudentCard 
-            sid={studentId} 
-            school={school} 
-            rounds={rounds} 
-          />
-          
-          {rounds.map(({ label, data }) => (
-            <RoundCard 
+          <StudentCard sid={studentId} school={school} rounds={rounds} />
+          {roundLabels.map(label => (
+            <RoundCard
               key={label}
               label={label}
-              data={data}
+              data={roundMap[label] || { status: 'absent', totalScore: 0, totalMax: 340 }}
               sid={studentId}
             />
           ))}
@@ -139,7 +86,23 @@ function App() {
     );
   }
 
-  // 홈 화면
+  if (currentView === 'admin') {
+    return (
+      <div className="container">
+        <div className="header">
+          <div>
+            <h1>전졸협 모의고사 관리자 시스템</h1>
+            <div className="small">성적 데이터를 회차별/교시별로 확인할 수 있습니다.</div>
+          </div>
+          <button onClick={goHome} className="btn">홈으로</button>
+        </div>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, marginTop: 16, minHeight: '70vh' }}>
+          <AdminSystem />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container">
       <div className="header">
@@ -148,12 +111,10 @@ function App() {
           <div className="small">학수번호 6자리를 입력해 본인 성적을 확인하세요.</div>
         </div>
       </div>
-
       <div className="grid">
         <div className="col-12">
           <div className="card narrow">
             <h2 style={{ marginTop: 0 }}>본인 점수 보기</h2>
-            
             <form onSubmit={handleSubmit} className="flex-column">
               <label htmlFor="sid" className="small">학수번호</label>
               <input
@@ -166,43 +127,14 @@ function App() {
                 maxLength={6}
                 disabled={loading}
               />
-              
-              <button 
-                type="submit" 
-                className="btn"
-                disabled={loading || studentId.length !== 6}
-              >
+              <button type="submit" className="btn" disabled={loading || studentId.length !== 6}>
                 {loading ? '조회 중...' : '성적 확인'}
               </button>
             </form>
-
-            {/* 관리자 시스템 버튼 */}
-            <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
-              <button 
-                onClick={goAdmin}
-                className="btn"
-                style={{ 
-                  width: '100%',
-                  background: 'var(--warn)',
-                  fontSize: 13
-                }}
-              >
-                🔧 성적관리시스템 (관리자)
-              </button>
-              <div className="small" style={{ marginTop: 8, textAlign: 'center', opacity: 0.7 }}>
-                회차별/교시별 답안 현황을 확인할 수 있습니다
-              </div>
-            </div>
-
             <div className="small" style={{ marginTop: 16 }}>
               • 숫자 6자리만 입력 가능합니다. 예: <code>015001</code>
             </div>
-
-            {error && (
-              <div className="alert" role="alert">
-                {error}
-              </div>
-            )}
+            {error && <div className="alert" role="alert">{error}</div>}
           </div>
         </div>
       </div>
