@@ -1,25 +1,23 @@
-// src/components/AdminSystem.jsx - 백엔드 변경사항 반영된 관리자 시스템
 import React, { useState, useEffect } from 'react';
 import { 
   ALL_SUBJECTS, 
   SUBJECT_MAX, 
   GROUPS, 
   ROUND_LABELS,
-  SESSION_SUBJECT_RANGES
+  SESSION_SUBJECT_RANGES,
+  getSubjectByQuestion
 } from '../services/dataService';
 
-// getSubjectByQuestion 함수 정의 (dataService.js에 없는 경우)
-const getSubjectByQuestion = (questionNum, session) => {
-  const ranges = SESSION_SUBJECT_RANGES[session] || [];
-  
-  for (const range of ranges) {
-    if (questionNum >= range.from && questionNum <= range.to) {
-      return range.s;
-    }
-  }
-  
-  return null;
-};
+// Firebase import 추가
+import { db } from '../services/firebase';
+import { 
+  collection, 
+  getDocs, 
+  doc, 
+  getDoc,
+  query,
+  where 
+} from 'firebase/firestore';
 
 const AdminSystem = () => {
   const [currentView, setCurrentView] = useState('rounds'); // 'rounds' | 'sessions' | 'answers'
