@@ -1,7 +1,6 @@
 // src/components/TrendChart.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { getAverages, getRealScoreDistribution, getParticipationStats, calcPercentileFromScores } from '../utils/helpers';
-
+import { getAverages, getRealScoreDistribution, getParticipationStats, calculatePercentileStrict } from '../utils/helpers';
 // 학교명 → 코드 변환
 const nameToCode = (name) => ({
   '가천대': '01', '경희대': '02', '대구한': '03', '대전대': '04',
