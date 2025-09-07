@@ -25,8 +25,7 @@ function WrongAnswerPanel({ roundLabel, data }) {
     return out;
   }, [data]);
 
-  // 🔥 특별 해설 제공(불타는) 문항 세트
-  // - 백엔드 필드명 여러 가지 지원: fireBySession / featuredBySession / hotBySession / specialBySession
+  // 🔥 특별 해설 제공 문항(교시별 Set) — 다양한 키명을 지원
   const fireBySession = useMemo(() => {
     const out = { '1교시': new Set(), '2교시': new Set(), '3교시': new Set(), '4교시': new Set() };
     const source =
@@ -35,7 +34,6 @@ function WrongAnswerPanel({ roundLabel, data }) {
       data?.hotBySession ||
       data?.specialBySession ||
       {};
-
     for (const [sess, arr] of Object.entries(source)) {
       if (Array.isArray(arr)) arr.forEach(n => out[sess]?.add(Number(n)));
     }
@@ -64,11 +62,7 @@ function WrongAnswerPanel({ roundLabel, data }) {
         </button>
 
         {isOpen && (
-          <div
-            id={`panel-${session}`}
-            className="panel"
-            aria-hidden={!isOpen}
-          >
+          <div id={`panel-${session}`} className="panel" aria-hidden={!isOpen}>
             <div className="grid">
               {Array.from({ length: total }, (_, i) => {
                 const qNum = i + 1;
@@ -100,8 +94,22 @@ function WrongAnswerPanel({ roundLabel, data }) {
   return (
     <div>
       <h2 style={{ marginTop: 0 }}>{roundLabel} 오답 보기</h2>
-      <div className="small" style={{ opacity: .85, marginBottom: 6 }}>
-        색상: <b style={{color:'#ffd8d8'}}>빨강</b>=내 오답, 회색=정답(또는 데이터 없음), <b>🔥</b>=특별 해설 제공
+
+      {/* 설명 줄 + 실제 불타는 버튼 예시 */}
+      <div className="small" style={{ opacity: .85, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span>색상: <b style={{color:'#ffd8d8'}}>빨강</b>=내 오답, 회색=정답(또는 데이터 없음), <b>🔥</b>=특별 해설 제공</span>
+        <span style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
+          <span className="small" style={{ opacity:.8 }}>예시</span>
+          <button
+            type="button"
+            className="qbtn fire"
+            style={{ transform:'scale(.9)', transformOrigin:'left center' }}
+            aria-label="특별 해설 제공 예시"
+          >
+            13
+            <span className="flame-emoji" aria-hidden>🔥</span>
+          </button>
+        </span>
       </div>
 
       <div className="accordion">
