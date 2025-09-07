@@ -402,3 +402,15 @@ export function calculatePercentileStrict(scores, myScore) {
 
   return +clamped.toFixed(1);
 }
+export function calcPercentileFromScores(scores, myScore) {
+  if (!Array.isArray(scores) || scores.length === 0 || myScore == null) return null;
+  const sorted = [...scores].sort((a, b) => b - a);
+  const n = sorted.length;
+  if (n === 1) return 0.0;
+
+  let idx = sorted.findIndex(s => s <= myScore);
+  if (idx < 0) idx = n - 1;
+
+  const p = (idx / (n - 1)) * 100;
+  return Math.max(0, Math.min(100, +p.toFixed(1)));
+}
