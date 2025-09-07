@@ -333,3 +333,16 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
   overflow-x: hidden;
 }
 
+/* Loading spinner */
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 4px solid var(--line);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+  margin: 0 auto 10px auto;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
