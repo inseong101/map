@@ -126,9 +126,9 @@ function StudentCard({ sid, school, rounds }) {
       let badgeClass = '';
       let badgeText = '';
 
-      if (status === 'absent' || status === 'dropout') {
-        badgeClass = 'badge invalid';
-        badgeText = '무효';
+      if (['absent', 'dropout', 'dropped'].includes(status)) {
+  badgeClass = 'badge invalid';
+  badgeText = '무효';
       } else {
         const passOverall = score >= TOTAL_MAX * 0.6;
         badgeClass = passOverall ? 'badge pass' : 'badge fail';
