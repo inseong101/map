@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { SESSION_SUBJECT_RANGES } from '../services/dataService';
+import './WrongPanel.css';
 
 // 교시별 문항 수
 const SESSION_LENGTH = {
