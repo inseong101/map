@@ -1,5 +1,5 @@
 // src/components/WrongAnswerPanel.jsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import './WrongPanel.css';
 
@@ -10,6 +10,8 @@ const SESSION_LENGTH = {
   '3교시': 80,
   '4교시': 80,
 };
+
+const SESSIONS = ['1교시', '2교시', '3교시', '4교시'];
 
 function WrongAnswerPanel({ roundLabel, data }) {
   const [open, setOpen] = useState({
@@ -24,14 +26,19 @@ function WrongAnswerPanel({ roundLabel, data }) {
     const out = { '1교시': new Set(), '2교시': new Set(), '3교시': new Set(), '4교시': new Set() };
     if (data?.wrongBySession) {
       for (const [sess, arr] of Object.entries(data.wrongBySession)) {
-        if (Array.isArray(arr)) arr.forEach(n => out[sess]?.add(Number(n)));
+        if (Array.isArray(arr)) arr.forEach((n) => out[sess]?.add(Number(n)));
       }
     }
     return out;
   }, [data]);
 
-  // 정답률 맵(문항번호 → 정답률%)
-  const [correctRateMap, setCorrectRateMap] = useState({'1교시': {}, '2교시': {}, '3교시': {}, '4교시': {}});
+  // 정답률 맵(교시별: 문항번호 → 정답률%)
+  const [correctRateMap, setCorrectRateMap] = useState({
+    '1교시': {},
+    '2교시': {},
+    '3교시': {},
+    '4교시': {},
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -41,11 +48,9 @@ function WrongAnswerPanel({ roundLabel, data }) {
       try {
         setLoading(true);
         const db = getFirestore();
-        const sessions = ['1교시', '2교시', '3교시', '4교시'];
         const rateMap = { '1교시': {}, '2교시': {}, '3교시': {}, '4교시': {} };
 
-        // 각 교시 analytics 로드해서 questionStats.correctRate 수집
-        for (const sess of sessions) {
+        for (const sess of SESSIONS) {
           const ref = doc(db, 'analytics', `${roundLabel}_${sess}`);
           const snap = await getDoc(ref);
           if (!snap.exists()) continue;
@@ -68,10 +73,12 @@ function WrongAnswerPanel({ roundLabel, data }) {
     }
 
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [roundLabel]);
 
-  const toggle = (sess) => setOpen(prev => ({ ...prev, [sess]: !prev[sess] }));
+  const toggle = (sess) => setOpen((prev) => ({ ...prev, [sess]: !prev[sess] }));
 
   const QButton = ({ session, idx }) => {
     const qNum = idx; // 1-based
@@ -91,26 +98,71 @@ function WrongAnswerPanel({ roundLabel, data }) {
     );
   };
 
+  // ====== 접힘이 확실히 되도록: 패널 실제 높이를 측정해서 max-height에 px로 반영 ======
+  const panelRefs = useRef({
+    '1교시': null,
+    '2교시': null,
+    '3교시': null,
+    '4교시': null,
+  });
+  const [panelHeights, setPanelHeights] = useState({
+    '1교시': 0,
+    '2교시': 0,
+    '3교시': 0,
+    '4교시': 0,
+  });
+
+  const measureHeights = useCallback(() => {
+    const next = { ...panelHeights };
+    for (const sess of SESSIONS) {
+      const el = panelRefs.current[sess];
+      if (el) {
+        // 패널 내부 실제 내용 높이 측정
+        next[sess] = el.scrollHeight;
+      }
+    }
+    setPanelHeights(next);
+  }, [panelHeights]);
+
+  // 콘텐츠가 바뀌거나(로딩 종료), 열림/닫힘이 바뀌거나, 리사이즈 시 재계산
+  useEffect(() => {
+    // 처음 렌더 직후 한 번
+    requestAnimationFrame(measureHeights);
+    const onResize = () => measureHeights();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    requestAnimationFrame(measureHeights);
+  }, [loading, open, measureHeights]);
+
   const renderSession = (session) => {
     const total = SESSION_LENGTH[session] || 80;
+    const isOpen = open[session];
+
     return (
       <div className="session" key={session}>
         <button
           type="button"
-          className={`session-head ${open[session] ? 'open' : ''}`}
+          className={`session-head ${isOpen ? 'open' : ''}`}
           onClick={() => toggle(session)}
-          aria-expanded={open[session]}
+          aria-expanded={isOpen}
         >
           <span>{session}</span>
           <span className="arrow">❯</span>
         </button>
 
+        {/* 측정 대상: 패널의 "내용 래퍼"를 따로 두면 더 정확하지만,
+            현 구조에서도 패널 자체 scrollHeight 측정으로 충분합니다. */}
         <div
           className="panel"
+          ref={(el) => (panelRefs.current[session] = el)}
           style={{
-            maxHeight: open[session] ? 'none' : 0,
-            padding: open[session] ? '10px 0 4px' : 0,
-            overflow: open[session] ? 'visible' : 'hidden',
+            maxHeight: isOpen ? `${panelHeights[session]}px` : '0px',
+            padding: isOpen ? '10px 0 4px' : '0px',
+            overflow: 'hidden',
           }}
         >
           <div className="grid">
@@ -118,9 +170,7 @@ function WrongAnswerPanel({ roundLabel, data }) {
               <QButton key={i + 1} session={session} idx={i + 1} />
             ))}
           </div>
-          {loading && (
-            <div className="loading">정답률 불러오는 중…</div>
-          )}
+          {loading && <div className="loading">정답률 불러오는 중…</div>}
         </div>
       </div>
     );
@@ -129,12 +179,12 @@ function WrongAnswerPanel({ roundLabel, data }) {
   return (
     <div>
       <h2 style={{ marginTop: 0 }}>{roundLabel} 오답 보기</h2>
-      <div className="small" style={{ opacity: .85, marginBottom: 6 }}>
-        색상: <b style={{color:'#ffd8d8'}}>빨강</b>=내 오답, 회색=정답(또는 데이터 없음). (정답률은 버튼 툴팁에서 확인)
+      <div className="small" style={{ opacity: 0.85, marginBottom: 6 }}>
+        색상: <b style={{ color: '#ffd8d8' }}>빨강</b>=내 오답, 회색=정답(또는 데이터 없음). (정답률은 버튼 툴팁에서 확인)
       </div>
 
       <div className="accordion">
-        {['1교시', '2교시', '3교시', '4교시'].map(renderSession)}
+        {SESSIONS.map(renderSession)}
       </div>
     </div>
   );
