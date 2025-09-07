@@ -1,7 +1,6 @@
 // src/components/WrongAnswerPanel.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
-import { SESSION_SUBJECT_RANGES } from '../services/dataService';
 import './WrongPanel.css';
 
 // 교시별 문항 수
@@ -137,57 +136,6 @@ function WrongAnswerPanel({ roundLabel, data }) {
       <div className="accordion">
         {['1교시', '2교시', '3교시', '4교시'].map(renderSession)}
       </div>
-
-      {/* 전용 스타일 */}
-      <style jsx>{`
-        .accordion { display: flex; flex-direction: column; gap: 10px; }
-        .session { border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
-
-        .session-head {
-          width: 100%;
-          display: flex; align-items: center; justify-content: space-between;
-          padding: 10px 12px;
-          background: linear-gradient(90deg, var(--primary), #4cc9ff);
-          color: #fff; border: none; border-radius: 12px 12px 0 0; cursor: pointer;
-          font-weight: 800; letter-spacing: .2px;
-        }
-        .session-head .arrow { transition: transform .25s ease; }
-        .session-head.open .arrow { transform: rotate(90deg); }
-
-        .panel { transition: all .25s ease; border-top: 1px solid var(--line); }
-
-        .grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
-          gap: 6px;
-          padding: 8px 10px 12px;
-        }
-
-        /* 기본(무채색) 버튼 */
-        .qbtn {
-          appearance: none;
-          border: 1px solid var(--line);
-          background: rgba(255,255,255,0.02);
-          color: var(--ink);
-          border-radius: 8px;
-          padding: 8px 0;
-          font-weight: 800;
-          font-size: 13px;
-          cursor: default;
-        }
-        /* 내 오답 = 빨강 */
-        .qbtn.red {
-          background: rgba(239,68,68,.16);
-          border-color: rgba(239,68,68,.45);
-          color: #ffd8d8;
-        }
-
-        .loading {
-          padding: 8px 12px;
-          color: var(--muted);
-          font-size: 12px;
-        }
-      `}</style>
     </div>
   );
 }
