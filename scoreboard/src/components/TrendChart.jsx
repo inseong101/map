@@ -341,38 +341,6 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
         }
       }
     }
-
-    const canvas = canvasRef.current;
-    if (canvas) {
-      canvas.onmousemove = (e) => {
-        const rect = canvas.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const binIndex = Math.floor((mouseX - padding.left) / binWidth);
-
-        if (binIndex >= 0 && binIndex < bins.length) {
-          const b = bins[binIndex];
-          drawCurrent(data, roundIdx, schoolMode);
-          if (b.count > 0) {
-            const x = padding.left + binIndex * binWidth;
-            const h = yMax > 0 ? (b.count / yMax) * chartH : 0;
-            const y = padding.top + chartH - h;
-            const pctText = `${b.percentage.toFixed(1)}%`;
-            const cx = x + binWidth / 2;
-            const ty = y - 6;
-
-            const ctx2 = canvas.getContext('2d');
-            ctx2.fillStyle = '#d6def7';
-            ctx2.font = '10px system-ui';
-            ctx2.textAlign = 'center';
-            ctx2.fillText(`${b.count}명`, cx, ty);
-            ctx2.fillText(`(${pctText})`, cx, ty + 12);
-          }
-        }
-      };
-      canvas.onmouseleave = () => {
-        drawCurrent(data, roundIdx, schoolMode);
-      };
-    }
   }
 
   function drawCutoff(ctx, padding, chartW, chartH, score, minX, maxX) {
