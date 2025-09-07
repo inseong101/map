@@ -5,27 +5,26 @@ import { ALL_SUBJECTS, SESSION_SUBJECT_RANGES } from '../services/dataService';
 
 function WrongAnswerPanel({ roundLabel, data }) {
   const [openSections, setOpenSections] = useState({});
-  const [errorRateMap, setErrorRateMap] = useState({});   // { [qNum]: number }
-  const [choicePercMap, setChoicePercMap] = useState({}); // { [qNum]: {1..5} }
-  const [showChoices, setShowChoices] = useState(true);
+  const [correctRateMap, setCorrectRateMap] = useState({}); // { [qNum]: number }
+  const [loading, setLoading] = useState(true);
 
   const toggleSection = (subject) => {
-    setOpenSections(prev => ({
+    setOpenSections((prev) => ({
       ...prev,
-      [subject]: !prev[subject]
+      [subject]: !prev[subject],
     }));
   };
 
   // 교시별 오답을 과목별 오답으로 변환
   const getWrongQuestionsBySubject = () => {
     const result = {};
-    ALL_SUBJECTS.forEach(s => result[s] = []);
+    ALL_SUBJECTS.forEach((s) => (result[s] = []));
 
-    if (data.wrongBySession) {
+    if (data?.wrongBySession) {
       Object.entries(data.wrongBySession).forEach(([session, wrongList]) => {
         const ranges = SESSION_SUBJECT_RANGES[session] || [];
-        wrongList.forEach(questionNum => {
-          const range = ranges.find(r => questionNum >= r.from && questionNum <= r.to);
+        wrongList.forEach((questionNum) => {
+          const range = ranges.find((r) => questionNum >= r.from && questionNum <= r.to);
           if (range && result[range.s]) {
             result[range.s].push(questionNum);
           }
@@ -34,7 +33,7 @@ function WrongAnswerPanel({ roundLabel, data }) {
     }
 
     // 중복 제거 및 정렬
-    Object.keys(result).forEach(subject => {
+    Object.keys(result).forEach((subject) => {
       result[subject] = Array.from(new Set(result[subject])).sort((a, b) => a - b);
     });
 
@@ -44,91 +43,90 @@ function WrongAnswerPanel({ roundLabel, data }) {
   // Firestore에서 analytics 로드 (4개 교시를 한 번씩만)
   useEffect(() => {
     let cancelled = false;
+
     async function loadAnalytics() {
       try {
+        setLoading(true);
         const db = getFirestore();
-        const sessions = ["1교시", "2교시", "3교시", "4교시"];
+        const sessions = ['1교시', '2교시', '3교시', '4교시'];
 
         const parts = await Promise.all(
           sessions.map(async (sess) => {
             const ref = doc(db, 'analytics', `${roundLabel}_${sess}`);
             const snap = await getDoc(ref);
-            if (!snap.exists()) return { err: {}, cho: {} };
+            if (!snap.exists()) return {};
             const a = snap.data() || {};
             const qs = a.questionStats || {};
-            const cp = a.choicePercents || {};
-            const err = {};
+            const map = {};
             Object.entries(qs).forEach(([k, st]) => {
               const q = parseInt(k, 10);
-              if (Number.isFinite(q) && typeof st?.errorRate === 'number') {
-                err[q] = st.errorRate;
+              if (Number.isFinite(q) && typeof st?.correctRate === 'number') {
+                map[q] = st.correctRate; // 백엔드에서 소수점(%)로 저장됨
               }
             });
-            return { err, cho: cp };
+            return map;
           })
         );
 
-        const mergedErr = Object.assign({}, ...parts.map(p => p.err));
-        const mergedCho = Object.assign({}, ...parts.map(p => p.cho));
+        const merged = Object.assign({}, ...parts);
 
         if (!cancelled) {
-          setErrorRateMap(mergedErr);
-          setChoicePercMap(mergedCho);
+          setCorrectRateMap(merged);
         }
       } catch (e) {
-        console.error('오답률/선지 분포 로드 실패:', e);
+        console.error('정답률 로드 실패:', e);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     }
+
     loadAnalytics();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [roundLabel]);
 
-  // Firestore에서 가져온 오답률 반환 (없으면 null)
-  const getErrorRateForQuestion = (questionNum) => {
-    const v = errorRateMap[questionNum];
-    return typeof v === 'number' ? Math.round(v) : null;
+  // Firestore에서 가져온 정답률 반환 (없으면 null)
+  const getCorrectRateForQuestion = (questionNum) => {
+    const v = correctRateMap[questionNum];
+    return typeof v === 'number' ? Math.round(v) : null; // 정수%로 표시
   };
 
   const wrongBySubject = getWrongQuestionsBySubject();
 
   // 교시별 과목 그룹화
   const sessionGroups = {
-    "1교시": ["간", "심", "비", "폐", "신"],
-    "2교시": ["상한", "사상", "침구", "보건"],
-    "3교시": ["외과", "신경", "안이비", "부인과"],
-    "4교시": ["소아", "예방", "생리", "본초"]
+    '1교시': ['간', '심', '비', '폐', '신'],
+    '2교시': ['상한', '사상', '침구', '보건'],
+    '3교시': ['외과', '신경', '안이비', '부인과'],
+    '4교시': ['소아', '예방', '생리', '본초'],
   };
 
-  // 오답 문항 셀 렌더링 (오답률 + 선택 분포)
+  // 오답 문항 셀 렌더링 (정답률만)
   const renderWrongQuestionCell = (questionNum) => {
-    const errorRate = getErrorRateForQuestion(questionNum);
-    const choices = choicePercMap?.[questionNum]; // {1..5}
-    const choiceText = choices
-      ? `①${choices[1] ?? 0}% ②${choices[2] ?? 0}% ③${choices[3] ?? 0}% ④${choices[4] ?? 0}% ⑤${choices[5] ?? 0}%`
-      : null;
+    const correctRate = getCorrectRateForQuestion(questionNum);
 
     return (
-      <div key={`wrong-${questionNum}`} className="qcell bad" title={`문항 ${questionNum}`}>
+      <div key={`wrong-${questionNum}`} className="qcell good" title={`문항 ${questionNum}`}>
         <div className="question-num">{questionNum}</div>
-        <div className="error-rate">{errorRate == null ? '—' : `${errorRate}%`}</div>
-        {showChoices && (
-          <div className="choice-row">{choiceText || '—'}</div>
-        )}
+        <div className="rate">{loading ? '…' : correctRate == null ? '—' : `${correctRate}%`}</div>
       </div>
     );
   };
 
   const renderQuestionSection = (wrongNumbers) => {
     if (wrongNumbers.length === 0) {
-      return <div className="small" style={{ opacity: 0.8, padding: '10px 0' }}>오답 없음</div>;
+      return (
+        <div className="small" style={{ opacity: 0.8, padding: '10px 0' }}>
+          오답 없음
+        </div>
+      );
     }
 
     return (
       <div className="question-section">
         <div className="section-title">내 오답 ({wrongNumbers.length}문항)</div>
-        <div className="qgrid">
-          {wrongNumbers.map(num => renderWrongQuestionCell(num))}
-        </div>
+        <div className="qgrid">{wrongNumbers.map((num) => renderWrongQuestionCell(num))}</div>
       </div>
     );
   };
@@ -136,11 +134,9 @@ function WrongAnswerPanel({ roundLabel, data }) {
   const renderSessionGroup = (sessionName, subjects) => {
     return (
       <div key={sessionName} className="session-group">
-        <div className="session-header">
-          {sessionName}
-        </div>
+        <div className="session-header">{sessionName}</div>
         <div className="session-content">
-          {subjects.map(subject => {
+          {subjects.map((subject) => {
             const wrongNumbers = wrongBySubject[subject] || [];
             const isOpen = openSections[subject];
             const totalWrongCount = wrongNumbers.length;
@@ -152,16 +148,18 @@ function WrongAnswerPanel({ roundLabel, data }) {
                   className={`acc-btn ${isOpen ? 'open' : ''}`}
                   onClick={() => toggleSection(subject)}
                 >
-                  <span>{subject} 오답 ({totalWrongCount}문항)</span>
+                  <span>
+                    {subject} 오답 ({totalWrongCount}문항)
+                  </span>
                   <span className={`rotate ${isOpen ? 'open' : ''}`}>❯</span>
                 </button>
-                
-                <div 
+
+                <div
                   className="panel"
-                  style={{ 
+                  style={{
                     maxHeight: isOpen ? 'none' : '0',
                     overflow: isOpen ? 'visible' : 'hidden',
-                    padding: isOpen ? '10px 0' : '0'
+                    padding: isOpen ? '10px 0' : '0',
                   }}
                 >
                   {isOpen && renderQuestionSection(wrongNumbers)}
@@ -178,24 +176,11 @@ function WrongAnswerPanel({ roundLabel, data }) {
     <div>
       <h2 style={{ marginTop: 0 }}>{roundLabel} 오답노트</h2>
       <div className="small" style={{ opacity: 0.8, marginBottom: '6px' }}>
-        과목명을 클릭하면 오답노트가 펼쳐집니다. 각 문항 아래 숫자는 전체 오답률입니다.
+        과목명을 클릭하면 오답노트가 펼쳐집니다. 각 문항 아래 숫자는 전체 <b>정답률</b>입니다. (미응답 제외)
       </div>
 
-      {/* 선지 분포 토글 */}
-      <div style={{ margin: '6px 0 10px' }}>
-        <label className="small" style={{ cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            checked={showChoices}
-            onChange={(e) => setShowChoices(e.target.checked)}
-            style={{ marginRight: 6 }}
-          />
-          선지 분포 표시
-        </label>
-      </div>
-      
       <div className="accordion">
-        {Object.entries(sessionGroups).map(([sessionName, subjects]) => 
+        {Object.entries(sessionGroups).map(([sessionName, subjects]) =>
           renderSessionGroup(sessionName, subjects)
         )}
       </div>
@@ -225,38 +210,30 @@ function WrongAnswerPanel({ roundLabel, data }) {
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          min-width: 56px; /* 선지 줄 표시 위해 약간 넓힘 */
-          height: auto;    /* 내용 높이에 맞춤 */
+          min-width: 56px;
+          height: auto;
           border-radius: 4px;
           font-weight: 600;
           color: white;
-          padding: 4px 3px;
+          padding: 6px 6px;
           text-align: center;
         }
 
-        .qcell.bad {
-          background-color: #dc3545;
+        .qcell.good {
+          background-color: #28a745; /* 초록: 정답률 */
         }
 
         .question-num {
           font-size: 0.8rem;
-          font-weight: 600;
+          font-weight: 700;
           line-height: 1;
-          margin-bottom: 1px;
+          margin-bottom: 2px;
         }
 
-        .error-rate {
-          font-size: 0.7rem;
-          opacity: 0.95;
-          line-height: 1;
-        }
-
-        .choice-row {
-          margin-top: 2px;
-          font-size: 0.65rem;
+        .rate {
+          font-size: 0.8rem;
+          opacity: 0.98;
           line-height: 1.1;
-          opacity: 0.95;
-          word-spacing: 2px;
         }
 
         .panel {
