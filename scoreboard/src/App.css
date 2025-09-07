@@ -316,3 +316,20 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 }
 .qgrid::-webkit-scrollbar{ display:none; }  /* WebKit */
 
+/* 작은 패널(panel, accordion 등)은 스크롤 제거 */
+.flip-card .flip-back .panel {
+  overflow: visible !important;   /* 스크롤 제거 */
+  max-height: none !important;    /* 높이 제한 해제 */
+}
+
+/* 세션 그룹 전체 컨테이너도 스크롤 제거 */
+.flip-card .flip-back .session-content {
+  overflow: visible !important;
+}
+
+/* 큰 RoundCard(바깥 flip-card)는 기존처럼 스크롤 유지 */
+.flip-card .flip-back {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
