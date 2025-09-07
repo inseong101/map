@@ -1,34 +1,73 @@
-.session-block { margin-bottom: 24px; }
-.session-block h3 { margin-bottom: 8px; color: var(--muted); }
+/* ==== WrongAnswerPanel (always-open buttons, collapsible by session) ==== */
+.accordion { 
+  display: flex; 
+  flex-direction: column; 
+  gap: 10px; 
+}
 
-.grid {
+/* 세션 카드 */
+.session { 
+  border: 1px solid var(--line); 
+  border-radius: 12px; 
+  background: var(--surface-2); 
+}
+
+/* 세션 헤더 (접힘/펼침 토글) */
+.session-head {
+  width: 100%;
+  display: flex; 
+  align-items: center; 
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: linear-gradient(90deg, var(--primary), #4cc9ff);
+  color: #fff; 
+  border: none; 
+  border-radius: 12px 12px 0 0; 
+  cursor: pointer;
+  font-weight: 800; 
+  letter-spacing: .2px;
+}
+.session-head .arrow { transition: transform .25s ease; }
+.session-head.open .arrow { transform: rotate(90deg); }
+
+/* 접힘 영역 */
+.panel { 
+  transition: all .25s ease; 
+  border-top: 1px solid var(--line); 
+  overflow: hidden; 
+}
+
+/* 번호 버튼 그리드 */
+.panel .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
   gap: 6px;
+  padding: 8px 10px 12px;
 }
 
-.btn-q {
-  border: none;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 6px;
-  cursor: default;
-  background: var(--surface-2); /* 무채색 기본 */
+/* 기본 번호 버튼(무채색) */
+.qbtn {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.02);
   color: var(--ink);
+  border-radius: 8px;
+  padding: 8px 0;
+  font-weight: 800;
+  font-size: 13px;
+  cursor: default;
 }
 
-.btn-q.wrong {
-  background: #ef4444;
-  color: #fff;
+/* 내 오답 = 빨강 */
+.qbtn.red {
+  background: rgba(239,68,68,.16);
+  border-color: rgba(239,68,68,.45);
+  color: #ffd8d8;
 }
 
-.btn-q.top {
-  background: #f472b6; /* 핑크 */
-  color: #fff;
-}
-
-.btn-q.half {
-  background: linear-gradient(90deg, #ef4444 50%, #f472b6 50%);
-  color: #fff;
+/* 정답률 로딩 문구 */
+.panel .loading {
+  padding: 8px 12px;
+  color: var(--muted);
+  font-size: 12px;
 }
