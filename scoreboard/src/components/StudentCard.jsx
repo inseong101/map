@@ -143,57 +143,6 @@ function StudentCard({ sid, school, rounds }) {
     });
   };
 
-  const renderRoundSummaries = () => {
-    return rounds.map(({ label, data }) => {
-      const score = Number(data?.totalScore);
-      const rs = roundSummaries[label] || {};
-      const {
-        totalStudents = 0,
-        eligible = 0,
-        absent = 0,
-        dropout = 0,
-        percentile = null
-      } = rs;
-
-      const scoreTxt = Number.isFinite(score) ? `${score}점` : '표시 안함';
-      const pctTxt = Number.isFinite(percentile) ? ` (전국 상위 ${percentile}%)` : '';
-
-      return (
-        <div
-          key={`sum-${label}`}
-          className="small"
-          style={{
-            marginTop: 6,
-            padding: '6px 8px',
-            borderRadius: 8,
-            background: 'rgba(21,29,54,0.35)',
-            border: '1px solid var(--line)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
-            gap: 12
-          }}
-        >
-          {/* 좌측 */}
-          <div>
-            <strong>{label}</strong> — 본인 점수:{' '}
-            <span style={{ color: '#ef4444', fontWeight: 700 }}>{scoreTxt}</span>
-            {pctTxt}
-            <div style={{ marginTop: 4 }}>전체응시자: {totalStudents}명</div>
-          </div>
-
-          {/* 우측 */}
-          <div style={{ textAlign: 'right' }}>
-            <div>유효응시자: {eligible}</div>
-            <div>
-              무효응시자: {absent + dropout} (미응시자: {absent} · 중도포기: {dropout})
-            </div>
-          </div>
-        </div>
-      );
-    });
-  };
-
   return (
     <div className="card" style={{ marginBottom: '16px' }}>
       <div className="flex" style={{ justifyContent: 'space-between' }}>
@@ -211,14 +160,11 @@ function StudentCard({ sid, school, rounds }) {
       
       <hr className="sep" />
 
-      {/* 새 레이아웃 반영 */}
-      <div style={{ marginBottom: 8 }}>
-        {renderRoundSummaries()}
-      </div>
+      {/* 요약 블록 제거됨 */}
 
       <div>
         <TrendChart rounds={rounds} school={school} />
-        <div className="small" style={{ marginTop: '8px', opacity: 0.8 }}></div>
+        <div className="small" style={{ marginTop: '8px', opacity: 0.8 }} />
       </div>
     </div>
   );
