@@ -197,3 +197,101 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
   border: 1px solid rgba(107,33,168,0.45);
 }
 
+/* =========================
+   RoundCard 상태 별 카드 배경
+   (앞/뒤 카드 모두 동일 클래스로 칠함)
+   ========================= */
+.card.rc-pass {
+  background: linear-gradient(180deg, rgba(34,197,94,.16), var(--surface));
+  border-color: rgba(34,197,94,.45);
+}
+.card.rc-fail {
+  background: linear-gradient(180deg, rgba(239,68,68,.16), var(--surface));
+  border-color: rgba(239,68,68,.45);
+}
+.card.rc-invalid {
+  background: linear-gradient(180deg, rgba(107,33,168,.16), var(--surface));
+  border-color: rgba(107,33,168,.45);
+}
+
+/* 진행바 색도 상태에 맞게 */
+.rc-pass .progress > .bar { background: linear-gradient(90deg, var(--ok), #72f2b1); }
+.rc-fail .progress > .bar { background: linear-gradient(90deg, var(--bad), #ff6b6b); }
+/* invalid는 기본(primary) 막대 유지 */
+
+/* =========================
+   뒷면(오답/세부) 액센트 틴트
+   - 세션 헤더 / 아코디언 버튼 / 토글류
+   ========================= */
+.flip-back.rc-pass .accordion .session-header {
+  background: rgba(34,197,94,.18);
+  color: #d9ffe7;
+  border-bottom: 1px solid rgba(34,197,94,.45);
+}
+.flip-back.rc-fail .accordion .session-header {
+  background: rgba(239,68,68,.18);
+  color: #ffd8d8;
+  border-bottom: 1px solid rgba(239,68,68,.45);
+}
+.flip-back.rc-invalid .accordion .session-header {
+  background: rgba(107,33,168,.18);
+  color: #e9d5ff;
+  border-bottom: 1px solid rgba(107,33,168,.45);
+}
+
+/* 아코디언 버튼(예: 1교시/2교시/과목별 토글 등) */
+.flip-back.rc-pass .accordion .acc-btn {
+  background: rgba(34,197,94,.12);
+  border-color: rgba(34,197,94,.45);
+}
+.flip-back.rc-pass .accordion .acc-btn:hover { background: rgba(34,197,94,.18); }
+
+.flip-back.rc-fail .accordion .acc-btn {
+  background: rgba(239,68,68,.12);
+  border-color: rgba(239,68,68,.45);
+}
+.flip-back.rc-fail .accordion .acc-btn:hover { background: rgba(239,68,68,.18); }
+
+.flip-back.rc-invalid .accordion .acc-btn {
+  background: rgba(107,33,168,.12);
+  border-color: rgba(107,33,168,.45);
+}
+.flip-back.rc-invalid .accordion .acc-btn:hover { background: rgba(107,33,168,.18); }
+
+/* (선택) 뒷면 내부의 작은 필/칩류도 약간 상태색 */
+.flip-back.rc-pass .pill { border-color: rgba(34,197,94,.55); color: #d9ffe7; }
+.flip-back.rc-fail .pill { border-color: rgba(239,68,68,.55); color: #ffd8d8; }
+.flip-back.rc-invalid .pill { border-color: rgba(107,33,168,.55); color: #e9d5ff; }
+/* === RoundCard 뒷면은 상태와 무관하게 '고정 파란계열'로 === */
+/* 카드 자체 배경/테두리 고정 */
+.flip-face.flip-back.card,
+.flip-face.flip-back.card.rc-pass,
+.flip-face.flip-back.card.rc-fail,
+.flip-face.flip-back.card.rc-invalid {
+  background: linear-gradient(180deg, rgba(21,29,54,.92), #0f1731);
+  border-color: var(--line);
+}
+
+/* 뒷면의 세션 헤더(예: 1교시/2교시 제목) 파란 그라데이션 고정 */
+.flip-face.flip-back .accordion .session-header {
+  background: linear-gradient(90deg, var(--primary), #4cc9ff);
+  color: #fff;
+  border-bottom: 1px solid var(--line);
+}
+
+/* 뒷면의 아코디언 버튼/토글(예: 교시/과목 버튼) 고정 팔레트 */
+.flip-face.flip-back .accordion .acc-btn {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--ink);
+}
+.flip-face.flip-back .accordion .acc-btn:hover {
+  background: var(--surface-2);
+}
+
+/* 뒷면의 pill/칩은 기본 스타일로 초기화 (상태색 제거) */
+.flip-face.flip-back .pill {
+  border-color: #33416f;
+  color: var(--muted);
+}
+
