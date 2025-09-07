@@ -267,11 +267,3 @@ export async function getRealScoreDistribution(roundLabel) {
   }
 }
 
-// 학교명 → 학교코드 변환 (외부에서 쓰는 함수)
-export function getSchoolCodeFromName(schoolName) {
-  return {
-    "가천대": "01", "경희대": "02", "대구한": "03", "대전대": "04",
-    "동국대": "05", "동신대": "06", "동의대": "07", "부산대": "08",
-    "상지대": "09", "세명대": "10", "우석대": "11", "원광대": "12"
-  }[schoolName] || "01";
-}
