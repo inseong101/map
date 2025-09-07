@@ -4,7 +4,7 @@ import { fmt, pct, pill, chunk } from '../utils/helpers';
 import { SUBJECT_MAX } from '../services/dataService';
 import WrongAnswerPanel from './WrongAnswerPanel';
 
-const INVALID_CARD_HEIGHT = 360; // ✅ 무효 카드 고정 높이(px) — 필요시 조절
+const INVALID_CARD_HEIGHT = 600; // ✅ 무효 카드 고정 높이(px) — 필요시 조절
 
 function RoundCard({ label, data, sid }) {
   const [isFlipped, setIsFlipped] = useState(false);
