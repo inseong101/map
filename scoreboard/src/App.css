@@ -177,3 +177,23 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
   background: rgba(107,33,168,0.15);
   border: 1px solid rgba(107,33,168,0.45);
 }
+
+/* 앞·뒷면 모두 같은 색상 쓰기 */
+.round.pass,
+.flip-back.pass {
+  background: rgba(34,197,94,0.15);
+  border: 1px solid rgba(34,197,94,0.45);
+}
+
+.round.fail,
+.flip-back.fail {
+  background: rgba(239,68,68,0.15);
+  border: 1px solid rgba(239,68,68,0.45);
+}
+
+.round.invalid,
+.flip-back.invalid {
+  background: rgba(107,33,168,0.15);
+  border: 1px solid rgba(107,33,168,0.45);
+}
+
