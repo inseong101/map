@@ -14,9 +14,9 @@ const nameToCode = (name) => ({
   '상지대': '09', '세명대': '10', '우석대': '11', '원광대': '12',
 }[name] || '01');
 
-// 축/범위 상수
-const X_MIN = 0;
-const X_MAX = 340;
+// 축/범위 상수 (기본값)
+const X_MIN_DEFAULT = 0;
+const X_MAX_DEFAULT = 340;
 const BIN_SIZE = 5;
 const CUTOFF_SCORE = 204;
 
@@ -86,6 +86,7 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
             ? calcPercentileFromScores(schStats.completedScores, studentScore)
             : null;
 
+        // ✅ 동적 X축으로 분포 만들기 (bins + min/max 함께 보관)
         const natBins = buildDistribution(natScores, studentScore);
         const schBins = buildDistribution(schScores, studentScore);
 
@@ -96,8 +97,8 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
           nationalAvg: averages?.nationalAvg ?? '-',
           schoolAvg: averages?.schoolAvg ?? '-',
 
-          nationalBins: natBins,
-          schoolBins: schBins,
+          nationalBins: natBins, // { bins, min, max }
+          schoolBins: schBins,   // { bins, min, max }
 
           // 분포 인원 (유효 응시자 수와 동일하도록 helpers에서 보장)
           totalNational: natScores.length,
@@ -129,11 +130,43 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
     drawCurrent(bundle, selectedRoundIdx, isSchoolMode);
   }, [bundle, selectedRoundIdx, isSchoolMode]);
 
-  // 분포 생성
+  /** 점수 배열 기반 동적 X범위 계산 */
+  function getDynamicRange(scores, studentScore) {
+    const source = scores && scores.length ? scores : (Number.isFinite(studentScore) ? [studentScore] : []);
+    if (!source.length) return { min: X_MIN_DEFAULT, max: X_MAX_DEFAULT };
+
+    const minScore = Math.min(...source);
+    const maxScore = Math.max(...source);
+
+    // 같은 값만 있을 경우 최소 폭 확보
+    let dynMin = Math.floor(minScore / BIN_SIZE) * BIN_SIZE;
+    let dynMax = Math.ceil(maxScore / BIN_SIZE) * BIN_SIZE;
+
+    if (dynMin === dynMax) {
+      dynMin = Math.max(X_MIN_DEFAULT, dynMin - BIN_SIZE * 3);
+      dynMax = Math.min(X_MAX_DEFAULT, dynMax + BIN_SIZE * 3);
+    }
+
+    // 너무 좁으면 살짝 여유
+    if (dynMax - dynMin < 60) {
+      const extra = Math.floor((60 - (dynMax - dynMin)) / 2);
+      dynMin = Math.max(X_MIN_DEFAULT, dynMin - extra);
+      dynMax = Math.min(X_MAX_DEFAULT, dynMax + extra);
+    }
+
+    // 커트라인이 범위 밖이면 살짝 포함해주기
+    if (CUTOFF_SCORE < dynMin) dynMin = Math.max(X_MIN_DEFAULT, Math.floor(CUTOFF_SCORE / BIN_SIZE) * BIN_SIZE - BIN_SIZE * 2);
+    if (CUTOFF_SCORE > dynMax) dynMax = Math.min(X_MAX_DEFAULT, Math.ceil(CUTOFF_SCORE / BIN_SIZE) * BIN_SIZE + BIN_SIZE * 2);
+
+    return { min: dynMin, max: dynMax };
+  }
+
+  /** 분포 생성 (동적 X범위) */
   function buildDistribution(scores, studentScore) {
+    const { min, max } = getDynamicRange(scores, studentScore);
     const bins = [];
-    // 0~335 구간
-    for (let x = X_MIN; x < X_MAX; x += BIN_SIZE) {
+
+    for (let x = min; x < max; x += BIN_SIZE) {
       const count = scores.filter((s) => s >= x && s < x + BIN_SIZE).length;
       bins.push({
         min: x,
@@ -144,16 +177,17 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
         percentage: scores.length > 0 ? (count / scores.length) * 100 : 0,
       });
     }
-    // 마지막 340 단일 bin
-    const lastCount = scores.filter((s) => s === X_MAX).length;
+    // 끝 값(== max)에 딱 들어맞는 케이스
+    const lastCount = scores.filter((s) => s === max).length;
     bins.push({
-      min: X_MAX,
-      max: X_MAX,
+      min: max,
+      max: max,
       count: lastCount,
-      isStudent: studentScore === X_MAX,
+      isStudent: studentScore === max,
       percentage: scores.length > 0 ? (lastCount / scores.length) * 100 : 0,
     });
-    return bins;
+
+    return { bins, min, max };
   }
 
   // 현재 회차 그리기
@@ -195,19 +229,21 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
     ctx.font = '12px system-ui';
     ctx.fillText(`평균: ${avg}점`, W / 2, 40);
 
-    // 활성 분포
-    const activeBins = schoolMode ? cur.schoolBins : cur.nationalBins;
-    const yMax = drawAxes(ctx, padding, chartW, chartH, activeBins);
+    // 활성 분포 (동적 min/max)
+    const active = schoolMode ? cur.schoolBins : cur.nationalBins; // { bins, min, max }
+    const { bins, min, max } = active || { bins: [], min: X_MIN_DEFAULT, max: X_MAX_DEFAULT };
+
+    const yMax = drawAxes(ctx, padding, chartW, chartH, bins, min, max);
 
     // 막대
     const color = schoolMode ? '#22c55e' : '#7ea2ff';
-    drawBarsWithLabels(ctx, padding, chartW, chartH, activeBins, color, yMax, data, roundIdx, schoolMode);
+    drawBarsWithLabels(ctx, padding, chartW, chartH, bins, color, yMax, data, roundIdx, schoolMode, min, max);
 
-    // 커트라인
-    drawCutoff(ctx, padding, chartW, chartH, CUTOFF_SCORE);
+    // 커트라인 (동적 min/max 좌표계 사용)
+    drawCutoff(ctx, padding, chartW, chartH, CUTOFF_SCORE, min, max);
   }
 
-  function drawAxes(ctx, padding, chartW, chartH, bins) {
+  function drawAxes(ctx, padding, chartW, chartH, bins, minX, maxX) {
     ctx.strokeStyle = '#213056';
     ctx.lineWidth = 1;
 
@@ -223,15 +259,16 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
     ctx.lineTo(padding.left + chartW, padding.top + chartH);
     ctx.stroke();
 
-    // X 라벨
+    // X 라벨 (동적 범위)
     ctx.fillStyle = '#9db0d6';
     ctx.font = '10px system-ui';
     ctx.textAlign = 'center';
     const xTickStep = 40;
-    for (let s = X_MIN; s <= X_MAX; s += xTickStep) {
-      const x = padding.left + ((s - X_MIN) / (X_MAX - X_MIN)) * chartW;
+    const start = Math.ceil(minX / xTickStep) * xTickStep;
+    for (let s = start; s <= maxX; s += xTickStep) {
+      const x = padding.left + ((s - minX) / (maxX - minX)) * chartW;
       ctx.fillText(String(s), x, padding.top + chartH + 16);
-      if (s > X_MIN && s < X_MAX) {
+      if (s > minX && s < maxX) {
         ctx.strokeStyle = 'rgba(33,48,86,0.2)';
         ctx.beginPath();
         ctx.moveTo(x, padding.top);
@@ -277,7 +314,7 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
     return base * 10;
   }
 
-  function drawBarsWithLabels(ctx, padding, chartW, chartH, bins, primaryColor, yMax, data, roundIdx, schoolMode) {
+  function drawBarsWithLabels(ctx, padding, chartW, chartH, bins, primaryColor, yMax, data, roundIdx, schoolMode, minX, maxX) {
     const barCount = bins.length;
     const binWidth = chartW / barCount;
 
@@ -287,9 +324,11 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
       const h = yMax > 0 ? (b.count / yMax) * chartH : 0;
       const y = padding.top + chartH - h;
 
-      const fill = b.isStudent ? '#ef4444' : `${primaryColor}CC`;
+      const fill = b.count > 0
+        ? (b.isStudent ? '#ef4444' : `${primaryColor}CC`)
+        : 'transparent';
 
-      if (b.count > 0) {
+      if (h > 0) {
         ctx.fillStyle = fill;
         const minH = Math.max(h, 1);
         const drawY = padding.top + chartH - minH;
@@ -336,8 +375,9 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
     }
   }
 
-  function drawCutoff(ctx, padding, chartW, chartH, score) {
-    const x = padding.left + ((score - X_MIN) / (X_MAX - X_MIN)) * chartW;
+  function drawCutoff(ctx, padding, chartW, chartH, score, minX, maxX) {
+    if (score < minX || score > maxX) return; // 범위 밖이면 표시 안함
+    const x = padding.left + ((score - minX) / (maxX - minX)) * chartW;
     ctx.strokeStyle = '#f59e0b';
     ctx.lineWidth = 2;
     ctx.setLineDash([4, 4]);
@@ -446,8 +486,8 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
           fontSize: 14,
           color: 'var(--muted)',
           display: 'flex',
-          justifyContent: 'center',   // 전체 중앙
-          gap: 60,                    // 좌우 블록 사이 간격
+          justifyContent: 'center',
+          gap: 60,
         }}
       >
         {/* 좌측 블록 */}
