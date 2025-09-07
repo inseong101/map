@@ -331,3 +331,37 @@ function getSchoolCodeFromName(name) {
   };
   return map[name] || '01';
 }
+
+
+// ✅ 4교시 모두 completed 학생만 유효로 집계
+export async function getParticipationStats(roundLabel, schoolCodeOrNull = null) {
+  const { db } = await import('../services/firebase');
+  const { collection, getDocs } = await import('firebase/firestore');
+
+  const sessions = ['1교시', '2교시', '3교시', '4교시'];
+  const perSid = {}; // sid -> {completed:0..4, hasAny:true/false}
+
+  for (const session of sessions) {
+    const ref = collection(db, 'scores_raw', roundLabel, session);
+    const snap = await getDocs(ref);
+
+    snap.forEach(doc => {
+      const sid = doc.id;
+      // 학교 필터
+      if (schoolCodeOrNull) {
+        if (String(sid).slice(0,2) !== schoolCodeOrNull) return;
+      }
+
+      // 유효 학번만 (01~12)
+      const code = String(sid).slice(0,2);
+      if (!['01','02','03','04','05','06','07','08','09','10','11','12'].includes(code)) return;
+
+      const data = doc.data() || {};
+      const st = data.status; // 'completed' | 'absent'
+
+      if (!perSid[sid]) perSid[sid] = { completed: 0, any: false, scoreSum: 0 };
+      perSid[sid].any = perSid[sid].any || (st === 'completed');
+      if (st === 'completed') {
+        perSid[sid].completed++;
+        // score_raw 저장 시 totalScore가 있으므로 이용 (없을 경우 0)
+        const sc = Number.isFinite(data.totalScore)
