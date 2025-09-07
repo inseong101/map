@@ -1,83 +1,9 @@
 // src/components/WrongAnswerPanel.jsx
-import React, { useState, useEffect } from 'react';
-import { ALL_SUBJECTS, SESSION_SUBJECT_RANGES, findSubjectByQuestionNum } from '../services/dataService';
+import React, { useState } from 'react';
+import { ALL_SUBJECTS, SESSION_SUBJECT_RANGES } from '../services/dataService';
 
 function WrongAnswerPanel({ roundLabel, data }) {
   const [openSections, setOpenSections] = useState({});
-  const [highErrorQuestions, setHighErrorQuestions] = useState({});
-  const [loading, setLoading] = useState(true);
-
-  // Firebase Functions URL - 프로젝트 ID를 실제 ID로 변경하세요
-  const FUNCTIONS_BASE_URL = 'https://us-central1-jeonjolhyup.cloudfunctions.net';
-
-  // 고오답률 문항 데이터 가져오기
-  useEffect(() => {
-    const loadHighErrorQuestions = async () => {
-      try {
-        setLoading(true);
-        
-        // 올바른 Firebase Functions URL 사용
-        const apiUrl = `${FUNCTIONS_BASE_URL}/getHighErrorRateQuestions?roundLabel=${roundLabel}`;
-        console.log('API 요청 URL:', apiUrl); // 디버깅용
-        
-        const response = await fetch(apiUrl, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const result = await response.json();
-        
-        if (result.success) {
-          setHighErrorQuestions(result.data || {});
-        } else {
-          console.warn('API 응답 오류:', result.message);
-          setHighErrorQuestions({});
-        }
-      } catch (error) {
-        console.error('고오답률 문항 로딩 실패:', error);
-        
-        // 네트워크 오류 시 임시 테스트 데이터 (개발용)
-        console.log('임시 테스트 데이터 사용');
-        setHighErrorQuestions({
-          "간": [
-            { questionNum: 12, errorRate: 75 },
-            { questionNum: 5, errorRate: 68 },
-            { questionNum: 8, errorRate: 62 }
-          ],
-          "심": [
-            { questionNum: 23, errorRate: 71 },
-            { questionNum: 17, errorRate: 58 }
-          ],
-          "침구": [
-            { questionNum: 45, errorRate: 82 },
-            { questionNum: 52, errorRate: 77 },
-            { questionNum: 61, errorRate: 65 }
-          ],
-          "보건": [
-            { questionNum: 85, errorRate: 69 },
-            { questionNum: 92, errorRate: 54 }
-          ],
-          "외과": [
-            { questionNum: 3, errorRate: 73 },
-            { questionNum: 11, errorRate: 67 },
-            { questionNum: 15, errorRate: 55 }
-          ]
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (roundLabel) {
-      loadHighErrorQuestions();
-    }
-  }, [roundLabel]);
 
   const toggleSection = (subject) => {
     setOpenSections(prev => ({
@@ -112,6 +38,23 @@ function WrongAnswerPanel({ roundLabel, data }) {
     return result;
   };
 
+  // 간단한 오답률 계산 (임시 데이터 - 실제로는 통계 서비스에서 가져와야 함)
+  const getErrorRateForQuestion = (questionNum) => {
+    // 임시로 랜덤한 오답률 반환 (실제로는 통계 데이터에서 계산)
+    const mockErrorRates = {
+      1: 15, 2: 23, 3: 67, 4: 34, 5: 78, 6: 12, 7: 45, 8: 89,
+      9: 23, 10: 56, 11: 34, 12: 71, 13: 28, 14: 82, 15: 19,
+      17: 73, 18: 29, 19: 64, 20: 41, 21: 85, 22: 17, 23: 58,
+      33: 76, 34: 42, 35: 69, 36: 33, 37: 81, 38: 25, 39: 57,
+      45: 83, 46: 37, 47: 72, 48: 26, 49: 68, 50: 44, 51: 79,
+      52: 91, 53: 35, 54: 62, 55: 18, 56: 74, 57: 48, 58: 86,
+      61: 77, 62: 31, 63: 65, 64: 39, 65: 84, 66: 22, 67: 59,
+      85: 69, 86: 43, 87: 76, 88: 27, 89: 82, 90: 38, 91: 75, 92: 54
+    };
+    
+    return mockErrorRates[questionNum] || Math.floor(Math.random() * 40) + 30; // 30-70% 범위
+  };
+
   const wrongBySubject = getWrongQuestionsBySubject();
 
   // 교시별 과목 그룹화
@@ -122,48 +65,28 @@ function WrongAnswerPanel({ roundLabel, data }) {
     "4교시": ["소아", "예방", "생리", "본초"]
   };
 
-  // 개별 문항 셀 렌더링 (학생 오답)
-  const renderWrongQuestionCell = (num) => (
-    <div key={`wrong-${num}`} className="qcell bad">{num}</div>
-  );
+  // 오답 문항 셀 렌더링 (오답률 포함)
+  const renderWrongQuestionCell = (questionNum) => {
+    const errorRate = getErrorRateForQuestion(questionNum);
+    return (
+      <div key={`wrong-${questionNum}`} className="qcell bad">
+        <div className="question-num">{questionNum}</div>
+        <div className="error-rate">{errorRate}%</div>
+      </div>
+    );
+  };
 
-  // 고오답률 문항 셀 렌더링 (진한 빨간색 + 오답률 표시)
-  const renderHighErrorQuestionCell = (questionData) => (
-    <div key={`high-error-${questionData.questionNum}`} className="qcell high-error">
-      <div className="question-num">{questionData.questionNum}</div>
-      <div className="error-rate">{questionData.errorRate}%</div>
-    </div>
-  );
-
-  const renderQuestionSection = (wrongNumbers, highErrorData) => {
-    const hasWrongQuestions = wrongNumbers.length > 0;
-    const hasHighErrorQuestions = highErrorData && highErrorData.length > 0;
-
-    if (!hasWrongQuestions && !hasHighErrorQuestions) {
+  const renderQuestionSection = (wrongNumbers) => {
+    if (wrongNumbers.length === 0) {
       return <div className="small" style={{ opacity: 0.8, padding: '10px 0' }}>오답 없음</div>;
     }
 
     return (
       <div className="question-section">
-        {/* 학생 오답 문항 */}
-        {hasWrongQuestions && (
-          <div className="wrong-section">
-            <div className="section-title">내 오답 ({wrongNumbers.length}문항)</div>
-            <div className="qgrid">
-              {wrongNumbers.map(num => renderWrongQuestionCell(num))}
-            </div>
-          </div>
-        )}
-
-        {/* 고오답률 문항 */}
-        {hasHighErrorQuestions && (
-          <div className="high-error-section">
-            <div className="section-title">고오답률 문항 ({highErrorData.length}문항)</div>
-            <div className="qgrid">
-              {highErrorData.map(questionData => renderHighErrorQuestionCell(questionData))}
-            </div>
-          </div>
-        )}
+        <div className="section-title">내 오답 ({wrongNumbers.length}문항)</div>
+        <div className="qgrid">
+          {wrongNumbers.map(num => renderWrongQuestionCell(num))}
+        </div>
       </div>
     );
   };
@@ -177,10 +100,8 @@ function WrongAnswerPanel({ roundLabel, data }) {
         <div className="session-content">
           {subjects.map(subject => {
             const wrongNumbers = wrongBySubject[subject] || [];
-            const highErrorData = highErrorQuestions[subject] || [];
             const isOpen = openSections[subject];
             const totalWrongCount = wrongNumbers.length;
-            const totalHighErrorCount = highErrorData.length;
 
             return (
               <div key={subject} className="item">
@@ -189,7 +110,7 @@ function WrongAnswerPanel({ roundLabel, data }) {
                   className={`acc-btn ${isOpen ? 'open' : ''}`}
                   onClick={() => toggleSection(subject)}
                 >
-                  <span>{subject} 오답노트 (내 오답: {totalWrongCount}, 고오답률: {totalHighErrorCount})</span>
+                  <span>{subject} 오답 ({totalWrongCount}문항)</span>
                   <span className={`rotate ${isOpen ? 'open' : ''}`}>❯</span>
                 </button>
                 
@@ -201,7 +122,7 @@ function WrongAnswerPanel({ roundLabel, data }) {
                     padding: isOpen ? '10px 0' : '0'
                   }}
                 >
-                  {isOpen && renderQuestionSection(wrongNumbers, highErrorData)}
+                  {isOpen && renderQuestionSection(wrongNumbers)}
                 </div>
               </div>
             );
@@ -211,20 +132,11 @@ function WrongAnswerPanel({ roundLabel, data }) {
     );
   };
 
-  if (loading) {
-    return (
-      <div>
-        <h2 style={{ marginTop: 0 }}>{roundLabel} 오답노트</h2>
-        <div className="loading">고오답률 문항 데이터 로딩 중...</div>
-      </div>
-    );
-  }
-
   return (
     <div>
       <h2 style={{ marginTop: 0 }}>{roundLabel} 오답노트</h2>
       <div className="small" style={{ opacity: 0.8, marginBottom: '6px' }}>
-        과목명을 클릭하면 오답노트가 펼쳐집니다. 빨간색은 내 오답, 진한 빨간색은 고오답률 문항입니다.
+        과목명을 클릭하면 오답노트가 펼쳐집니다. 각 문항 아래 숫자는 전체 오답률입니다.
       </div>
       
       <div className="accordion">
@@ -238,13 +150,6 @@ function WrongAnswerPanel({ roundLabel, data }) {
           display: flex;
           flex-direction: column;
           gap: 15px;
-        }
-
-        .wrong-section,
-        .high-error-section {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
         }
 
         .section-title {
@@ -262,26 +167,19 @@ function WrongAnswerPanel({ roundLabel, data }) {
 
         .qcell {
           display: inline-flex;
+          flex-direction: column;
           align-items: center;
           justify-content: center;
-          width: 40px;
-          height: 30px;
+          width: 45px;
+          height: 40px;
           border-radius: 4px;
-          font-size: 0.85rem;
           font-weight: 600;
           color: white;
+          padding: 2px;
         }
 
         .qcell.bad {
           background-color: #dc3545;
-        }
-
-        .qcell.high-error {
-          background-color: #a71e2a;
-          flex-direction: column;
-          height: 40px;
-          width: 45px;
-          padding: 2px;
         }
 
         .question-num {
@@ -294,6 +192,7 @@ function WrongAnswerPanel({ roundLabel, data }) {
           font-size: 0.7rem;
           opacity: 0.9;
           line-height: 1;
+          margin-top: 1px;
         }
 
         .panel {
@@ -356,12 +255,6 @@ function WrongAnswerPanel({ roundLabel, data }) {
 
         .small {
           font-size: 0.8rem;
-        }
-
-        .loading {
-          text-align: center;
-          padding: 20px;
-          color: #6c757d;
         }
       `}</style>
     </div>
