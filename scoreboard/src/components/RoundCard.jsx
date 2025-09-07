@@ -118,7 +118,11 @@ function RoundCard({ label, data, sid }) {
 
         {/* 앞면 */}
         <div ref={frontRef} className="flip-face flip-front card">
-          <div className={`round ${isInvalid ? 'absent' : (overallPass ? '' : 'fail')}`}>
+  <div
+    className={`round ${
+      isInvalid ? 'invalid' : overallPass ? 'pass' : 'fail'
+    }`}
+  >
             <div className="flex" style={{ justifyContent: 'space-between' }}>
               <h2 style={{ margin: 0 }}>{label} 총점</h2>
               {!isInvalid && (
