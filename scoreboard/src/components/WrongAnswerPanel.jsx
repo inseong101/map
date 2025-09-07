@@ -104,7 +104,7 @@ function WrongAnswerPanel({ roundLabel, data }) {
     style={{ marginLeft: 8 }}
     aria-label="특별 해설 제공 예시"
   >
-    -예시-<span className="flame-emoji" aria-hidden></span>
+    ㅤ예시ㅤ<span className="flame-emoji" aria-hidden></span>
   </button>
   =특별 해설 제공(클릭하여 학습)
 </div>
