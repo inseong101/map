@@ -41,6 +41,61 @@ const AdminSystem = () => {
     '09': '상지대', '10': '세명대', '11': '우석대', '12': '원광대'
   };
 
+// AdminSystem.jsx에 다음 함수를 추가하세요:
+
+// 문항별 통계를 가져오는 함수
+const getQuestionStats = async (roundLabel, session, questionNum) => {
+  try {
+    // analytics 컬렉션에서 해당 교시의 문항 통계 조회
+    const analyticsRef = doc(db, 'analytics', `${roundLabel}_${session}`);
+    const analyticsSnap = await getDoc(analyticsRef);
+    
+    if (analyticsSnap.exists()) {
+      const data = analyticsSnap.data();
+      const questionStats = data.questionStats?.[questionNum];
+      const choiceStats = data.choiceStats?.[questionNum];
+      
+      if (questionStats && choiceStats) {
+        return {
+          questionNum,
+          totalResponses: questionStats.totalResponses || 0,
+          wrongCount: questionStats.wrongCount || 0,
+          errorRate: questionStats.errorRate || 0,
+          choices: choiceStats
+        };
+      }
+    }
+    
+    return {
+      questionNum,
+      totalResponses: 0,
+      wrongCount: 0,
+      errorRate: 0,
+      choices: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+    };
+    
+  } catch (error) {
+    console.error('문항 통계 조회 실패:', error);
+    return {
+      questionNum,
+      totalResponses: 0,
+      wrongCount: 0,
+      errorRate: 0,
+      choices: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+    };
+  }
+};
+
+// 또는 더 간단하게 사용 중인 곳에서 직접 처리하려면:
+// getQuestionStats(selectedRound, selectedSession, q) 대신
+// { errorRate: 0, totalResponses: 0 } 같은 기본값을 사용하세요.
+
+
+
+
+
+
+  
   // 사용 가능한 회차 확인
   useEffect(() => {
     checkAvailableRounds();
