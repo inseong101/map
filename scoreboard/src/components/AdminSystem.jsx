@@ -1,7 +1,14 @@
 // src/components/AdminSystem.jsx - 백엔드 변경사항 반영된 관리자 시스템
-import React, { useState, useEffect } from 'react';
-import { collection, doc, getDocs, getDoc } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import { 
+  ALL_SUBJECTS, 
+  SUBJECT_MAX, 
+  GROUPS, 
+  ROUND_LABELS,
+  SESSION_SUBJECT_RANGES,
+  getSubjectByQuestion,  // 이 함수 추가
+  findSubjectByQuestionNum,  // 이 함수도 추가 (필요한 경우)
+  findSessionByQuestionNum   // 이 함수도 추가 (필요한 경우)
+} from '../services/dataService';
 
 const AdminSystem = () => {
   const [currentView, setCurrentView] = useState('rounds'); // 'rounds' | 'sessions' | 'answers'
