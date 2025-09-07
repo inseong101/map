@@ -25,8 +25,24 @@ function WrongAnswerPanel({ roundLabel, data }) {
     return out;
   }, [data]);
 
+  // 🔥 특별 해설 제공(불타는) 문항 세트
+  // - 백엔드 필드명 여러 가지 지원: fireBySession / featuredBySession / hotBySession / specialBySession
+  const fireBySession = useMemo(() => {
+    const out = { '1교시': new Set(), '2교시': new Set(), '3교시': new Set(), '4교시': new Set() };
+    const source =
+      data?.fireBySession ||
+      data?.featuredBySession ||
+      data?.hotBySession ||
+      data?.specialBySession ||
+      {};
+
+    for (const [sess, arr] of Object.entries(source)) {
+      if (Array.isArray(arr)) arr.forEach(n => out[sess]?.add(Number(n)));
+    }
+    return out;
+  }, [data]);
+
   const handleToggle = (sess) => {
-    // 항상 하나만 열려 있게: 클릭한 걸로 고정(같은 걸 다시 눌러도 유지)
     if (openSession !== sess) setOpenSession(sess);
   };
 
@@ -57,13 +73,20 @@ function WrongAnswerPanel({ roundLabel, data }) {
               {Array.from({ length: total }, (_, i) => {
                 const qNum = i + 1;
                 const isWrong = wrongBySession[session]?.has(qNum);
+                const isFire = fireBySession[session]?.has(qNum);
+                const cls = `qbtn${isWrong ? ' red' : ''}${isFire ? ' fire' : ''}`;
+                const label = `문항 ${qNum}${isWrong ? ' (내 오답)' : ''}${isFire ? ' · 특별 해설 제공' : ''}`;
+
                 return (
                   <button
                     key={qNum}
                     type="button"
-                    className={`qbtn${isWrong ? ' red' : ''}`}
+                    className={cls}
+                    title={label}
+                    aria-label={label}
                   >
                     {qNum}
+                    {isFire && <span className="flame-emoji" aria-hidden>🔥</span>}
                   </button>
                 );
               })}
@@ -78,7 +101,7 @@ function WrongAnswerPanel({ roundLabel, data }) {
     <div>
       <h2 style={{ marginTop: 0 }}>{roundLabel} 오답 보기</h2>
       <div className="small" style={{ opacity: .85, marginBottom: 6 }}>
-        색상: <b style={{color:'#ffd8d8'}}>빨강</b>=내 오답, 회색=정답(또는 데이터 없음)
+        색상: <b style={{color:'#ffd8d8'}}>빨강</b>=내 오답, 회색=정답(또는 데이터 없음), <b>🔥</b>=특별 해설 제공
       </div>
 
       <div className="accordion">
