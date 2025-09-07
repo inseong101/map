@@ -524,11 +524,12 @@ const AdminSystem = () => {
           <table style={{ 
             width: '100%', 
             borderCollapse: 'collapse',
-            minWidth: Math.max(800, questions.length * 30 + 100)
+            minWidth: Math.max(800, questions.length * 30 + 130)
           }}>
             <thead style={{ position: 'sticky', top: 0, background: 'var(--surface-2)', zIndex: 10 }}>
+              {/* 과목명 행 */}
               <tr>
-                <th style={{
+                <th rowSpan="9" style={{
                   padding: '12px 8px',
                   border: '1px solid var(--line)',
                   background: 'var(--surface-2)',
@@ -538,35 +539,239 @@ const AdminSystem = () => {
                   minWidth: 80,
                   position: 'sticky',
                   left: 0,
-                  zIndex: 11
+                  zIndex: 11,
+                  verticalAlign: 'middle'
                 }}>
                   학수번호
                 </th>
-                <th style={{
+                <th rowSpan="9" style={{
                   padding: '12px 8px',
                   border: '1px solid var(--line)',
                   background: 'var(--surface-2)',
                   color: 'var(--ink)',
                   fontWeight: 700,
                   fontSize: 11,
-                  minWidth: 50
+                  minWidth: 50,
+                  verticalAlign: 'middle'
                 }}>
                   상태
                 </th>
+                {questions.map(q => {
+                  const subject = getSubjectByQuestion(q, selectedSession);
+                  return (
+                    <th key={q} style={{
+                      padding: '6px 4px',
+                      border: '1px solid var(--line)',
+                      background: '#8b5cf6',
+                      color: '#fff',
+                      fontWeight: 700,
+                      fontSize: 9,
+                      minWidth: 30,
+                      textAlign: 'center'
+                    }}>
+                      {subject}
+                    </th>
+                  );
+                })}
+              </tr>
+
+              {/* 문항번호 행 */}
+              <tr>
                 {questions.map(q => (
                   <th key={q} style={{
-                    padding: '12px 4px',
+                    padding: '6px 4px',
                     border: '1px solid var(--line)',
                     background: 'var(--surface-2)',
                     color: 'var(--ink)',
                     fontWeight: 700,
-                    fontSize: 11,
-                    minWidth: 30,
-                    writingMode: 'vertical-rl'
+                    fontSize: 10,
+                    textAlign: 'center'
                   }}>
                     {q}
                   </th>
                 ))}
+              </tr>
+
+              {/* 정답 행 */}
+              <tr>
+                {questions.map(q => (
+                  <th key={q} style={{
+                    padding: '4px',
+                    border: '1px solid var(--line)',
+                    background: '#22c55e',
+                    color: '#fff',
+                    fontWeight: 700,
+                    fontSize: 10,
+                    textAlign: 'center'
+                  }}>
+                    {answerKey[q] || '?'}
+                  </th>
+                ))}
+              </tr>
+
+              {/* 응답 현황 행 */}
+              <tr>
+                {questions.map(q => {
+                  const stats = getQuestionStats(q);
+                  return (
+                    <th key={q} style={{
+                      padding: '4px',
+                      border: '1px solid var(--line)',
+                      background: '#3b82f6',
+                      color: '#fff',
+                      fontWeight: 600,
+                      fontSize: 9,
+                      textAlign: 'center'
+                    }}>
+                      {stats ? `${stats.actualResponses}/${stats.totalResponses}` : '0/0'}
+                    </th>
+                  );
+                })}
+              </tr>
+
+              {/* 응답률(%) 행 */}
+              <tr>
+                {questions.map(q => {
+                  const stats = getQuestionStats(q);
+                  return (
+                    <th key={q} style={{
+                      padding: '4px',
+                      border: '1px solid var(--line)',
+                      background: '#0ea5e9',
+                      color: '#fff',
+                      fontWeight: 600,
+                      fontSize: 9,
+                      textAlign: 'center'
+                    }}>
+                      {stats ? `${stats.responseRate}%` : '0%'}
+                    </th>
+                  );
+                })}
+              </tr>
+
+              {/* 오답률 행 */}
+              <tr>
+                {questions.map(q => {
+                  const stats = getQuestionStats(q);
+                  return (
+                    <th key={q} style={{
+                      padding: '4px',
+                      border: '1px solid var(--line)',
+                      background: '#ef4444',
+                      color: '#fff',
+                      fontWeight: 600,
+                      fontSize: 9,
+                      textAlign: 'center'
+                    }}>
+                      {stats ? `${stats.errorRate}%` : '0%'}
+                    </th>
+                  );
+                })}
+              </tr>
+
+              {/* 1번 선택률 행 */}
+              <tr>
+                {questions.map(q => {
+                  const stats = getQuestionStats(q);
+                  const isCorrect = answerKey[q] === 1;
+                  return (
+                    <th key={q} style={{
+                      padding: '4px',
+                      border: '1px solid var(--line)',
+                      background: isCorrect ? '#10b981' : '#6b7280',
+                      color: '#fff',
+                      fontWeight: 600,
+                      fontSize: 9,
+                      textAlign: 'center'
+                    }}>
+                      ①{stats ? `${stats.choiceRates[1]}%` : '0%'}
+                    </th>
+                  );
+                })}
+              </tr>
+
+              {/* 2번 선택률 행 */}
+              <tr>
+                {questions.map(q => {
+                  const stats = getQuestionStats(q);
+                  const isCorrect = answerKey[q] === 2;
+                  return (
+                    <th key={q} style={{
+                      padding: '4px',
+                      border: '1px solid var(--line)',
+                      background: isCorrect ? '#10b981' : '#6b7280',
+                      color: '#fff',
+                      fontWeight: 600,
+                      fontSize: 9,
+                      textAlign: 'center'
+                    }}>
+                      ②{stats ? `${stats.choiceRates[2]}%` : '0%'}
+                    </th>
+                  );
+                })}
+              </tr>
+
+              {/* 3번 선택률 행 */}
+              <tr>
+                {questions.map(q => {
+                  const stats = getQuestionStats(q);
+                  const isCorrect = answerKey[q] === 3;
+                  return (
+                    <th key={q} style={{
+                      padding: '4px',
+                      border: '1px solid var(--line)',
+                      background: isCorrect ? '#10b981' : '#6b7280',
+                      color: '#fff',
+                      fontWeight: 600,
+                      fontSize: 9,
+                      textAlign: 'center'
+                    }}>
+                      ③{stats ? `${stats.choiceRates[3]}%` : '0%'}
+                    </th>
+                  );
+                })}
+              </tr>
+
+              {/* 4번 선택률 행 */}
+              <tr>
+                {questions.map(q => {
+                  const stats = getQuestionStats(q);
+                  const isCorrect = answerKey[q] === 4;
+                  return (
+                    <th key={q} style={{
+                      padding: '4px',
+                      border: '1px solid var(--line)',
+                      background: isCorrect ? '#10b981' : '#6b7280',
+                      color: '#fff',
+                      fontWeight: 600,
+                      fontSize: 9,
+                      textAlign: 'center'
+                    }}>
+                      ④{stats ? `${stats.choiceRates[4]}%` : '0%'}
+                    </th>
+                  );
+                })}
+              </tr>
+
+              {/* 5번 선택률 행 */}
+              <tr>
+                {questions.map(q => {
+                  const stats = getQuestionStats(q);
+                  const isCorrect = answerKey[q] === 5;
+                  return (
+                    <th key={q} style={{
+                      padding: '4px',
+                      border: '1px solid var(--line)',
+                      background: isCorrect ? '#10b981' : '#6b7280',
+                      color: '#fff',
+                      fontWeight: 600,
+                      fontSize: 9,
+                      textAlign: 'center'
+                    }}>
+                      ⑤{stats ? `${stats.choiceRates[5]}%` : '0%'}
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
