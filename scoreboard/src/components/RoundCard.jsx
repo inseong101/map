@@ -6,8 +6,10 @@ import WrongAnswerPanel from './WrongAnswerPanel';
 
 function RoundCard({ label, data, sid }) {
   const [isFlipped, setIsFlipped] = useState(false);
+
   const flipCardRef = useRef(null);
   const frontRef = useRef(null);
+  const backRef  = useRef(null);
 
   const {
     totalScore = 0,
@@ -22,22 +24,45 @@ function RoundCard({ label, data, sid }) {
 
   const overallRate = totalMax > 0 ? pct(totalScore, totalMax) : 0;
 
-  // 앞면 높이를 기준으로 카드 높이 동기화
+  // invalid = 미응시/중도포기/기타 무효 판정
+  const isInvalid = status === 'absent' || status === 'dropout' || status === 'dropped';
+  const statusClass = isInvalid ? 'rc-invalid' : (overallPass ? 'rc-pass' : 'rc-fail');
+
+  // ✅ 카드 높이 동기화: 유효차수=앞면 기준, 무효차수=뒷면 기준
   useEffect(() => {
     const syncHeight = () => {
-      if (flipCardRef.current && frontRef.current) {
-        const frontHeight = frontRef.current.offsetHeight;
-        flipCardRef.current.style.setProperty('--front-height', `${frontHeight}px`);
-        flipCardRef.current.classList.add('height-synced');
-      }
+      const card   = flipCardRef.current;
+      const target = isInvalid ? backRef.current : frontRef.current; // 핵심: 대상 전환
+      if (!card || !target) return;
+
+      const h = target.offsetHeight || 0;
+      card.style.setProperty('--front-height', `${h}px`);
+      card.classList.add('height-synced');
     };
-    const timer = setTimeout(syncHeight, 100);
-    window.addEventListener('resize', syncHeight);
+
+    // 즉시 한 번
+    syncHeight();
+
+    // 리사이즈 대응
+    const onResize = () => syncHeight();
+    window.addEventListener('resize', onResize);
+
+    // 대상 면의 내부 콘텐츠 변화에도 대응
+    const target = isInvalid ? backRef.current : frontRef.current;
+    const ro = target ? new ResizeObserver(syncHeight) : null;
+    if (ro && target) ro.observe(target);
+
+    // 폰트/레이아웃 지연 대비 보강 호출
+    const t1 = setTimeout(syncHeight, 60);
+    const t2 = requestAnimationFrame(syncHeight);
+
     return () => {
-      clearTimeout(timer);
-      window.removeEventListener('resize', syncHeight);
+      window.removeEventListener('resize', onResize);
+      if (ro) ro.disconnect();
+      clearTimeout(t1);
+      cancelAnimationFrame(t2);
     };
-  }, []);
+  }, [isInvalid]); // 무효/유효 전환 시 재측정
 
   const getReasonText = () => {
     if (!meets60 && anyGroupFail) return '과락 및 평락으로 인한 불합격';
@@ -106,10 +131,6 @@ function RoundCard({ label, data, sid }) {
     setIsFlipped(prev => !prev);
   };
 
-  // invalid = 미응시/중도포기/기타 무효 판정
-  const isInvalid = status === 'absent' || status === 'dropout' || status === 'dropped';
-  const statusClass = isInvalid ? 'rc-invalid' : (overallPass ? 'rc-pass' : 'rc-fail');
-
   return (
     <div
       ref={flipCardRef}
@@ -118,7 +139,7 @@ function RoundCard({ label, data, sid }) {
     >
       <div className={`flip-inner ${isFlipped ? 'is-flipped' : ''}`}>
 
-        {/* 앞면 */}
+        {/* 앞면 (유효/무효 모두 같은 골격, 내용만 다름) */}
         <div
           ref={frontRef}
           className={`flip-face flip-front card ${statusClass}`}
@@ -133,8 +154,8 @@ function RoundCard({ label, data, sid }) {
             )}
           </div>
 
-          {/* ✅ 무효 차수: 앞면에는 안내만 표시 */}
           {isInvalid ? (
+            // ✅ 무효 차수: 앞면엔 안내만
             <div className="small" style={{ marginTop: 12, fontWeight: 700 }}>
               본 회차는 분석에서 제외됩니다.
             </div>
@@ -162,8 +183,11 @@ function RoundCard({ label, data, sid }) {
           )}
         </div>
 
-        {/* 뒷면 */}
-        <div className={`flip-face flip-back card ${statusClass}`}>
+        {/* 뒷면 (무효라도 항상 오답 패널 표시) */}
+        <div
+          ref={backRef}
+          className={`flip-face flip-back card ${statusClass}`}
+        >
           <WrongAnswerPanel roundLabel={label} data={data} />
         </div>
       </div>
