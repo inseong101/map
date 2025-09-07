@@ -1,74 +1,176 @@
 // src/components/RoundCard.jsx
-import React, { useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { fmt, pct, pill, chunk } from '../utils/helpers';
+import { SUBJECT_MAX } from '../services/dataService';
 import WrongAnswerPanel from './WrongAnswerPanel';
 
-function RoundCard({ label, data = {}, sid }) {
-  // 상태 감지
-  const status = data?.status || 'completed'; // completed | absent | dropout | invalid ...
-  const isPass = Number.isFinite(data?.totalScore) && Number.isFinite(data?.totalMax)
-    ? (data.totalScore / data.totalMax) >= 0.6
-    : false;
+function RoundCard({ label, data, sid }) {
+  const [isFlipped, setIsFlipped] = useState(false);
+  const flipCardRef = useRef(null);
+  const frontRef = useRef(null);
 
-  // 카드 상태 클래스
-  const rcClass =
-    status === 'invalid' ? 'rc-invalid'
-    : status === 'absent' || status === 'dropout' ? 'rc-fail'
-    : isPass ? 'rc-pass'
-    : 'rc-fail';
+  const {
+    totalScore = 0,
+    totalMax = 340,
+    overallPass = false,
+    meets60 = false,
+    anyGroupFail = false,
+    groupResults,
+    subjectScores = {},
+    status
+  } = data || {};
 
-  // 배지/상태 텍스트
-  const statusBadge = (() => {
-    if (status === 'invalid') return <span className="badge invalid">무효</span>;
-    if (status === 'absent') return <span className="badge fail">미응시</span>;
-    if (status === 'dropout') return <span className="badge fail">중도포기</span>;
-    return isPass ? <span className="badge pass">합격권</span> : <span className="badge fail">불합격권</span>;
-  })();
+  const overallRate = totalMax > 0 ? pct(totalScore, totalMax) : 0;
 
-  const totalScoreText = useMemo(() => {
-    const s = Number.isFinite(data?.totalScore) ? data.totalScore : '-';
-    const m = Number.isFinite(data?.totalMax)   ? data.totalMax   : '-';
-    return `${s} / ${m}`;
-  }, [data?.totalScore, data?.totalMax]);
+  // 앞면 높이를 기준으로 카드 높이 동기화
+  useEffect(() => {
+    const syncHeight = () => {
+      if (flipCardRef.current && frontRef.current) {
+        const frontHeight = frontRef.current.offsetHeight;
+        flipCardRef.current.style.setProperty('--front-height', `${frontHeight}px`);
+        flipCardRef.current.classList.add('height-synced');
+      }
+    };
+    const timer = setTimeout(syncHeight, 100);
+    window.addEventListener('resize', syncHeight);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', syncHeight);
+    };
+  }, []);
+
+  const getReasonText = () => {
+    if (!meets60 && anyGroupFail) return '과락 및 평락으로 인한 불합격';
+    if (!meets60) return '평락으로 인한 불합격';
+    return '과락으로 인한 불합격';
+  };
+
+  const renderGroupBoxes = () => {
+    if (!groupResults) return null;
+    return groupResults.map((group) => {
+      const { label: groupLabel, subjects, layoutChunks, score, max, rate, pass } = group;
+
+      let chipsHtml = null;
+      if (layoutChunks && layoutChunks.length) {
+        const rows = chunk(subjects, layoutChunks);
+        chipsHtml = rows.map((row, rowIndex) => (
+          <div key={rowIndex} className="subj-row">
+            {row.map(subject => {
+              const sScore = subjectScores[subject] || 0;
+              const sMax = SUBJECT_MAX[subject] || 0;
+              return (
+                <span key={subject} className="subj-chip">
+                  {subject} <span className="muted">{fmt(sScore)}/{fmt(sMax)}</span>
+                </span>
+              );
+            })}
+          </div>
+        ));
+      } else {
+        chipsHtml = (
+          <div className="subj-row">
+            {subjects.map(subject => {
+              const sScore = subjectScores[subject] || 0;
+              const sMax = SUBJECT_MAX[subject] || 0;
+              return (
+                <span key={subject} className="subj-chip">
+                  {subject} <span className="muted">{fmt(sScore)}/{fmt(sMax)}</span>
+                </span>
+              );
+            })}
+          </div>
+        );
+      }
+
+      return (
+        <div key={group.name} className={`group-box ${pass ? 'ok' : 'fail'} span-12`}>
+          <div className="group-head">
+            <div className="name" style={{ fontWeight: 800 }}>{groupLabel}</div>
+            <div className="small">
+              소계 {fmt(score)}/{fmt(max)} · 정답률 {rate}%{' '}
+              {pass
+                ? <span dangerouslySetInnerHTML={{ __html: pill('통과', 'ok') }} />
+                : <span dangerouslySetInnerHTML={{ __html: pill('과락', 'red') }} />
+              }
+            </div>
+          </div>
+          {chipsHtml}
+        </div>
+      );
+    });
+  };
+
+  const handleCardClick = (e) => {
+    if (e.target.closest('button')) return;
+    setIsFlipped(prev => !prev);
+  };
+
+  // invalid = 미응시/중도포기/기타 무효 판정
+  const isInvalid = status === 'absent' || status === 'dropout' || status === 'dropped';
+  const statusClass = isInvalid ? 'rc-invalid' : (overallPass ? 'rc-pass' : 'rc-fail');
 
   return (
-    <div className={`flip-card`}>
-      <div className="flip-inner">
+    <div
+      ref={flipCardRef}
+      className="flip-card"
+      onClick={handleCardClick}
+    >
+      <div className={`flip-inner ${isFlipped ? 'is-flipped' : ''}`}>
 
-        {/* ===== 앞면 ===== */}
-        <div className={`card flip-face flip-front ${rcClass}`}>
+        {/* 앞면 (상태 클래스 카드에 부여) */}
+        <div
+          ref={frontRef}
+          className={`flip-face flip-front card ${statusClass}`}
+        >
           <div className="flex" style={{ justifyContent: 'space-between' }}>
-            <h2 style={{ margin: 0 }}>{label}</h2>
-            {statusBadge}
+            <h2 style={{ margin: 0 }}>{label} 총점</h2>
+            {!isInvalid && (
+              <div className="kpi">
+                <div className="num">{fmt(totalScore)}</div>
+                <div className="sub">/ {fmt(totalMax)}</div>
+              </div>
+            )}
           </div>
 
-          <div className="kpi" style={{ marginTop: 8 }}>
-            <div className="num">{totalScoreText}</div>
-            <div className="sub">총점</div>
-          </div>
-
-          {/* 무효차수 안내는 '앞면'에만 */}
-          {status === 'invalid' && (
-            <div className="alert" style={{ marginTop: 12 }}>
-              본 회차는 분석에서 제외됩니다.
+          {isInvalid ? (
+            <div className="small" style={{ marginTop: 12 }}>
+              본 회차 {status === 'absent' ? '미응시' : '중도포기'}
             </div>
+          ) : (
+            <>
+              <div className="progress" style={{ margin: '8px 0 2px 0' }}>
+                <div className="bar" style={{ width: `${overallRate}%` }} />
+                <div className="cutline" />
+              </div>
+              <div className="small" style={{ marginTop: 10 }}>
+                정답률 {overallRate}% (컷 60%: 204/340){' '}
+                {overallPass
+                  ? <span dangerouslySetInnerHTML={{ __html: pill('통과', 'ok') }} />
+                  : <span dangerouslySetInnerHTML={{ __html: pill('불합격', 'red') }} />
+                }
+                <div className="small" style={{ marginTop: 6, opacity: 0.9 }}>
+                  {getReasonText()}
+                </div>
+              </div>
+            </>
           )}
 
-          {/* (예시) 진행바 */}
-          {Number.isFinite(data?.totalScore) && Number.isFinite(data?.totalMax) && (
-            <div className="progress" style={{ marginTop: 12 }}>
-              <div
-                className="bar"
-                style={{ width: `${Math.max(0, Math.min(100, (data.totalScore / data.totalMax) * 100))}%` }}
-              />
-              <div className="cutline" />
+          {!isInvalid && (
+            <div className="group-grid" style={{ marginTop: 12 }}>
+              {renderGroupBoxes()}
             </div>
           )}
         </div>
 
-        {/* ===== 뒷면 ===== */}
-        <div className={`card flip-face flip-back ${rcClass}`}>
-          {/* 무효차수라도 뒷면은 동일하게 오답 버튼 그리드 표시 */}
-          <WrongAnswerPanel roundLabel={label} data={data} />
+        {/* 뒷면 (여기도 동일한 상태 클래스 부여해서 색/버튼 틴트 복원) */}
+        <div className={`flip-face flip-back card ${statusClass}`}>
+          {isInvalid ? (
+            <div className="small" style={{ padding: 20, textAlign: 'center' }}>
+              본 회차는 분석에서 제외됩니다.
+            </div>
+          ) : (
+            <WrongAnswerPanel roundLabel={label} data={data} />
+          )}
         </div>
       </div>
     </div>
