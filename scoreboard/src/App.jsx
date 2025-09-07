@@ -12,6 +12,7 @@ const SESSIONS = ['1교시', '2교시', '3교시', '4교시'];
 async function getRoundTotalFromFirestore(roundLabel, sid) {
   const db = getFirestore();
   const perSession = [];
+  let completedCount = 0;
 
   for (const session of SESSIONS) {
     try {
@@ -31,6 +32,7 @@ async function getRoundTotalFromFirestore(roundLabel, sid) {
 
       const s = Number(d.totalScore);
       perSession.push(Number.isFinite(s) ? s : 0);
+      completedCount += 1;
     } catch (e) {
       console.error(`점수 조회 오류: ${roundLabel} ${session} ${sid}`, e);
       perSession.push(0);
@@ -38,7 +40,11 @@ async function getRoundTotalFromFirestore(roundLabel, sid) {
   }
 
   const total = perSession.reduce((a, b) => a + b, 0);
-  return { total, sessionScores: perSession };
+   const roundStatus =
+   completedCount === 4 ? 'completed' :
+   completedCount === 0 ? 'absent' : 'dropout';
+
+ return { total, sessionScores: perSession, roundStatus };
 }
 
 function App() {
@@ -91,7 +97,7 @@ function App() {
       try {
         const out = [];
         for (const { label, data } of rounds) {
-          const { total, sessionScores } = await getRoundTotalFromFirestore(label, studentId);
+          const { total, sessionScores, roundStatus } = await getRoundTotalFromFirestore(label, studentId);
           out.push({
             label,
             data: {
@@ -99,6 +105,7 @@ function App() {
               sessionScores,
               totalScore: total,
               totalMax: (data && data.totalMax) || 340
+              status: roundStatus       // ✅ 라운드 상태 주입 (absent / dropout / completed)
             }
           });
         }
