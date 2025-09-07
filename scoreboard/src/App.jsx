@@ -158,7 +158,7 @@ function App() {
 
       if (foundRounds.length === 0) {
         // 🔔 학수번호 부재 안내 그대로 유지
-        setError('존재하지 않는 학수번호거나 미응시자입니다.');
+        setError('존재하지 않는 학수번호입니다.');
         return;
       }
 
