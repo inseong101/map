@@ -118,30 +118,33 @@ function StudentCard({ sid, school, rounds }) {
     return () => { cancelled = true; };
   }, [sid, rounds]);
 
-  const renderBadges = () => {
-    return rounds.map(({ label, data }) => {
-      const status = data?.status;
-      const score = Number(data?.totalScore) || 0;
+  // 상단 배지 (합격/불합격/무효)
+const renderBadges = () => {
+  return (rounds || []).map(({ label, data }) => {
+    const status = data?.status; // 'completed' | 'absent' | 'dropout' | 'dropped'
+    const isInvalid = status === 'absent' || status === 'dropout' || status === 'dropped';
 
-      let badgeClass = '';
-      let badgeText = '';
+    const score = Number(data?.totalScore) || 0;
+    // totalMax가 데이터에 있으면 그걸, 없으면 전체 기본값 사용
+    const max = Number(data?.totalMax) || TOTAL_MAX;
+    const passOverall = score >= max * 0.6;
 
-      if (['absent', 'dropout', 'dropped'].includes(status)) {
-  badgeClass = 'badge invalid';
-  badgeText = '무효';
-      } else {
-        const passOverall = score >= TOTAL_MAX * 0.6;
-        badgeClass = passOverall ? 'badge pass' : 'badge fail';
-        badgeText = passOverall ? '합격' : '불합격';
-      }
+    const badgeClass = isInvalid
+      ? 'badge invalid'
+      : (passOverall ? 'badge pass' : 'badge fail');
 
-      return (
-        <span key={label} className={badgeClass}>
-          {label} {badgeText}
-        </span>
-      );
-    });
-  };
+    const badgeText = isInvalid
+      ? '무효'
+      : (passOverall ? '합격' : '불합격');
+
+    return (
+      <span key={label} className={badgeClass}>
+        {label} {badgeText}
+      </span>
+    );
+  });
+};
+
 
   return (
     <div className="card" style={{ marginBottom: '16px' }}>
