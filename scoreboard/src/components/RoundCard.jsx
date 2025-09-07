@@ -10,18 +10,18 @@ function RoundCard({ label, data, sid }) {
   const frontRef = useRef(null);
 
   const {
-    totalScore,
-    totalMax,
-    overallPass,
-    meets60,
-    anyGroupFail,
+    totalScore = 0,
+    totalMax = 340,
+    overallPass = false,
+    meets60 = false,
+    anyGroupFail = false,
     groupResults,
+    subjectScores = {},
     status
   } = data || {};
 
   const overallRate = totalMax > 0 ? pct(totalScore, totalMax) : 0;
 
-  // 높이 동기화
   useEffect(() => {
     const syncHeight = () => {
       if (flipCardRef.current && frontRef.current) {
@@ -50,20 +50,17 @@ function RoundCard({ label, data, sid }) {
     return groupResults.map((group) => {
       const { label: groupLabel, subjects, layoutChunks, score, max, rate, pass } = group;
 
-      let chipsHtml = '';
+      let chipsHtml = null;
       if (layoutChunks && layoutChunks.length) {
         const rows = chunk(subjects, layoutChunks);
         chipsHtml = rows.map((row, rowIndex) => (
           <div key={rowIndex} className="subj-row">
-            {row.map((subject) => {
-              const subjectScore = data.subjectScores[subject] || 0;
-              const subjectMax = SUBJECT_MAX[subject] || 0;
+            {row.map(subject => {
+              const sScore = subjectScores[subject] || 0;
+              const sMax = SUBJECT_MAX[subject] || 0;
               return (
                 <span key={subject} className="subj-chip">
-                  {subject}{' '}
-                  <span className="muted">
-                    {fmt(subjectScore)}/{fmt(subjectMax)}
-                  </span>
+                  {subject} <span className="muted">{fmt(sScore)}/{fmt(sMax)}</span>
                 </span>
               );
             })}
@@ -72,15 +69,12 @@ function RoundCard({ label, data, sid }) {
       } else {
         chipsHtml = (
           <div className="subj-row">
-            {subjects.map((subject) => {
-              const subjectScore = data.subjectScores[subject] || 0;
-              const subjectMax = SUBJECT_MAX[subject] || 0;
+            {subjects.map(subject => {
+              const sScore = subjectScores[subject] || 0;
+              const sMax = SUBJECT_MAX[subject] || 0;
               return (
                 <span key={subject} className="subj-chip">
-                  {subject}{' '}
-                  <span className="muted">
-                    {fmt(subjectScore)}/{fmt(subjectMax)}
-                  </span>
+                  {subject} <span className="muted">{fmt(sScore)}/{fmt(sMax)}</span>
                 </span>
               );
             })}
@@ -91,16 +85,13 @@ function RoundCard({ label, data, sid }) {
       return (
         <div key={group.name} className={`group-box ${pass ? 'ok' : 'fail'} span-12`}>
           <div className="group-head">
-            <div className="name" style={{ fontWeight: 800 }}>
-              {groupLabel}
-            </div>
+            <div className="name" style={{ fontWeight: 800 }}>{groupLabel}</div>
             <div className="small">
-              소계 {fmt(score)}/{fmt(max)} · 정답률 {rate}%
-              {pass ? (
-                <span dangerouslySetInnerHTML={{ __html: pill('통과', 'ok') }} />
-              ) : (
-                <span dangerouslySetInnerHTML={{ __html: pill('과락', 'red') }} />
-              )}
+              소계 {fmt(score)}/{fmt(max)} · 정답률 {rate}%{' '}
+              {pass
+                ? <span dangerouslySetInnerHTML={{ __html: pill('통과', 'ok') }} />
+                : <span dangerouslySetInnerHTML={{ __html: pill('과락', 'red') }} />
+              }
             </div>
           </div>
           {chipsHtml}
@@ -111,23 +102,25 @@ function RoundCard({ label, data, sid }) {
 
   const handleCardClick = (e) => {
     if (e.target.closest('button')) return;
-    setIsFlipped(!isFlipped);
+    setIsFlipped(prev => !prev);
   };
 
-  // ✅ invalid 판정(보라색 처리 대상)
- const isInvalid = ['absent', 'dropout', 'dropped', 'invalid'].includes(status);
- const isAbsent  = status === 'absent';
+  // invalid = 미응시/중도포기
+  const isInvalid = status === 'absent' || status === 'dropout' || status === 'dropped';
 
   return (
-    <div ref={flipCardRef} className="flip-card" onClick={handleCardClick}>
+    <div
+      ref={flipCardRef}
+      className="flip-card"
+      onClick={handleCardClick}
+    >
       <div className={`flip-inner ${isFlipped ? 'is-flipped' : ''}`}>
+
         {/* 앞면 */}
         <div ref={frontRef} className="flip-face flip-front card">
-          <div className={`round ${isInvalid ? 'absent' : overallPass ? '' : 'fail'}`}>
+          <div className={`round ${isInvalid ? 'absent' : (overallPass ? '' : 'fail')}`}>
             <div className="flex" style={{ justifyContent: 'space-between' }}>
               <h2 style={{ margin: 0 }}>{label} 총점</h2>
-
-              {/* ✅ invalid이면 총점 KPI 숨김 */}
               {!isInvalid && (
                 <div className="kpi">
                   <div className="num">{fmt(totalScore)}</div>
@@ -138,22 +131,21 @@ function RoundCard({ label, data, sid }) {
 
             {isInvalid ? (
               <div className="small" style={{ marginTop: 12 }}>
-                본 회차 {isAbsent ? '미응시' : '중도포기'}
+                본 회차 {status === 'absent' ? '미응시' : '중도포기'}
               </div>
             ) : (
               <>
                 <div className="progress" style={{ margin: '8px 0 2px 0' }}>
-                  <div className="bar" style={{ width: `${overallRate}%` }}></div>
-                  <div className="cutline"></div>
+                  <div className="bar" style={{ width: `${overallRate}%` }} />
+                  <div className="cutline" />
                 </div>
                 <div className="small" style={{ marginTop: 10 }}>
-                  정답률 {overallRate}% (컷 60%: 204/340) ·{' '}
-                  {overallPass ? (
-                    <span dangerouslySetInnerHTML={{ __html: pill('통과', 'ok') }} />
-                  ) : (
-                    <span dangerouslySetInnerHTML={{ __html: pill('불합격', 'red') }} />
-                  )}
-                  <div className="small" style={{ marginTop: '6px', opacity: 0.9 }}>
+                  정답률 {overallRate}% (컷 60%: 204/340){' '}
+                  {overallPass
+                    ? <span dangerouslySetInnerHTML={{ __html: pill('통과', 'ok') }} />
+                    : <span dangerouslySetInnerHTML={{ __html: pill('불합격', 'red') }} />
+                  }
+                  <div className="small" style={{ marginTop: 6, opacity: 0.9 }}>
                     {getReasonText()}
                   </div>
                 </div>
@@ -161,8 +153,11 @@ function RoundCard({ label, data, sid }) {
             )}
           </div>
 
-          {/* ✅ invalid이면 그룹 박스도 숨김 */}
-          {!isInvalid && <div className="group-grid" style={{ marginTop: 12 }}>{renderGroupBoxes()}</div>}
+          {!isInvalid && (
+            <div className="group-grid" style={{ marginTop: 12 }}>
+              {renderGroupBoxes()}
+            </div>
+          )}
         </div>
 
         {/* 뒷면 */}
