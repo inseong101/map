@@ -5,7 +5,8 @@ import {
   GROUPS, 
   ROUND_LABELS,
   SESSION_SUBJECT_RANGES,
-  // getSubjectByQuestion를 올바른 함수명으로 변경
+  findSubjectByQuestionNum, // 이 함수를 추가
+  getSubjectByQuestion      // 이 함수도 필요하면 추가
 } from '../services/dataService';
 
 // Firebase import 추가
