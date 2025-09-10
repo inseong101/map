@@ -462,7 +462,7 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
         <div style={{ textAlign: 'center' }}>
           <div>
             <strong style={{ color: 'var(--ink)' }}>{rounds[selectedRoundIdx]?.label}</strong>
-            {' '}— 본인 점수:{' '}
+            {' '}— {' '}
             <span style={{ color: '#ef4444', fontWeight: 'bold' }}>
               {Number.isFinite(current.studentScore) ? `${current.studentScore}점` : '표시 안함'}
             </span>
