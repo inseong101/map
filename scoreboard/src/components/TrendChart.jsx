@@ -459,27 +459,38 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
         }}
       >
         {/* 좌측 블록 */}
-        <div style={{ textAlign: 'center' }}>
-          <div>
-            <strong style={{ color: 'var(--ink)' }}>{rounds[selectedRoundIdx]?.label}</strong>
-            {' '}— {' '}
-            <span style={{ color: '#ef4444', fontWeight: 'bold' }}>
-              {Number.isFinite(current.studentScore) ? `${current.studentScore}점` : '표시 안함'}
-            </span>
-            {' '}{pct != null ? `(상위 ${pct.toFixed(1)}%)` : ''}
-          </div>
-          <div style={{ marginTop: 4 }}>응시대상자: {stats?.total ?? 0}</div>
-        </div>
+        {/* 좌측 블록 */}
+<div style={{ textAlign: 'center' }}>
+  <div>
+    <strong style={{ color: 'var(--ink)' }}>
+      {rounds[selectedRoundIdx]?.label}
+    </strong>
+    {' '}—{' '}
+    <span style={{ color: '#ef4444', fontWeight: 'bold' }}>
+      {Number.isFinite(current.studentScore) ? `${current.studentScore}점` : '표시 안함'}
+    </span>
+    <br />
+    {pct != null && (
+      <span>(상위 {pct.toFixed(1)}%)</span>
+    )}
+  </div>
+  <div style={{ marginTop: 4 }}>
+    응시대상자: {stats?.total ?? 0}
+  </div>
+</div>
 
-        {/* 우측 블록 */}
-        <div style={{ textAlign: 'center' }}>
-          <div>유효응시자: {stats?.completed ?? 0}</div>
-          <div>
-            무효응시자: {(stats?.absent ?? 0) + (stats?.dropout ?? 0)}
-            {' '}(미응시자: {stats?.absent ?? 0}
-            {' '}중도포기: {stats?.dropout ?? 0})
-          </div>
-        </div>
+{/* 우측 블록 */}
+<div style={{ textAlign: 'center' }}>
+  <div>유효응시자: {stats?.completed ?? 0}</div>
+  <div>
+    무효응시자: {(stats?.absent ?? 0) + (stats?.dropout ?? 0)}
+    <br />
+    (<span>미응시자: {stats?.absent ?? 0}</span>
+    <br />
+    <span>중도포기: {stats?.dropout ?? 0}</span>)
+  </div>
+</div>
+
       </div>
     );
   };
