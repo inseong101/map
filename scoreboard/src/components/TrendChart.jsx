@@ -476,7 +476,8 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
           <div>유효응시자: {stats?.completed ?? 0}</div>
           <div>
             무효응시자: {(stats?.absent ?? 0) + (stats?.dropout ?? 0)}
-            {' '}(미응시자: {stats?.absent ?? 0} · 중도포기: {stats?.dropout ?? 0})
+            {' '}(미응시자: {stats?.absent ?? 0})
+            {' '}(중도포기: {stats?.dropout ?? 0})
           </div>
         </div>
       </div>
