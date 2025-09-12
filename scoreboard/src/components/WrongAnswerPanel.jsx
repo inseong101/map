@@ -82,7 +82,7 @@ function WrongAnswerPanel({ roundLabel, data }) {
             className="qbtn fire"
             aria-label="특별 해설 제공 예시"
           >
-            예시<span className="flame-emoji" aria-hidden>🔥</span>
+            -예시-<span className="flame-emoji" aria-hidden>🔥</span>
           </button>
           = 특별 해설 제공
         </span>
