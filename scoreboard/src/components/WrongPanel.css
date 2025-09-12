@@ -1,126 +1,54 @@
-/* ==== WrongAnswerPanel (탭 전환형, 내부 스크롤 없음) ==== */
-.wrong-panel-root {
-  /* 카드 내부에서 자체 스크롤을 만들지 않음 */
+/* ==== WrongAnswerPanel ==== */
+.wrong-panel-root { overflow: visible; }
+
+/* 설명/탭은 그대로 */
+.legend-line{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; opacity:.9; margin-bottom:8px; font-size:13px;}
+.legend-red{ color:#ffd8d8; }
+.legend-example{ display:inline-flex; align-items:center; gap:6px; }
+.session-tabs{ display:flex; gap:6px; flex-wrap:wrap; margin:8px 0 10px;}
+.tab-btn{ appearance:none; border:1px solid var(--line); background:var(--surface); color:var(--ink); border-radius:999px; padding:6px 12px; font-weight:700; font-size:13px; cursor:pointer;}
+.tab-btn.active{ background:var(--primary); border-color:var(--primary); color:#fff;}
+
+/* 탭 콘텐츠 래퍼: 카드 뒷면 영역을 차지(부모가 높이를 정해줌) */
+.tab-content{
   overflow: visible;
+  position: relative;
+  /* 부모가 카드 뒷면 전체를 주는 상황이면 높이가 이미 정해짐.
+     아니라면 명시적으로 원하는 높이를 주거나 flex로 늘려줘도 됨. */
 }
 
-/* 설명 줄 */
-.legend-line {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  opacity: .9;
-  margin-bottom: 8px;
-  font-size: 13px;
-}
-.legend-red { color: #ffd8d8; }
-.legend-example {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* 상단 탭 */
-.session-tabs {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin: 8px 0 10px;
-}
-.tab-btn {
-  appearance: none;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink);
-  border-radius: 999px;
-  padding: 6px 12px;
-  font-weight: 700;
-  font-size: 13px;
-  cursor: pointer;
-}
-.tab-btn.active {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: #fff;
-}
-
-/* 탭 콘텐츠 래퍼 — 내부 스크롤 끔 */
-.tab-content {
-  overflow: visible;
-}
-
-/* 번호 버튼 그리드
-   - 버튼 크기를 기존 대비 80%로 줄임 */
-.btn-grid {
+/* 버튼 그리드: 열/행은 JS가 인라인 스타일로 지정 */
+.btn-grid{
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(29px, 1fr)); /* 기존 36px → 29px */
-  gap: 5px; /* 간격도 살짝 줄임 */
+  gap: 5px;
+  /* grid-template-columns / rows 는 인라인에서 설정됨 */
 }
 
-/* 기본 번호 버튼(무채색) */
-.qbtn {
-  position: relative; /* 🔥 이모지 배치용 */
+/* 버튼 스타일(그대로) */
+.qbtn{
+  position: relative;
   appearance: none;
   border: 1px solid var(--line);
   background: rgba(255,255,255,0.03);
   color: var(--ink);
-  border-radius: 6px;          /* 8px → 6px */
-  padding: 6px 0;              /* 8px → 6px */
+  border-radius: 6px;
   font-weight: 800;
-  font-size: 11px;             /* 13px → 11px */
+  font-size: 11px;
   line-height: 1;
   cursor: default;
+  /* 인라인 rows/cols가 픽셀로 정하므로 padding 없이 중앙정렬 */
+  display:flex; align-items:center; justify-content:center;
 }
+.qbtn.red{ background: rgba(239,68,68,.16); border-color: rgba(239,68,68,.45); color:#ffd8d8; }
+.qbtn.fire{ animation: blazing .6s ease-in-out infinite alternate;
+  box-shadow:0 0 16px #ff4500,0 0 32px #ff6b35,0 0 48px #ff8c42; border-color:#ff7a3a;}
+.qbtn.fire .flame-emoji{ position:absolute; top:-6px; right:-5px; font-size:13px; transform-origin:center;
+  animation: flame-wiggle .9s ease-in-out infinite; pointer-events:none;}
 
-/* 내 오답 = 빨강 */
-.qbtn.red {
-  background: rgba(239,68,68,.16);
-  border-color: rgba(239,68,68,.45);
-  color: #ffd8d8;
-}
+@keyframes blazing{0%{box-shadow:0 0 16px #ff4500,0 0 32px #ff6b35,0 0 48px #ff8c42; transform:scale(1);}100%{box-shadow:0 0 22px #ff4500,0 0 44px #ff6b35,0 0 66px #ff8c42; transform:scale(1.04);}}
+@keyframes flame-wiggle{0%{transform:translateY(0) rotate(0) scale(1);}50%{transform:translateY(-1px) rotate(-6deg) scale(1.05);}100%{transform:translateY(0) rotate(0) scale(1);}}
 
-/* 🔥 불타는 버튼 효과 */
-.qbtn.fire {
-  animation: blazing 0.6s ease-in-out infinite alternate;
-  box-shadow:
-    0 0 16px #ff4500,
-    0 0 32px #ff6b35,
-    0 0 48px #ff8c42;
-  border-color: #ff7a3a;
-}
-
-/* 🔥 이모지 위치 */
-.qbtn.fire .flame-emoji {
-  position: absolute;
-  top: -6px;    /* 기존 -7px → 살짝 조정 */
-  right: -5px;
-  font-size: 13px; /* 글자 크기 줄어든 만큼 조정 */
-  transform-origin: center;
-  animation: flame-wiggle 0.9s ease-in-out infinite;
-  pointer-events: none;
-}
-
-/* 불타는 글로우 & 살짝 커졌다 작아짐 */
-@keyframes blazing {
-  0% {
-    box-shadow: 0 0 16px #ff4500, 0 0 32px #ff6b35, 0 0 48px #ff8c42;
-    transform: scale(1);
-  }
-  100% {
-    box-shadow: 0 0 22px #ff4500, 0 0 44px #ff6b35, 0 0 66px #ff8c42;
-    transform: scale(1.04);
-  }
-}
-
-/* 🔥 이모지 살짝 흔들리는 모션 */
-@keyframes flame-wiggle {
-  0%   { transform: translateY(0) rotate(0deg) scale(1); }
-  50%  { transform: translateY(-1px) rotate(-6deg) scale(1.05); }
-  100% { transform: translateY(0) rotate(0deg) scale(1); }
-}
-
-/* 아주 작은 화면에서 더 줄이기 */
-@media (max-width: 380px) {
-  .qbtn { padding: 5px 0; font-size: 10.5px; }
+/* 아주 작은 화면 보정 */
+@media (max-width: 380px){
+  .qbtn{ font-size:10.5px; }
 }
