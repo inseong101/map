@@ -1,117 +1,154 @@
-/* scoreboard/src/components/AdminSystem.css */
+/* ==== WrongAnswerPanel (탭 전환형, 내부 스크롤 없음) ==== */
+.wrong-panel-root {
+  /* 카드 앞면 높이를 그대로 따르도록: 부모가 높이를 정해둔다고 가정 */
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 
-.admin-root { padding: 20px; }
-.admin-title { margin: 6px 0 16px; color: var(--ink); }
-.admin-title.inline { display: inline; margin-left: 12px; }
-.admin-loading { text-align: center; padding: 40px; color: var(--muted); }
-
-.admin-top-tabs { display:flex; gap:8px; align-items:center; margin-bottom:10px; }
-.admin-tab {
-  appearance:none; border:1px solid var(--line); background:var(--surface);
-  color:var(--ink); border-radius:999px; padding:6px 12px; font-weight:700; font-size:13px; cursor:pointer;
+  /* 내부에 자체 스크롤을 만들지 않음 */
+  overflow: hidden;
 }
-.admin-tab.active { background:var(--primary); border-color:var(--primary); color:#fff; }
-.admin-tab.subtle { opacity:.8; }
 
-.grid-cards { display:grid; gap:12px; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); max-width:720px; }
-.grid-cards.min120 { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
-
-.round-btn {
-  padding:16px 12px; border:1px solid var(--line); border-radius:8px; font-weight:700; font-size:14px;
-  transition: .15s ease; background: var(--surface-2); color: var(--muted); cursor:not-allowed; opacity:.6;
+/* 설명 줄 */
+.legend-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  opacity: .9;
+  margin-bottom: 8px;
+  font-size: 13px;
 }
-.round-btn.ok { background: var(--primary); color: #fff; cursor:pointer; opacity:1; }
-.round-btn.ok2 { background: var(--ok); color:#fff; cursor:pointer; opacity:1; }
-.round-btn.disabled { background: var(--surface-2); color: var(--muted); }
-.muted { color: var(--muted); }
-.tiny { font-size: 11px; }
-.small { font-size: 12px; }
-.bold { font-weight: 800; }
-.center { text-align: center; }
-
-.btn { appearance:none; border:1px solid var(--line); background:var(--surface); color:var(--ink); border-radius:8px; padding:8px 12px; cursor:pointer; }
-.btn.small { padding:6px 10px; font-size:12px; }
-.btn.outline { background:var(--surface-2); }
-.btn-row { display:flex; gap:8px; }
-
-.bar { display:flex; align-items:center; gap:12px; margin-bottom:12px; }
-
-/* Overview table */
-.overview-table-wrap { margin-top: 8px; }
-.overview-table {
-  width: 100%; border-collapse: collapse; border:1px solid var(--line); border-radius:8px; overflow:hidden;
+.legend-red { color: #ffd8d8; }
+.legend-example {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
-.overview-table th, .overview-table td {
-  border:1px solid var(--line); padding:8px; vertical-align: top;
+
+/* 상단 탭 */
+.session-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 8px 0 10px;
 }
-.overview-table thead th { background: var(--surface-2); color: var(--ink); text-align:left; }
-.per-session-grid { display:grid; gap:6px; grid-template-columns: 1fr; }
-.pill-line { display:flex; gap:6px; flex-wrap:wrap; }
-.pill {
-  display:inline-block; padding:3px 8px; border-radius:999px; font-size:11px; font-weight:700; border:1px solid transparent;
-}
-.pill.green { background:#073b26; color:#98f5c7; border-color:#1f9d6d; }
-.pill.blue  { background:#07253b; color:#9cd3ff; border-color:#1c74c9; }
-.pill.purple{ background:#22113b; color:#d8c8ff; border-color:#7e5bef; }
-.pill.warn  { background:#3b1a19; color:#ffd2cf; border-color:#ef4444; }
-.pill.gray  { background:#2b2f36; color:#c7c9ce; border-color:#434a55; }
-
-/* Answers table */
-.table-scroll-x { overflow-x:auto; border:1px solid var(--line); border-radius:8px; }
-.answers-table { width:100%; border-collapse:collapse; }
-.answers-table th, .answers-table td { border:1px solid var(--line); padding:4px; text-align:center; font-size:11px; }
-.answers-table thead th { position: sticky; top:0; z-index:10; text-align: center; }
-
-.answers-table th.side.left { min-width:80px; background:var(--surface-2); color:var(--ink); font-weight:700; }
-.answers-table th.side.status { min-width:56px; background:var(--surface-2); color:var(--ink); font-weight:700; }
-.answers-table th.sticky-spacer { visibility:hidden; }
-
-.answers-table th.c1 { background:#6b7280; color:#fff; }
-.answers-table th.c2 { background:#6b7280; color:#fff; }
-.answers-table th.c3 { background:#6b7280; color:#fff; }
-.answers-table th.c4 { background:#6b7280; color:#fff; }
-.answers-table th.c5 { background:#6b7280; color:#fff; }
-.answers-table th.is-key { background:#10b981; }
-
-.answers-table th.nonresp { background:#0ea5e9; color:#fff; font-weight:700; }
-.answers-table th.answer  { background:#8b5cf6; color:#fff; font-weight:700; }
-.answers-table th.correct { background:#22c55e; color:#fff; font-weight:700; }
-.answers-table th.qnum    { background:var(--surface-2); color:var(--ink); font-weight:800; }
-.answers-table th.subject { background:#111827; color:#fff; font-weight:800; }
-
-.answers-table td.side.left.body {
-  position: sticky; left:0; z-index:1; background:var(--surface);
-  color:var(--ink); font-weight:700;
-}
-.answers-table td.side.status.body {
-  position: sticky; left:80px; z-index:1; color:#fff; font-weight:700;
-}
-.answers-table td.side.status.body.ok   { background:#22c55e; }   /* 유효응시 */
-.answers-table td.side.status.body.warn { background:#f59e0b; }   /* 중도포기 */
-.answers-table td.side.status.body.bad-dark { background:#374151; } /* 미응시 */
-
-.answers-table td.cell { color:#fff; }
-.answers-table td.cell.ok  { background:#22c55e; }  /* 정답 */
-.answers-table td.cell.bad { background:#ef4444; }  /* 오답 */
-.answers-table td.cell.gray{ background:#6b7280; }  /* 미응답(유효응시자) */
-.answers-table td.cell.dark{ background:#374151; }  /* 미응시/중도 등 무효 */
-
-.legend { display:inline-block; width:10px; height:10px; border-radius:2px; margin:0 2px; vertical-align:middle; }
-.legend.green { background:#22c55e; }
-.legend.red   { background:#ef4444; }
-.legend.gray  { background:#6b7280; }
-.legend.dark  { background:#374151; }
-
-/* 왼쪽 두 칸 병합 라벨 셀 */
-.answers-table th.rowhead {
-  position: sticky;
-  left: 0;
-  z-index: 12;
-  background: var(--surface-2);
+.tab-btn {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--surface);
   color: var(--ink);
-  font-weight: 800;
-  text-align: center;
-  padding: 6px 10px;
-  min-width: 136px; /* 80 + 56 */
-  border-right: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
 }
+.tab-btn.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+/* 탭 콘텐츠 래퍼 — 남은 공간만 차지, 내부 스크롤 끔 */
+.tab-content {
+  flex: 1;           /* 위 요소들(제목/설명/탭) 제외한 나머지 높이 채움 */
+  overflow: hidden;  /* 내부 스크롤 금지 */
+  position: relative;
+}
+
+/* 번호 버튼 그리드: 행/열은 JSX에서 픽셀로 지정 */
+.btn-grid {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  height: 100%;      /* 탭 콘텐츠 영역을 꽉 채움 */
+  /* grid-template-columns / rows 는 인라인 스타일로 주입됨 */
+}
+
+/* 기본 번호 버튼 */
+.qbtn {
+  position: relative; /* 🔥 이모지 배치용 */
+  appearance: none;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.03);
+  color: var(--ink);
+  border-radius: 6px;
+  font-weight: 800;
+  font-size: 11px;
+  line-height: 1;
+  cursor: default;
+
+  /* 셀 크기를 100%로 채우고 중앙 정렬 */
+  width: 100%;
+  height: 100%;
+  display: flex; align-items: center; justify-content: center;
+
+  /* 여백으로 셀 계산을 흐리지 않기 위해 padding 제거 */
+  padding: 0;
+}
+
+/* 내 오답 = 빨강 */
+.qbtn.red {
+  background: rgba(239,68,68,.16);
+  border-color: rgba(239,68,68,.45);
+  color: #ffd8d8;
+}
+
+/* 🔥 불타는 버튼 효과 */
+.qbtn.fire {
+  animation: blazing 0.6s ease-in-out infinite alternate;
+  box-shadow:
+    0 0 16px #ff4500,
+    0 0 32px #ff6b35,
+    0 0 48px #ff8c42;
+  border-color: #ff7a3a;
+}
+
+/* 🔥 이모지 위치 */
+.qbtn.fire .flame-emoji {
+  position: absolute;
+  top: -6px;
+  right: -5px;
+  font-size: 13px;
+  transform-origin: center;
+  animation: flame-wiggle 0.9s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* 불타는 글로우 & 살짝 커졌다 작아짐 */
+@keyframes blazing {
+  0% {
+    box-shadow: 0 0 16px #ff4500, 0 0 32px #ff6b35, 0 0 48px #ff8c42;
+    transform: scale(1);
+  }
+  100% {
+    box-shadow: 0 0 22px #ff4500, 0 0 44px #ff6b35, 0 0 66px #ff8c42;
+    transform: scale(1.04);
+  }
+}
+
+/* 🔥 이모지 살짝 흔들리는 모션 */
+@keyframes flame-wiggle {
+  0%   { transform: translateY(0) rotate(0deg) scale(1); }
+  50%  { transform: translateY(-1px) rotate(-6deg) scale(1.05); }
+  100% { transform: translateY(0) rotate(0deg) scale(1); }
+}
+
+/* 아주 작은 화면 보정 */
+@media (max-width: 380px) {
+  .qbtn { font-size: 10.5px; }
+}
+
+/* 예시 버튼을 번호 박스와 완전 동일 크기/정렬로 */
+.qbtn.sample {
+  padding: 0;                 /* 내부 여백 제거 */
+  min-width: 0;               /* 폭 고정 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* " = 특별 해설 제공" 을 한 줄로 버튼 옆에 고정 */
+.legend-example { display: inline-flex; align-items: center; gap: 6px; }
+.legend-label { white-space: nowrap; }
