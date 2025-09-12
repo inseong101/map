@@ -8,6 +8,10 @@
     ],
     "rewrites": [
       {
+        "source": "/api/prebinned",
+        "function": "getPrebinnedDistribution"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
@@ -17,5 +21,3 @@
     "source": "functions"
   }
 }
-
-
