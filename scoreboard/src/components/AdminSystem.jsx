@@ -300,17 +300,6 @@ const AdminSystem = () => {
                           >
                             교시 보기
                           </button>
-                          <button
-                            className="btn small outline"
-                            onClick={()=>{
-                              setSelectedRound(row.round);
-                              setSelectedSession('1교시');
-                              setCurrentView('answers');
-                              loadAnswerData(row.round,'1교시');
-                            }}
-                          >
-                            1교시 표
-                          </button>
                         </div>
                       </td>
                     </tr>
