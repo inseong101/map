@@ -1,22 +1,31 @@
 {
   "hosting": {
     "public": "scoreboard/build",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
-      { "source": "/api/prebinned",      "function": "getPrebinnedDistribution" },
-      { "source": "/api/highError",      "function": "getHighErrorRateQuestions" },
-      { "source": "/api/questionStats",  "function": "getQuestionChoiceStats" },
-      { "source": "/api/overallStatus",  "function": "getOverallStatus" },
-      { "source": "/api/manualUpdate",   "function": "manualUpdateAnalytics" },
+      {
+        "source": "/api/prebinned",
+        "function": { "functionId": "getPrebinnedDistribution", "region": "asia-northeast3" }
+      },
+      {
+        "source": "/api/highError",
+        "function": { "functionId": "getHighErrorRateQuestions", "region": "asia-northeast3" }
+      },
+      {
+        "source": "/api/questionStats",
+        "function": { "functionId": "getQuestionChoiceStats", "region": "asia-northeast3" }
+      },
+      {
+        "source": "/api/overallStatus",
+        "function": { "functionId": "getOverallStatus", "region": "asia-northeast3" }
+      },
+      {
+        "source": "/api/manualUpdate",
+        "function": { "functionId": "manualUpdateAnalytics", "region": "asia-northeast3" }
+      },
 
       { "source": "**", "destination": "/index.html" }
     ]
   },
-  "functions": {
-    "source": "functions"
-  }
+  "functions": { "source": "functions" }
 }
