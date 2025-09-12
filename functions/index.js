@@ -203,6 +203,13 @@ async function processExcelData(jsonData, roundLabel, session) {
 
     await updateSessionAnalytics(roundLabel, session);
     await updateRoundAnalytics(roundLabel);
+     // 전체 통합 상태 문서도 갱신
+  await analyzeOverallStatus(roundLabel);
+
+  // [NEW] 분포 사전집계도 함께 생성
+  await buildPrebinnedDistributions(roundLabel);
+
+  console.log(`회차 요약 통계 업데이트 완료: ${roundLabel}`);
 
     return {
       processedCount: processedData.length,
@@ -697,5 +704,172 @@ exports.getOverallStatus = functions.https.onRequest(async (req, res) => {
 });
 
 
+// ====== [NEW] 사전 집계 설정 ======
+const BIN_SIZE = 5;
+const CUTOFF_SCORE = 204;
 
+/**
+ * 4교시 모두 completed 학생들만 대상으로
+ * - 전국/학교별 총점 분포를 5점 단위 bin으로 사전 집계하여 저장합니다.
+ * 저장 위치: distributions/{roundLabel}
+ * 구조:
+ * {
+ *   roundLabel,
+ *   range: { min, max },
+ *   cutoff: 204,
+ *   national: [{min,max,count}, ...],
+ *   bySchool: { "01":[...], "02":[...], ... },
+ *   averages: {
+ *     nationalAvg: number|null,
+ *     bySchool: { "01": number|null, ... }
+ *   },
+ *   stats: {
+ *     national: { total, completed },        // completed == 유효응시자(4교시 완료)
+ *     bySchool: { "01": { total, completed }, ... }
+ *   },
+ *   updatedAt: serverTimestamp
+ * }
+ */
+async function buildPrebinnedDistributions(roundLabel) {
+  // 1) 4개 교시 읽어서 sid별 completed count와 총점 누적
+  const sessions = ['1교시','2교시','3교시','4교시'];
+  const perSid = {}; // sid -> { completed:0..4, sum: number }
+  const schoolTotals = {}; // 학교별 { total(유효 sid 수), completed(4교시 완료 수) }
+  const nationalTotals = { total: 0, completed: 0 };
+
+  for (const session of sessions) {
+    const snap = await db.collection('scores_raw').doc(roundLabel).collection(session).get();
+    snap.forEach(doc => {
+      const sid = doc.id;
+      const data = doc.data() || {};
+      const code = String(sid).slice(0,2);
+      if (!/^(0[1-9]|1[0-2])$/.test(code)) return;
+
+      if (!perSid[sid]) perSid[sid] = { completed: 0, sum: 0, code };
+      if (data.status === 'completed') {
+        perSid[sid].completed += 1;
+        perSid[sid].sum += (Number.isFinite(data.totalScore) ? Number(data.totalScore) : 0);
+      }
+    });
+  }
+
+  // 2) 4교시 완료자만 집계 대상으로 사용
+  const nationalScores = [];
+  const bySchoolScores = {};  // code -> number[]
+  Object.values(perSid).forEach(v => {
+    nationalTotals.total += 1;
+    const code = v.code;
+    if (!schoolTotals[code]) schoolTotals[code] = { total: 0, completed: 0 };
+    schoolTotals[code].total += 1;
+
+    if (v.completed === 4) {
+      nationalTotals.completed += 1;
+      schoolTotals[code].completed += 1;
+
+      nationalScores.push(v.sum);
+      if (!bySchoolScores[code]) bySchoolScores[code] = [];
+      bySchoolScores[code].push(v.sum);
+    }
+  });
+
+  // 3) 동적 범위(분포 있는 점수 기준) 계산
+  let minScore = nationalScores.length ? Math.min(...nationalScores) : 0;
+  let maxScore = nationalScores.length ? Math.max(...nationalScores) : 0;
+  if (minScore === maxScore) {
+    minScore = Math.max(0, minScore - BIN_SIZE * 3);
+    maxScore = Math.min(340, maxScore + BIN_SIZE * 3);
+  }
+  // 커트라인을 범위에 포함
+  if (CUTOFF_SCORE < minScore) minScore = Math.floor(CUTOFF_SCORE / BIN_SIZE) * BIN_SIZE - BIN_SIZE * 2;
+  if (CUTOFF_SCORE > maxScore) maxScore = Math.ceil(CUTOFF_SCORE / BIN_SIZE) * BIN_SIZE + BIN_SIZE * 2;
+  minScore = Math.max(0, Math.floor(minScore / BIN_SIZE) * BIN_SIZE);
+  maxScore = Math.min(340, Math.ceil(maxScore / BIN_SIZE) * BIN_SIZE);
+
+  // 4) 5점 bin 생성 도우미
+  const makeBins = (scores) => {
+    if (!scores || !scores.length) {
+      // 빈 분포라도 min/max는 유지
+      const out = [];
+      for (let x = minScore; x < maxScore; x += BIN_SIZE) {
+        out.push({ min: x, max: x + BIN_SIZE, count: 0 });
+      }
+      out.push({ min: maxScore, max: maxScore, count: 0 }); // 끝점 포함
+      return out;
+    }
+    const counts = [];
+    for (let x = minScore; x < maxScore; x += BIN_SIZE) {
+      const c = scores.filter(s => s >= x && s < x + BIN_SIZE).length;
+      counts.push({ min: x, max: x + BIN_SIZE, count: c });
+    }
+    // 끝 값(==maxScore)
+    const lastCount = scores.filter(s => s === maxScore).length;
+    counts.push({ min: maxScore, max: maxScore, count: lastCount });
+    return counts;
+  };
+
+  const national = makeBins(nationalScores);
+  const bySchool = {};
+  Object.entries(bySchoolScores).forEach(([code, arr]) => {
+    bySchool[code] = makeBins(arr);
+  });
+
+  // 5) 평균(반올림) 계산
+  const avg = (arr) => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0) / arr.length) : null;
+  const averages = {
+    nationalAvg: avg(nationalScores),
+    bySchool: {}
+  };
+  Object.entries(bySchoolScores).forEach(([code, arr]) => {
+    averages.bySchool[code] = avg(arr);
+  });
+
+  // 6) 저장
+  await db.collection('distributions').doc(roundLabel).set({
+    roundLabel,
+    range: { min: minScore, max: maxScore },
+    cutoff: CUTOFF_SCORE,
+    national,
+    bySchool,
+    averages,
+    stats: {
+      national: { total: nationalTotals.total, completed: nationalTotals.completed },
+      bySchool: schoolTotals
+    },
+    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+
+  console.log(`[dist] saved distributions/${roundLabel}  (N=${nationalTotals.completed})`);
+}
+
+/**
+ * [NEW] 사전집계 조회 API
+ * GET /getPrebinnedDistribution?roundLabel=1차
+ */
+exports.getPrebinnedDistribution = functions.https.onRequest(async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+
+  try {
+    const { roundLabel } = req.query;
+    if (!roundLabel) return res.status(400).json({ success: false, error: 'roundLabel은 필수입니다.' });
+
+    const ref = db.collection('distributions').doc(roundLabel);
+    const snap = await ref.get();
+
+    if (!snap.exists) {
+      // 없으면 즉석 생성 후 반환
+      await buildPrebinnedDistributions(roundLabel);
+      const snap2 = await ref.get();
+      if (!snap2.exists) return res.json({ success: true, data: null, message: '데이터 없음' });
+      return res.json({ success: true, data: snap2.data() });
+    }
+
+    return res.json({ success: true, data: snap.data() });
+  } catch (e) {
+    console.error('getPrebinnedDistribution 실패:', e);
+    res.status(500).json({ success: false, error: '서버 오류', details: e.message });
+  }
+});
 
