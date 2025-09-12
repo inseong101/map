@@ -39,11 +39,12 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
 
       for (const round of rounds) {
         const { label, data: roundData } = round;
+
         const studentScore = Number.isFinite(roundData?.totalScore)
           ? Number(roundData.totalScore)
           : null;
 
-        // 사전집계 호출
+        // ── 사전집계 호출 ─────────────────────────────────────────────
         const res = await getPrebinnedDistribution(label);
         const d = res?.data || {};
 
@@ -52,18 +53,18 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
         const schoolAvg   = d?.averages?.bySchool?.[schCode] ?? '-';
 
         // 분포 bins
-        const natBinsRaw = Array.isArray(d.national) ? d.national : [];
-        const schBinsRaw = d?.bySchool?.[schCode] ?? [];
+        const natBinsRaw = Array.isArray(d?.national) ? d.national : [];
+        const schBinsRaw = Array.isArray(d?.bySchool?.[schCode]) ? d.bySchool[schCode] : [];
 
-        // 범위/컷오프
-        const minX = Number.isFinite(d?.range?.min) ? d.range.min : 0;
-        const maxX = Number.isFinite(d?.range?.max) ? d.range.max : 340;
-        const cutoff = Number.isFinite(d?.cutoff)   ? d.cutoff   : 204;
+        // 범위/컷오프(응답에 없으면 기본값)
+        const minX   = Number.isFinite(d?.range?.min) ? d.range.min : 0;
+        const maxX   = Number.isFinite(d?.range?.max) ? d.range.max : 340;
+        const cutoff = Number.isFinite(d?.cutoff)      ? d.cutoff    : 204;
 
         // 내 점수 표시 플래그
         const tagStudent = (bins) => {
-          if (!Number.isFinite(studentScore)) return bins;
-          return bins.map(b => {
+          if (!Number.isFinite(studentScore)) return bins || [];
+          return (bins || []).map(b => {
             const inRange =
               (b.min <= studentScore) &&
               (studentScore < b.max || (b.min === b.max && studentScore === b.max));
@@ -76,8 +77,12 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
         const totalSchool   = d?.stats?.bySchool?.[schCode]?.completed ?? 0;
 
         // 백분위(상위%)
-        const myNatPct = calcPercentileFromBins(natBinsRaw, studentScore);
-        const mySchPct = calcPercentileFromBins(schBinsRaw, studentScore);
+        const myNatPct = Number.isFinite(studentScore)
+          ? calcPercentileFromBins(natBinsRaw, studentScore)
+          : null;
+        const mySchPct = Number.isFinite(studentScore)
+          ? calcPercentileFromBins(schBinsRaw, studentScore)
+          : null;
 
         out.push({
           label,
@@ -95,6 +100,8 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
       }
 
       setBundle(out);
+
+      // 최초 그리기
       requestAnimationFrame(() => {
         drawCurrent(out, 0, false);
         setIsLoading(false);
@@ -132,6 +139,7 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
     const chartW = W - padding.left - padding.right;
     const chartH = H - padding.top - padding.bottom;
 
+    // 타이틀(원형 유지: 유효표기)
     const title = schoolMode
       ? `학교 분포 (유효 ${cur.totalSchool}명)`
       : `전국 분포 (유효 ${cur.totalNational}명)`;
@@ -174,10 +182,13 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
     ctx.fillStyle = '#9db0d6';
     ctx.font = '10px system-ui';
     ctx.textAlign = 'center';
+
+    const span = Math.max(1, (maxX - minX));
     const xTickStep = 40;
     const start = Math.ceil(minX / xTickStep) * xTickStep;
     for (let s = start; s <= maxX; s += xTickStep) {
-      const x = padding.left + ((s - minX) / (maxX - minX)) * chartW;
+      const ratio = (s - minX) / span;
+      const x = padding.left + ratio * chartW;
       ctx.fillText(String(s), x, padding.top + chartH + 16);
       if (s > minX && s < maxX) {
         ctx.strokeStyle = 'rgba(33,48,86,0.2)';
@@ -189,7 +200,7 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
     }
 
     // Y 눈금
-    const maxCount = Math.max(1, ...bins.map((b) => b.count));
+    const maxCount = Math.max(1, ...bins.map((b) => b.count || 0));
     const steps = 4;
     const niceStep = makeNiceStep(maxCount / steps);
     const yStep = Math.max(1, niceStep);
@@ -225,8 +236,9 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
     return base * 10;
   }
 
-  function drawBarsWithLabels(ctx, padding, chartW, chartH, bins, primaryColor, yMax) {
-    const barCount = bins.length || 1;
+  // minX, maxX 파라미터는 호출부와 시그니처를 맞추기 위해 유지(내부에선 bins/yMax로 충분)
+  function drawBarsWithLabels(ctx, padding, chartW, chartH, bins, primaryColor, yMax, _minX, _maxX) {
+    const barCount = Math.max(1, (bins?.length || 0));
     const binWidth = chartW / barCount;
 
     for (let i = 0; i < barCount; i++) {
@@ -255,7 +267,10 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
   }
 
   function drawCutoff(ctx, padding, chartW, chartH, score, minX, maxX) {
-    if (!Number.isFinite(score) || score < minX || score > maxX) return;
+    if (!Number.isFinite(score)) return;
+    if (!(maxX > minX)) return; // 0분모 가드
+    if (score < minX || score > maxX) return;
+
     const x = padding.left + ((score - minX) / (maxX - minX)) * chartW;
     ctx.strokeStyle = '#f59e0b';
     ctx.lineWidth = 2;
@@ -267,7 +282,7 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
     ctx.setLineDash([]);
   }
 
-  // ------ 상단 컨트롤/요약/범례 ------
+  // ------ 상단 컨트롤/요약/범례 (원형 유지) ------
   const TopControls = () => (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: 12, flexWrap: 'wrap' }}>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -331,8 +346,8 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
     if (!cur) return null;
     return (
       <div style={{ fontSize: 13, marginBottom: 6, opacity: .9 }}>
-        내 점수: <b>{cur.studentScore ?? '-'}</b>점 | 
-        전국 백분위: <b>{cur.myNatPct != null ? `${cur.myNatPct.toFixed(1)}%` : '-'}</b> | 
+        내 점수: <b>{cur.studentScore ?? '-'}</b>점 |{' '}
+        전국 백분위: <b>{cur.myNatPct != null ? `${cur.myNatPct.toFixed(1)}%` : '-'}</b> |{' '}
         학교 백분위: <b>{cur.mySchPct != null ? `${cur.mySchPct.toFixed(1)}%` : '-'}</b>
       </div>
     );
