@@ -452,3 +452,38 @@ export function deriveRoundStatus(roundData, sid) {
   // 그 외 예외 상태가 섞여 있으면 미응시 취급
   return 'absent';
 }
+
+// === 사전집계 분포 조회 (Cloud Functions HTTPS) ===
+export async function getPrebinnedDistribution(roundLabel) {
+  try {
+    // Hosting 리라이트가 있다면 이 상대경로로 OK.
+    // 없다면 전체 URL(예: https://asia-northeast3-<project>.cloudfunctions.net/getPrebinnedDistribution?roundLabel=1차)로 바꿔주세요.
+    const url = `/getPrebinnedDistribution?roundLabel=${encodeURIComponent(roundLabel)}`;
+    const resp = await fetch(url, { method: 'GET' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return await resp.json(); // { success, data }
+  } catch (e) {
+    console.error('getPrebinnedDistribution error:', e);
+    return { success: false, data: null };
+  }
+}
+
+// === bin 기반 백분위(상위%) 계산 유틸 ===
+export function calcPercentileFromBins(bins, studentScore) {
+  if (!Array.isArray(bins) || bins.length === 0 || !Number.isFinite(studentScore)) return null;
+  const total = bins.reduce((s,b)=>s + (b.count||0), 0);
+  if (total <= 1) return 0.0;
+
+  let higher = 0;
+  for (const b of bins) {
+    if (b.max <= studentScore) continue;
+    higher += (b.count || 0);
+  }
+  const myBin = bins.find(b => (b.min <= studentScore) && (studentScore < b.max || (b.min===b.max && studentScore===b.max)));
+  const tieAdj = myBin ? Math.max(0, (myBin.count || 0) - 1) * 0.5 : 0;
+  const rankLike = higher + tieAdj;
+
+  const pct = (rankLike / (total - 1)) * 100;
+  const clamped = Math.max(0, Math.min(100, +pct.toFixed(1)));
+  return clamped;
+}
