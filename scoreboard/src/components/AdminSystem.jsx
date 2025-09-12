@@ -1,8 +1,8 @@
 // scoreboard/src/components/AdminSystem.jsx
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import './AdminSystem.css';
 
-import { findSubjectByQuestionNum } from '../services/dataService';
+import { SESSION_SUBJECT_RANGES } from '../services/dataService';
 
 // Firebase
 import { db } from '../services/firebase';
@@ -14,11 +14,11 @@ import {
 } from 'firebase/firestore';
 
 /**
- * 이 컴포넌트는 4가지 화면을 가집니다.
- * - overview  : DB 개괄(회차/교시 가용성, 응시 파이프라인, 키/애널리틱스 누락 등) ← 신규
+ * 화면:
+ * - overview  : DB 개괄
  * - rounds    : 회차 선택
  * - sessions  : 교시 선택
- * - answers   : 답안 상세 표(문항 선택률/정답률 포함)
+ * - answers   : 답안 상세 표
  */
 const AdminSystem = () => {
   const [currentView, setCurrentView] = useState('overview');
@@ -34,14 +34,14 @@ const AdminSystem = () => {
   const [sessionAnalytics, setSessionAnalytics] = useState({});
   const [loading, setLoading] = useState(false);
 
-  // Overview 전용 상태
-  const [overviewRows, setOverviewRows] = useState([]); // 회차별 집계 테이블
+  // Overview 전용
+  const [overviewRows, setOverviewRows] = useState([]);
   const [overviewLoading, setOverviewLoading] = useState(false);
 
   const rounds   = ['1차','2차','3차','4차','5차','6차','7차','8차'];
   const sessions = ['1교시','2교시','3교시','4교시'];
 
-  // ---------- 공통 유틸 ----------
+  // 교시별 문항수
   const getQuestionNumbers = (session) => {
     switch (session) {
       case '1교시': return Array.from({length:80},(_,i)=>i+1);
@@ -52,8 +52,14 @@ const AdminSystem = () => {
     }
   };
 
-  // 화면에 쓰는 선택률/정답률 계산 (analytics/{round}_{session})
-  // choiceRates는 "응답자 대비 비율"로 계산 → 1~5 합이 100%
+  // ✅ 교시별 과목 매핑(SESSION_SUBJECT_RANGES 사용)
+  const subjectBy = (qNum, session) => {
+    const ranges = SESSION_SUBJECT_RANGES?.[session] || [];
+    const r = ranges.find(rr => qNum >= rr.from && qNum <= rr.to);
+    return r?.s || '-';
+  };
+
+  // 선택률/정답률(답한 사람 기준 → 1~5 합=100%)
   const getQuestionStatistics = (questionNum) => {
     const analytics = sessionAnalytics[selectedSession];
     if (!analytics) {
@@ -66,7 +72,6 @@ const AdminSystem = () => {
         correctAnswer: answerKey[questionNum] ?? null,
       };
     }
-
     const qs = analytics.questionStats?.[questionNum];
     const cs = analytics.choiceStats?.[questionNum];
 
@@ -82,7 +87,6 @@ const AdminSystem = () => {
       4: pct(cs?.[4] ?? 0),
       5: pct(cs?.[5] ?? 0),
     };
-
     const nonResponseRate = total > 0 ? Math.round((nullCount / total) * 100) : 0;
 
     const correctAnswer = Number(answerKey[questionNum]);
@@ -110,7 +114,6 @@ const AdminSystem = () => {
       const availRounds = [];
 
       for (const round of rounds) {
-        // 1) 각 교시 가용성
         const sessionAvailability = {};
         let hasAnySession = false;
         for (const s of sessions) {
@@ -126,7 +129,6 @@ const AdminSystem = () => {
         }
         if (hasAnySession) availRounds.push(round);
 
-        // 2) overall status
         let overall = null;
         try {
           const ref = doc(db, 'analytics', `${round}_overall_status`);
@@ -134,13 +136,11 @@ const AdminSystem = () => {
           if (snap.exists()) overall = snap.data();
         } catch {}
 
-        // 3) 교시별 analytics/answer key 누락도 및 문항수, 키 완성도
         const perSession = [];
         for (const s of sessions) {
           const questions = getQuestionNumbers(s);
           const expectedQ = questions.length;
 
-          // analytics 존재?
           let analytics = null;
           try {
             const ref = doc(db, 'analytics', `${round}_${s}`);
@@ -148,7 +148,6 @@ const AdminSystem = () => {
             if (snap.exists()) analytics = snap.data();
           } catch {}
 
-          // answer key 존재 & 완성도
           let keyObj = null;
           try {
             const ref = doc(db, 'answer_keys', `${round}_${s}`);
@@ -167,12 +166,7 @@ const AdminSystem = () => {
           });
         }
 
-        rows.push({
-          round,
-          sessionAvailability,
-          overall,     // { totalStudents, byStatus, lastUpdated, ... } 있을 수도/없을 수도
-          perSession,  // 교시별 상세
-        });
+        rows.push({ round, sessionAvailability, overall, perSession });
       }
 
       setAvailableRounds(availRounds);
@@ -233,12 +227,10 @@ const AdminSystem = () => {
   const loadAnswerData = async (round, session) => {
     setLoading(true);
     try {
-      // 정답표
       const keyRef = doc(db, 'answer_keys', `${round}_${session}`);
       const keySnap = await getDoc(keyRef);
       setAnswerKey(keySnap.exists() ? (keySnap.data() || {}) : {});
 
-      // 응답
       const sessionRef = collection(db, 'scores_raw', round, session);
       const snapshot = await getDocs(sessionRef);
 
@@ -268,38 +260,19 @@ const AdminSystem = () => {
 
   const handleRoundSelect   = (round)   => { setSelectedRound(round); setCurrentView('sessions'); };
   const handleSessionSelect = (session) => { setSelectedSession(session); setCurrentView('answers'); loadAnswerData(selectedRound, session); };
-  const goBack = () => {
-    if (currentView === 'answers') {
-      setCurrentView('sessions'); setAnswerData([]);
-    } else if (currentView === 'sessions') {
-      setCurrentView('rounds'); setSelectedRound(''); setAvailableSessions([]); setOverallStatus(null); setSessionAnalytics({});
-    }
-  };
 
-  // ---------- 렌더링 ----------
+  // ==== 렌더 ====
 
-  // 상단 탭
   const TopTabs = () => (
     <div className="admin-top-tabs">
-      <button
-        className={`admin-tab ${currentView==='overview' ? 'active':''}`}
-        onClick={()=>setCurrentView('overview')}
-      >Overview</button>
-      <button
-        className={`admin-tab ${currentView==='rounds' ? 'active':''}`}
-        onClick={()=>setCurrentView('rounds')}
-      >회차별 상세</button>
+      <button className={`admin-tab ${currentView==='overview' ? 'active':''}`} onClick={()=>setCurrentView('overview')}>Overview</button>
+      <button className={`admin-tab ${currentView==='rounds' ? 'active':''}`} onClick={()=>setCurrentView('rounds')}>회차별 상세</button>
       {currentView!=='overview' && (
-        <button
-          className="admin-tab subtle"
-          onClick={()=>loadOverview()}
-          title="Overview 새로고침"
-        >↻ 개괄 새로고침</button>
+        <button className="admin-tab subtle" onClick={()=>loadOverview()} title="Overview 새로고침">↻ 개괄 새로고침</button>
       )}
     </div>
   );
 
-  // === 1) OVERVIEW ===
   if (currentView === 'overview') {
     return (
       <div className="admin-root">
@@ -355,48 +328,12 @@ const AdminSystem = () => {
                 })}
               </tbody>
             </table>
-
-            {/* 빠른 진단 카드 */}
-            <div className="diag-grid">
-              <div className="card">
-                <div className="card-title">누락 진단</div>
-                <ul className="diag-list">
-                  {overviewRows.flatMap(r=>{
-                    const issues = [];
-                    if (!r.overall) issues.push(`${r.round}: overall_status 없음`);
-                    r.perSession.forEach(ps=>{
-                      if (!ps.available) issues.push(`${r.round} ${ps.session}: scores_raw 없음`);
-                      if (!ps.analyticsExists) issues.push(`${r.round} ${ps.session}: analytics 없음`);
-                      if (!ps.keyExists) issues.push(`${r.round} ${ps.session}: 정답표 없음`);
-                      else if (ps.keyFilled < ps.expectedQuestions) issues.push(`${r.round} ${ps.session}: 정답표 ${ps.keyFilled}/${ps.expectedQuestions}`);
-                    });
-                    return issues;
-                  }).map((t,i)=>(<li key={i}>{t}</li>))}
-                  {overviewRows.every(r=>{
-                    const a = r.overall;
-                    const okOverall = !!a;
-                    const okSess = r.perSession.every(ps=>ps.available && ps.analyticsExists && ps.keyExists && ps.keyFilled===ps.expectedQuestions);
-                    return okOverall && okSess;
-                  }) && <li>특이사항 없음</li>}
-                </ul>
-              </div>
-
-              <div className="card">
-                <div className="card-title">사용 팁</div>
-                <div className="small">
-                  • “회차별 상세” 탭에서 기존처럼 교시/문항 선택률 표를 볼 수 있어요.<br/>
-                  • 누락 항목(analytics/정답표) 보이면 Functions 재집계 또는 키 입력 상태를 확인하세요.<br/>
-                  • 필요시 CSV 내보내기/고난도 문항 TopN 등 블록도 이어서 붙일게요.
-                </div>
-              </div>
-            </div>
           </div>
         )}
       </div>
     );
   }
 
-  // === 2) 회차 선택 ===
   if (currentView === 'rounds') {
     return (
       <div className="admin-root">
@@ -419,7 +356,6 @@ const AdminSystem = () => {
     );
   }
 
-  // === 3) 교시 선택 ===
   if (currentView === 'sessions') {
     return (
       <div className="admin-root">
@@ -447,16 +383,24 @@ const AdminSystem = () => {
     );
   }
 
-  // === 4) 답안 표 ===
+  // ===== 답안 표 =====
   if (currentView === 'answers') {
     const questions = getQuestionNumbers(selectedSession);
 
-    if (loading) return (
-      <div className="admin-root">
-        <TopTabs />
-        <div className="admin-loading">데이터 로딩 중…</div>
-      </div>
-    );
+    if (loading) {
+      return (
+        <div className="admin-root">
+          <TopTabs />
+          <div className="admin-loading">데이터 로딩 중…</div>
+        </div>
+      );
+    }
+
+    // 헤더 행 타이틀(왼쪽 2칸 병합)
+    const rowTitles = [
+      '① 선택률', '② 선택률', '③ 선택률', '④ 선택률', '⑤ 선택률',
+      '미응답률', '정답', '정답률', '문항번호', '과목',
+    ];
 
     return (
       <div className="admin-root">
@@ -476,90 +420,85 @@ const AdminSystem = () => {
         <div className="table-scroll-x">
           <table className="answers-table" style={{ minWidth: Math.max(900, questions.length * 30 + 130) }}>
             <thead>
-              {/* 1행: ① */}
+              {/* 1: ① */}
               <tr>
-                <th className="side left">학수번호</th>
-                <th className="side status">상태</th>
+                <th className="rowhead" colSpan={2}>{rowTitles[0]}</th>
                 {questions.map(q=>{
                   const st = getQuestionStatistics(q);
-                  return <th key={`c1-${q}`} className={`c1 ${isCorrect(answerKey[q],1)?'is-key':''}`}>① {st.choiceRates[1]}%</th>;
+                  const isKey = Number(answerKey[q])===1;
+                  return <th key={`c1-${q}`} className={`c1 ${isKey?'is-key':''}`}>① {st.choiceRates[1]}%</th>;
                 })}
               </tr>
-              {/* 2행: ② */}
+              {/* 2: ② */}
               <tr>
-                <th className="side left sticky-spacer"/>
-                <th className="side status sticky-spacer"/>
+                <th className="rowhead" colSpan={2}>{rowTitles[1]}</th>
                 {questions.map(q=>{
                   const st = getQuestionStatistics(q);
-                  return <th key={`c2-${q}`} className={`c2 ${isCorrect(answerKey[q],2)?'is-key':''}`}>② {st.choiceRates[2]}%</th>;
+                  const isKey = Number(answerKey[q])===2;
+                  return <th key={`c2-${q}`} className={`c2 ${isKey?'is-key':''}`}>② {st.choiceRates[2]}%</th>;
                 })}
               </tr>
-              {/* 3행: ③ */}
+              {/* 3: ③ */}
               <tr>
-                <th className="side left sticky-spacer"/>
-                <th className="side status sticky-spacer"/>
+                <th className="rowhead" colSpan={2}>{rowTitles[2]}</th>
                 {questions.map(q=>{
                   const st = getQuestionStatistics(q);
-                  return <th key={`c3-${q}`} className={`c3 ${isCorrect(answerKey[q],3)?'is-key':''}`}>③ {st.choiceRates[3]}%</th>;
+                  const isKey = Number(answerKey[q])===3;
+                  return <th key={`c3-${q}`} className={`c3 ${isKey?'is-key':''}`}>③ {st.choiceRates[3]}%</th>;
                 })}
               </tr>
-              {/* 4행: ④ */}
+              {/* 4: ④ */}
               <tr>
-                <th className="side left sticky-spacer"/>
-                <th className="side status sticky-spacer"/>
+                <th className="rowhead" colSpan={2}>{rowTitles[3]}</th>
                 {questions.map(q=>{
                   const st = getQuestionStatistics(q);
-                  return <th key={`c4-${q}`} className={`c4 ${isCorrect(answerKey[q],4)?'is-key':''}`}>④ {st.choiceRates[4]}%</th>;
+                  const isKey = Number(answerKey[q])===4;
+                  return <th key={`c4-${q}`} className={`c4 ${isKey?'is-key':''}`}>④ {st.choiceRates[4]}%</th>;
                 })}
               </tr>
-              {/* 5행: ⑤ */}
+              {/* 5: ⑤ */}
               <tr>
-                <th className="side left sticky-spacer"/>
-                <th className="side status sticky-spacer"/>
+                <th className="rowhead" colSpan={2}>{rowTitles[4]}</th>
                 {questions.map(q=>{
                   const st = getQuestionStatistics(q);
-                  return <th key={`c5-${q}`} className={`c5 ${isCorrect(answerKey[q],5)?'is-key':''}`}>⑤ {st.choiceRates[5]}%</th>;
+                  const isKey = Number(answerKey[q])===5;
+                  return <th key={`c5-${q}`} className={`c5 ${isKey?'is-key':''}`}>⑤ {st.choiceRates[5]}%</th>;
                 })}
               </tr>
-              {/* 6행: 미응답률 */}
+              {/* 6: 미응답률 */}
               <tr>
-                <th className="side left sticky-spacer"/>
-                <th className="side status sticky-spacer"/>
+                <th className="rowhead" colSpan={2}>{rowTitles[5]}</th>
                 {questions.map(q=>{
                   const st = getQuestionStatistics(q);
                   return <th key={`nr-${q}`} className="nonresp">미응답 {st.nonResponseRate}%</th>;
                 })}
               </tr>
-              {/* 7행: 정답 */}
+              {/* 7: 정답 */}
               <tr>
-                <th className="side left sticky-spacer"/>
-                <th className="side status sticky-spacer"/>
+                <th className="rowhead" colSpan={2}>{rowTitles[6]}</th>
                 {questions.map(q=>{
                   const k = answerKey[q] ?? '?';
                   return <th key={`ans-${q}`} className="answer">정답 {k}</th>;
                 })}
               </tr>
-              {/* 8행: 정답률 */}
+              {/* 8: 정답률 */}
               <tr>
-                <th className="side left sticky-spacer"/>
-                <th className="side status sticky-spacer"/>
+                <th className="rowhead" colSpan={2}>{rowTitles[7]}</th>
                 {questions.map(q=>{
                   const st = getQuestionStatistics(q);
                   return <th key={`cr-${q}`} className="correct">정답률 {st.correctRate}%</th>;
                 })}
               </tr>
-              {/* 9행: 문항번호 */}
+              {/* 9: 문항번호 */}
               <tr>
-                <th className="side left sticky-spacer"/>
-                <th className="side status sticky-spacer"/>
+                <th className="rowhead" colSpan={2}>{rowTitles[8]}</th>
                 {questions.map(q=><th key={`q-${q}`} className="qnum">{q}</th>)}
               </tr>
-              {/* 10행: 과목 */}
+              {/* 10: 과목 */}
               <tr>
-                <th className="side left sticky-spacer"/>
-                <th className="side status sticky-spacer"/>
+                <th className="rowhead" colSpan={2}>{rowTitles[9]}</th>
                 {questions.map(q=>{
-                  const subj = findSubjectByQuestionNum(q, selectedSession);
+                  const subj = subjectBy(q, selectedSession);
                   return <th key={`subj-${q}`} className="subject">{subj}</th>;
                 })}
               </tr>
@@ -577,7 +516,6 @@ const AdminSystem = () => {
                     let cls = 'cell gray';
                     if (stu.status !== 'completed') cls = 'cell dark';
                     else if (!isNull) cls = (ans === correct) ? 'cell ok' : 'cell bad';
-
                     return <td key={`${stu.sid}-${q}`} className={cls}>{isNull?'-':ans}</td>;
                   })}
                 </tr>
@@ -599,6 +537,3 @@ const AdminSystem = () => {
 };
 
 export default AdminSystem;
-
-// ---- 렌더 헬퍼 ----
-const isCorrect = (k, n) => Number(k)===Number(n);
