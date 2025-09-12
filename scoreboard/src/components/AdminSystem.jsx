@@ -38,7 +38,7 @@ const AdminSystem = () => {
     return r?.s || '-';
   };
 
-  // 응답자 기준 선택률(①~⑤ 합=100), 미응답률은 전체 기준
+  // 응답자 기준 선택률(①~⑤ 합=100), 미응답자는 '명'으로 사용
   const getQuestionStatistics = (questionNum) => {
     const analytics = sessionAnalytics[selectedSession];
     const qs = analytics?.questionStats?.[questionNum];
@@ -56,15 +56,15 @@ const AdminSystem = () => {
       4: pct(cs?.[4] ?? 0),
       5: pct(cs?.[5] ?? 0),
     };
-    const nonResponseRate = total > 0 ? Math.round((nullCount / total) * 100) : 0;
 
     const correctAnswer = Number(answerKey[questionNum]);
     const correctRate =
       correctAnswer >= 1 && correctAnswer <= 5 ? choiceRates[correctAnswer] : 0;
 
-    return { choiceRates, nonResponseRate, correctRate };
+    return { choiceRates, nullCount, correctRate, total };
   };
 
+  // ===== Overview 로드 =====
   useEffect(() => { loadOverview(); }, []);
   async function loadOverview() {
     setOverviewLoading(true);
@@ -81,7 +81,9 @@ const AdminSystem = () => {
             const ok = !snap.empty;
             sessionAvailability[s] = ok;
             if (ok) hasAny = true;
-          } catch { sessionAvailability[s] = false; }
+          } catch {
+            sessionAvailability[s] = false;
+          }
         }
         if (hasAny) availRounds.push(round);
 
@@ -120,14 +122,17 @@ const AdminSystem = () => {
       }
       setAvailableRounds(availRounds);
       setOverviewRows(rows);
-    } finally { setOverviewLoading(false); }
+    } finally {
+      setOverviewLoading(false);
+    }
   }
 
+  // ===== 세부 로드 =====
   useEffect(() => {
     if (selectedRound) {
       checkAvailableSessions(selectedRound);
-      loadOverallStatus(selectedRound);
       loadSessionAnalytics(selectedRound);
+      loadOverallStatus(selectedRound);
     }
   }, [selectedRound]);
 
@@ -148,7 +153,9 @@ const AdminSystem = () => {
       const ref = doc(db, 'analytics', `${round}_overall_status`);
       const snap = await getDoc(ref);
       setOverallStatus(snap.exists() ? snap.data() : null);
-    } catch { setOverallStatus(null); }
+    } catch {
+      setOverallStatus(null);
+    }
   };
 
   const loadSessionAnalytics = async (round) => {
@@ -183,14 +190,17 @@ const AdminSystem = () => {
         students.push({
           sid: d.id,
           responses: filled,
-          status: data.status || 'unknown', // completed | absent | dropout | ...
+          status: data.status || 'unknown', // completed | dropout | absent 등
         });
       });
       students.sort((a,b)=>a.sid.localeCompare(b.sid));
       setAnswerData(students);
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
+  // ===== UI =====
   const handleRoundSelect   = (round)   => { setSelectedRound(round); setCurrentView('sessions'); };
   const handleSessionSelect = (session) => { setSelectedSession(session); setCurrentView('answers'); loadAnswerData(selectedRound, session); };
 
@@ -198,7 +208,9 @@ const AdminSystem = () => {
     <div className="admin-top-tabs">
       <button className={`admin-tab ${currentView==='overview' ? 'active':''}`} onClick={()=>setCurrentView('overview')}>Overview</button>
       <button className={`admin-tab ${currentView==='rounds' ? 'active':''}`} onClick={()=>setCurrentView('rounds')}>회차별 상세</button>
-      {currentView!=='overview' && <button className="admin-tab subtle" onClick={()=>loadOverview()} title="개괄 새로고침">↻</button>}
+      {currentView!=='overview' && (
+        <button className="admin-tab subtle" onClick={loadOverview} title="개괄 새로고침">↻</button>
+      )}
     </div>
   );
 
@@ -226,7 +238,7 @@ const AdminSystem = () => {
                   const sOK = sessions.filter(s=>row.sessionAvailability[s]).join(', ');
                   const os  = row.overall;
                   const statusLine = os
-                    ? `대상 ${os.totalStudents ?? '-'} · 완료 ${os.byStatus?.completed ?? '-'} · 중도 ${os.byStatus?.dropout ?? '-'} · 미응시 ${os.byStatus?.absent ?? '-'}`
+                    ? `대상 ${os.totalStudents ?? '-'} · 유효 ${os.byStatus?.completed ?? '-'} · 중도 ${os.byStatus?.dropout ?? '-'} · 미응시 ${os.byStatus?.absent ?? '-'}`
                     : 'overall_status 없음';
                   return (
                     <tr key={row.round}>
@@ -247,7 +259,7 @@ const AdminSystem = () => {
                       <td>
                         <div className="btn-row">
                           <button className="btn small" onClick={()=>{ setSelectedRound(row.round); setCurrentView('sessions'); }}>교시 보기</button>
-                          <button className="btn small outline" onClick={()=>{ setSelectedRound(row.round); setCurrentView('answers'); setSelectedSession('1교시'); loadAnswerData(row.round,'1교시'); }}>1교시 표</button>
+                          <button className="btn small outline" onClick={()=>{ setSelectedRound(row.round); setSelectedSession('1교시'); setCurrentView('answers'); loadAnswerData(row.round,'1교시'); }}>1교시 표</button>
                         </div>
                       </td>
                     </tr>
@@ -270,36 +282,14 @@ const AdminSystem = () => {
           {rounds.map(round=>{
             const ok = availableRounds.includes(round);
             return (
-              <button key={round} onClick={()=> ok && handleRoundSelect(round)} disabled={!ok}
-                className={`round-btn ${ok?'ok':'disabled'}`}>
+              <button
+                key={round}
+                onClick={()=> ok && handleRoundSelect(round)}
+                disabled={!ok}
+                className={`round-btn ${ok?'ok':'disabled'}`}
+              >
                 {round}
                 {!ok && <div className="muted small">데이터 없음</div>}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
-  if (currentView === 'sessions') {
-    return (
-      <div className="admin-root">
-        <TopTabs />
-        <div className="bar">
-          <button onClick={()=>{ setCurrentView('rounds'); setSelectedRound(''); setAvailableSessions([]); setOverallStatus(null); setSessionAnalytics({}); }} className="btn outline">← 뒤로</button>
-          <h2 className="admin-title inline">{selectedRound} - 교시 선택</h2>
-        </div>
-        <div className="grid-cards min120">
-          {sessions.map(s=>{
-            const ok = availableSessions.includes(s);
-            const analytics = sessionAnalytics[s];
-            return (
-              <button key={s} onClick={()=> ok && handleSessionSelect(s)} disabled={!ok}
-                className={`round-btn ${ok?'ok2':'disabled'}`}>
-                {s}
-                {analytics && <div className="tiny">{analytics.attendedStudents}/{analytics.totalStudents}명</div>}
-                {!ok && <div className="muted tiny">데이터 없음</div>}
               </button>
             );
           })}
@@ -320,16 +310,16 @@ const AdminSystem = () => {
       );
     }
 
-    const rowTitles = [
-      '① 선택률','② 선택률','③ 선택률','④ 선택률','⑤ 선택률',
-      '미응답률','정답','정답률','문항번호','과목'
-    ];
-
     const statusLabel = (status) => {
-      // 유효응시 = completed, 그 외 = 무효응시(미응시자/중도포기 포함)
-      return status === 'completed' ? '유효응시' : '무효응시';
+      if (status === 'completed') return '유효응시';
+      if (status === 'dropout')   return '중도포기';
+      return '미응시';
     };
-    const statusClass = (status) => status === 'completed' ? 'ok' : 'bad';
+    const statusClass = (status) => {
+      if (status === 'completed') return 'ok';
+      if (status === 'dropout')   return 'warn';
+      return 'bad-dark';
+    };
 
     return (
       <div className="admin-root">
@@ -340,47 +330,60 @@ const AdminSystem = () => {
         </div>
 
         <div className="table-scroll-x">
-          <table className="answers-table" style={{ minWidth: Math.max(900, questions.length * 30 + 130) }}>
+          <table className="answers-table" style={{ minWidth: Math.max(900, questions.length * 30 + 136) }}>
             <thead>
+              {/* 1행: 미응답자 수(명) */}
               <tr>
-                <th className="rowhead" colSpan={2}>{rowTitles[0]}</th>
-                {questions.map(q=>{ const st=getQuestionStatistics(q); const isKey=Number(answerKey[q])===1; return <th key={`c1-${q}`} className={`c1 ${isKey?'is-key':''}`}>{st.choiceRates[1]}</th>; })}
+                <th className="rowhead" colSpan={2}>미응답자 수</th>
+                {questions.map(q=>{
+                  const st=getQuestionStatistics(q);
+                  return <th key={`nr-${q}`} className="nonresp">{st.nullCount}명</th>;
+                })}
               </tr>
+
+              {/* 2~6행: ①~⑤ 선택률 (응답자 기준, 합=100) */}
+              {[1,2,3,4,5].map(choice=>(
+                <tr key={`c${choice}`}>
+                  <th className="rowhead" colSpan={2}>선택 {choice}</th>
+                  {questions.map(q=>{
+                    const st=getQuestionStatistics(q);
+                    const isKey=Number(answerKey[q])===choice;
+                    return <th key={`c${choice}-${q}`} className={`c${choice} ${isKey?'is-key':''}`}>{st.choiceRates[choice]}%</th>;
+                  })}
+                </tr>
+              ))}
+
+              {/* 7행: 정답 */}
               <tr>
-                <th className="rowhead" colSpan={2}>{rowTitles[1]}</th>
-                {questions.map(q=>{ const st=getQuestionStatistics(q); const isKey=Number(answerKey[q])===2; return <th key={`c2-${q}`} className={`c2 ${isKey?'is-key':''}`}>{st.choiceRates[2]}</th>; })}
+                <th className="rowhead" colSpan={2}>정답</th>
+                {questions.map(q=>{
+                  const k=answerKey[q] ?? '-';
+                  return <th key={`ans-${q}`} className="answer">{k}</th>;
+                })}
               </tr>
+
+              {/* 8행: 정답률 */}
               <tr>
-                <th className="rowhead" colSpan={2}>{rowTitles[2]}</th>
-                {questions.map(q=>{ const st=getQuestionStatistics(q); const isKey=Number(answerKey[q])===3; return <th key={`c3-${q}`} className={`c3 ${isKey?'is-key':''}`}>{st.choiceRates[3]}</th>; })}
+                <th className="rowhead" colSpan={2}>정답률</th>
+                {questions.map(q=>{
+                  const st=getQuestionStatistics(q);
+                  return <th key={`cr-${q}`} className="correct">{st.correctRate}%</th>;
+                })}
               </tr>
+
+              {/* 9행: 문항번호 */}
               <tr>
-                <th className="rowhead" colSpan={2}>{rowTitles[3]}</th>
-                {questions.map(q=>{ const st=getQuestionStatistics(q); const isKey=Number(answerKey[q])===4; return <th key={`c4-${q}`} className={`c4 ${isKey?'is-key':''}`}>{st.choiceRates[4]}</th>; })}
-              </tr>
-              <tr>
-                <th className="rowhead" colSpan={2}>{rowTitles[4]}</th>
-                {questions.map(q=>{ const st=getQuestionStatistics(q); const isKey=Number(answerKey[q])===5; return <th key={`c5-${q}`} className={`c5 ${isKey?'is-key':''}`}>{st.choiceRates[5]}</th>; })}
-              </tr>
-              <tr>
-                <th className="rowhead" colSpan={2}>{rowTitles[5]}</th>
-                {questions.map(q=>{ const st=getQuestionStatistics(q); return <th key={`nr-${q}`} className="nonresp">{st.nonResponseRate}</th>; })}
-              </tr>
-              <tr>
-                <th className="rowhead" colSpan={2}>{rowTitles[6]}</th>
-                {questions.map(q=>{ const k=answerKey[q] ?? '-'; return <th key={`ans-${q}`} className="answer">{k}</th>; })}
-              </tr>
-              <tr>
-                <th className="rowhead" colSpan={2}>{rowTitles[7]}</th>
-                {questions.map(q=>{ const st=getQuestionStatistics(q); return <th key={`cr-${q}`} className="correct">{st.correctRate}</th>; })}
-              </tr>
-              <tr>
-                <th className="rowhead" colSpan={2}>{rowTitles[8]}</th>
+                <th className="rowhead" colSpan={2}>문항번호</th>
                 {questions.map(q=><th key={`q-${q}`} className="qnum">{q}</th>)}
               </tr>
+
+              {/* 10행: 과목 (SESSION_SUBJECT_RANGES 기준) */}
               <tr>
-                <th className="rowhead" colSpan={2}>{rowTitles[9]}</th>
-                {questions.map(q=>{ const subj=subjectBy(q, selectedSession); return <th key={`subj-${q}`} className="subject">{subj}</th>; })}
+                <th className="rowhead" colSpan={2}>과목</th>
+                {questions.map(q=>{
+                  const subj=subjectBy(q, selectedSession);
+                  return <th key={`subj-${q}`} className="subject">{subj}</th>;
+                })}
               </tr>
             </thead>
 
@@ -393,9 +396,11 @@ const AdminSystem = () => {
                     const ans = stu.responses[q];
                     const correct = Number(answerKey[q]);
                     const isNull = ans == null;
-                    let cls = 'cell gray';
-                    if (stu.status !== 'completed') cls = 'cell dark';
+
+                    let cls = 'cell gray';               // 미응답
+                    if (stu.status !== 'completed') cls = 'cell dark';   // 미응시/중도포기는 회색이 아니라 진회색
                     else if (!isNull) cls = (ans === correct) ? 'cell ok' : 'cell bad';
+
                     return <td key={`${stu.sid}-${q}`} className={cls}>{isNull?'-':ans}</td>;
                   })}
                 </tr>
