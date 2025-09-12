@@ -1,57 +1,127 @@
-/* ==== WrongAnswerPanel (tab style) ==== */
+/* ==== WrongAnswerPanel (탭 전환형, 내부 스크롤 없음) ==== */
+.wrong-panel-root {
+  /* 카드 내부에서 자체 스크롤을 만들지 않음 */
+  overflow: visible;
+}
 
-/* 탭 버튼 행 */
+/* 설명 줄 */
+.legend-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  opacity: .9;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.legend-red { color: #ffd8d8; }
+.legend-example {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 상단 탭 */
 .session-tabs {
   display: flex;
   gap: 6px;
-  margin-bottom: 10px;
+  flex-wrap: wrap;
+  margin: 8px 0 10px;
 }
-
 .tab-btn {
-  flex: 1;
-  padding: 6px 0;
+  appearance: none;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface-2);
+  background: var(--surface);
   color: var(--ink);
+  border-radius: 999px;
+  padding: 6px 12px;
   font-weight: 700;
-  cursor: pointer;
   font-size: 13px;
+  cursor: pointer;
 }
 .tab-btn.active {
   background: var(--primary);
-  color: #fff;
   border-color: var(--primary);
+  color: #fff;
 }
 
-/* 선택된 교시 컨텐츠 */
-.session-panel {
-  margin-top: 6px;
+/* 탭 콘텐츠 래퍼 — 내부 스크롤 끔 */
+.tab-content {
+  overflow: visible;
 }
 
-/* 문항 버튼들 */
-.grid.no-scroll {
+/* 번호 버튼 그리드
+   - 모바일에서도 한 눈에: 버튼을 너무 작게 만들지 않되,
+     한 줄에 더 많이 들어가도록 minmax를 살짝 줄인 균형값(36px) 사용 */
+.btn-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
-  gap: 4px;
-  padding: 4px 0;
-  overflow: visible;  /* 카드 내부 스크롤 제거 */
+  grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+  gap: 6px;
 }
 
-/* 기본 버튼 */
+/* 기본 번호 버튼(무채색) */
 .qbtn {
+  position: relative; /* 🔥 이모지 배치용 */
+  appearance: none;
   border: 1px solid var(--line);
-  background: rgba(255,255,255,0.02);
+  background: rgba(255,255,255,0.03);
   color: var(--ink);
-  border-radius: 6px;
-  font-size: 11px;   /* ⬅️ 모바일 대응: 작게 */
-  font-weight: 700;
-  padding: 3px 0;    /* ⬅️ 세로 패딩 줄임 */
+  border-radius: 8px;
+  padding: 8px 0;
+  font-weight: 800;
+  font-size: 13px; /* 문항 번호 읽기 좋은 크기 */
+  line-height: 1;
+  cursor: default;
 }
 
-/* 오답 = 빨강 */
+/* 내 오답 = 빨강 */
 .qbtn.red {
   background: rgba(239,68,68,.16);
   border-color: rgba(239,68,68,.45);
   color: #ffd8d8;
+}
+
+/* 🔥 불타는 버튼 효과 */
+.qbtn.fire {
+  animation: blazing 0.6s ease-in-out infinite alternate;
+  box-shadow:
+    0 0 20px #ff4500,
+    0 0 40px #ff6b35,
+    0 0 60px #ff8c42;
+  border-color: #ff7a3a; /* 미묘한 강조 */
+}
+
+/* 🔥 이모지 위치(오른쪽 위 살짝 떠 있게) */
+.qbtn.fire .flame-emoji {
+  position: absolute;
+  top: -7px;
+  right: -6px;
+  font-size: 14px;
+  transform-origin: center;
+  animation: flame-wiggle 0.9s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* 불타는 글로우 & 살짝 커졌다 작아짐 */
+@keyframes blazing {
+  0% {
+    box-shadow: 0 0 20px #ff4500, 0 0 40px #ff6b35, 0 0 60px #ff8c42;
+    transform: scale(1);
+  }
+  100% {
+    box-shadow: 0 0 28px #ff4500, 0 0 56px #ff6b35, 0 0 84px #ff8c42;
+    transform: scale(1.04);
+  }
+}
+
+/* 🔥 이모지 살짝 흔들리는 모션 */
+@keyframes flame-wiggle {
+  0%   { transform: translateY(0) rotate(0deg) scale(1); }
+  50%  { transform: translateY(-1px) rotate(-6deg) scale(1.05); }
+  100% { transform: translateY(0) rotate(0deg) scale(1); }
+}
+
+/* 좁은 화면에서 버튼이 과하게 작아지지 않도록 최소 높이 보정 */
+@media (max-width: 380px) {
+  .qbtn { padding: 7px 0; font-size: 12.5px; }
 }
