@@ -1,103 +1,57 @@
-/* ==== WrongAnswerPanel (collapsible by session) ==== */
-.accordion { 
-  display: flex; 
-  flex-direction: column; 
-  gap: 10px; 
-}
+/* ==== WrongAnswerPanel (tab style) ==== */
 
-/* 세션 카드 */
-.session { 
-  border: 1px solid var(--line); 
-  border-radius: 12px; 
-  background: var(--surface-2); 
-}
-
-/* 세션 헤더 (접힘/펼침 토글) */
-.session-head {
-  width: 100%;
-  display: flex; 
-  align-items: center; 
-  justify-content: space-between;
-  padding: 10px 12px;
-  background: linear-gradient(90deg, var(--primary), #4cc9ff);
-  color: #fff; 
-  border: none; 
-  border-radius: 12px 12px 0 0; 
-  cursor: pointer;
-  font-weight: 800; 
-  letter-spacing: .2px;
-}
-.session-head .arrow { transition: transform .25s ease; }
-.session-head.open .arrow { transform: rotate(90deg); }
-
-/* 패널: 닫힘 시 렌더 제거로 접힘 처리 → 높이/오버플로 고민 X */
-.panel { 
-  border-top: 1px solid var(--line);
-}
-
-/* 번호 버튼 그리드 */
-.panel .grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+/* 탭 버튼 행 */
+.session-tabs {
+  display: flex;
   gap: 6px;
-  padding: 8px 10px 12px;
+  margin-bottom: 10px;
 }
 
-/* 기본 번호 버튼(무채색) */
+.tab-btn {
+  flex: 1;
+  padding: 6px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 13px;
+}
+.tab-btn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+/* 선택된 교시 컨텐츠 */
+.session-panel {
+  margin-top: 6px;
+}
+
+/* 문항 버튼들 */
+.grid.no-scroll {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
+  gap: 4px;
+  padding: 4px 0;
+  overflow: visible;  /* 카드 내부 스크롤 제거 */
+}
+
+/* 기본 버튼 */
 .qbtn {
-  appearance: none;
   border: 1px solid var(--line);
   background: rgba(255,255,255,0.02);
   color: var(--ink);
-  border-radius: 8px;
-  padding: 8px 0;
-  font-weight: 800;
-  font-size: 13px;
-  cursor: default;
+  border-radius: 6px;
+  font-size: 11px;   /* ⬅️ 모바일 대응: 작게 */
+  font-weight: 700;
+  padding: 3px 0;    /* ⬅️ 세로 패딩 줄임 */
 }
 
-/* 내 오답 = 빨강 */
+/* 오답 = 빨강 */
 .qbtn.red {
   background: rgba(239,68,68,.16);
   border-color: rgba(239,68,68,.45);
   color: #ffd8d8;
-}
-/* 🔥 불타는 버튼 효과 */
-.qbtn.fire {
-  position: relative;
-  animation: blazing 0.6s ease-in-out infinite alternate;
-  box-shadow:
-    0 0 20px #ff4500,
-    0 0 40px #ff6b35,
-    0 0 60px #ff8c42;
-  border-color: #ff7a3a; /* 미묘한 강조 */
-}
-
-/* 🔥 이모지 위치(오른쪽 위 살짝 떠 있게) */
-.qbtn.fire .flame-emoji {
-  position: absolute;
-  top: -8px;
-  right: -6px;
-  font-size: 14px;
-  transform-origin: center;
-  animation: flame-wiggle 0.9s ease-in-out infinite;
-  pointer-events: none;
-}
-
-@keyframes blazing {
-  0% {
-    box-shadow: 0 0 20px #ff4500, 0 0 40px #ff6b35, 0 0 60px #ff8c42;
-    transform: scale(1);
-  }
-  100% {
-    box-shadow: 0 0 30px #ff4500, 0 0 60px #ff6b35, 0 0 90px #ff8c42;
-    transform: scale(1.05);
-  }
-}
-
-/* 🔥 이모지 살짝 흔들리는 모션 */
-@keyframes flame-wiggle {
-  0%   { transform: translateY(0) rotate(0deg) scale(1); }
-  50%  { transform: translateY(-1px) rotate(-6deg) scale(1.05); }
-  100% { transform: translateY(0) rotate(0deg) scale(1); }
 }
