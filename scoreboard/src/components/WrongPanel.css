@@ -139,3 +139,16 @@
 @media (max-width: 380px) {
   .qbtn { font-size: 10.5px; }
 }
+
+/* 예시 버튼을 번호 박스와 완전 동일 크기/정렬로 */
+.qbtn.sample {
+  padding: 0;                 /* 내부 여백 제거 */
+  min-width: 0;               /* 폭 고정 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* " = 특별 해설 제공" 을 한 줄로 버튼 옆에 고정 */
+.legend-example { display: inline-flex; align-items: center; gap: 6px; }
+.legend-label { white-space: nowrap; }
