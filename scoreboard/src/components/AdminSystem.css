@@ -106,3 +106,20 @@
 .legend.red   { background:#ef4444; }
 .legend.gray  { background:#6b7280; }
 .legend.dark  { background:#374151; }
+
+
+/* 추가: 헤더 왼쪽 두 칸 병합용 */
+.answers-table th.rowhead {
+  position: sticky;
+  left: 0;
+  z-index: 12;              /* 기존 sticky 헤더보다 위로 */
+  background: var(--surface-2);
+  color: var(--ink);
+  font-weight: 800;
+  text-align: left;
+  padding: 6px 10px;
+  min-width: 136px;         /* 학수번호(80) + 상태(56) 합과 비슷하게 */
+  border-right: 1px solid var(--line);
+}
+
+/* 기존 것들은 그대로 유지 (필요 시 색상만 참고) */
