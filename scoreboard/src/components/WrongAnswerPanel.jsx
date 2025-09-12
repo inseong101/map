@@ -112,16 +112,26 @@ export default function WrongAnswerPanel({ roundLabel, data }) {
     <div className="wrong-panel-root">
       <h2 style={{ marginTop: 0 }}>{roundLabel} 오답 보기</h2>
 
-      {/* 설명 줄 — 실제 🔥 예시 버튼 포함 */}
-      <div className="legend-line">
-        <span>색상: <b className="legend-red">빨강</b>=내 오답, 회색=정답(또는 데이터 없음), </span>
-        <span className="legend-example">
-          <button type="button" className="qbtn fire" aria-label="특별 해설 제공 예시">
-            -예시-<span className="flame-emoji" aria-hidden>🔥</span>
-          </button>
-          = 특별 해설 제공
-        </span>
-      </div>
+      {/* 설명 줄 — 실제 🔥 예시 버튼 (실제 셀 크기와 동일) */}
+<div className="legend-line">
+  <span>
+    색상: <b className="legend-red">빨강</b>=내 오답, 회색=정답(또는 데이터 없음),
+  </span>
+
+  <span className="legend-example">
+    <button
+      type="button"
+      className="qbtn fire sample"
+      aria-label="특별 해설 제공 예시"
+      /* ✅ 실제 셀 크기와 동일하게 */
+      style={{ width: `${gridStyle.cellW}px`, height: `${gridStyle.cellH}px` }}
+    >
+      -예시-
+      <span className="flame-emoji" aria-hidden>🔥</span>
+    </button>
+    <span className="legend-label">= 특별 해설 제공</span>
+  </span>
+</div>
 
       {/* 상단 탭 */}
       <div className="session-tabs" role="tablist" aria-label="교시 선택">
