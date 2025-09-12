@@ -126,10 +126,11 @@ export default function WrongAnswerPanel({ roundLabel, data }) {
       /* ✅ 실제 셀 크기와 동일하게 */
       style={{ width: `${gridStyle.cellW}px`, height: `${gridStyle.cellH}px` }}
     >
-      특별 해설 제공
+      해설<br/>
+      제공<br/>
       <span className="flame-emoji" aria-hidden>🔥</span>
     </button>
-    
+    <span className="legend-label">고난도 문제 or 헷갈리는 문제는 특별 해설 제공</span>
   </span>
 </div>
 
