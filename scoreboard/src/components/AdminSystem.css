@@ -56,20 +56,11 @@
 .pill.warn  { background:#3b1a19; color:#ffd2cf; border-color:#ef4444; }
 .pill.gray  { background:#2b2f36; color:#c7c9ce; border-color:#434a55; }
 
-/* Diagnostic cards */
-.diag-grid { display:grid; grid-template-columns: repeat(auto-fill,minmax(260px,1fr)); gap:12px; margin-top:12px; }
-.card { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px; }
-.card-title { font-weight:800; margin-bottom:8px; color:var(--ink); }
-.diag-list { margin:0; padding-left:16px; line-height:1.6; }
-
 /* Answers table */
 .table-scroll-x { overflow-x:auto; border:1px solid var(--line); border-radius:8px; }
 .answers-table { width:100%; border-collapse:collapse; }
-
-/* 🔥 모든 헤더 가운데 정렬 */
-.answers-table thead th { position: sticky; top:0; z-index:10; text-align:center; }
-
 .answers-table th, .answers-table td { border:1px solid var(--line); padding:4px; text-align:center; font-size:11px; }
+.answers-table thead th { position: sticky; top:0; z-index:10; text-align: center; }
 
 .answers-table th.side.left { min-width:80px; background:var(--surface-2); color:var(--ink); font-weight:700; }
 .answers-table th.side.status { min-width:56px; background:var(--surface-2); color:var(--ink); font-weight:700; }
@@ -95,14 +86,15 @@
 .answers-table td.side.status.body {
   position: sticky; left:80px; z-index:1; color:#fff; font-weight:700;
 }
-.answers-table td.side.status.body.ok { background:#22c55e; }
-.answers-table td.side.status.body.bad { background:#ef4444; }
+.answers-table td.side.status.body.ok   { background:#22c55e; }   /* 유효응시 */
+.answers-table td.side.status.body.warn { background:#f59e0b; }   /* 중도포기 */
+.answers-table td.side.status.body.bad-dark { background:#374151; } /* 미응시 */
 
 .answers-table td.cell { color:#fff; }
-.answers-table td.cell.ok  { background:#22c55e; }
-.answers-table td.cell.bad { background:#ef4444; }
-.answers-table td.cell.gray{ background:#6b7280; }
-.answers-table td.cell.dark{ background:#374151; }
+.answers-table td.cell.ok  { background:#22c55e; }  /* 정답 */
+.answers-table td.cell.bad { background:#ef4444; }  /* 오답 */
+.answers-table td.cell.gray{ background:#6b7280; }  /* 미응답(유효응시자) */
+.answers-table td.cell.dark{ background:#374151; }  /* 미응시/중도 등 무효 */
 
 .legend { display:inline-block; width:10px; height:10px; border-radius:2px; margin:0 2px; vertical-align:middle; }
 .legend.green { background:#22c55e; }
@@ -110,24 +102,7 @@
 .legend.gray  { background:#6b7280; }
 .legend.dark  { background:#374151; }
 
-/* 추가: 헤더 왼쪽 두 칸 병합용 */
-.answers-table th.rowhead {
-  position: sticky;
-  left: 0;
-  z-index: 12;              /* 기존 sticky 헤더보다 위로 */
-  background: var(--surface-2);
-  color: var(--ink);
-  font-weight: 800;
-  text-align: center;       /* 가운데 정렬 */
-  padding: 6px 10px;
-  min-width: 136px;         /* 학수번호(80) + 상태(56) 합과 비슷하게 */
-  border-right: 1px solid var(--line);
-}
-
-/* 헤더 가운데 정렬 */
-.answers-table thead th { text-align: center; }
-
-/* rowhead 병합 라벨 셀 */
+/* 왼쪽 두 칸 병합 라벨 셀 */
 .answers-table th.rowhead {
   position: sticky;
   left: 0;
@@ -135,8 +110,8 @@
   background: var(--surface-2);
   color: var(--ink);
   font-weight: 800;
-  text-align: center;   /* ← left 대신 center */
+  text-align: center;
   padding: 6px 10px;
-  min-width: 136px;
+  min-width: 136px; /* 80 + 56 */
   border-right: 1px solid var(--line);
 }
