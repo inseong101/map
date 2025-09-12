@@ -51,12 +51,11 @@
 }
 
 /* 번호 버튼 그리드
-   - 모바일에서도 한 눈에: 버튼을 너무 작게 만들지 않되,
-     한 줄에 더 많이 들어가도록 minmax를 살짝 줄인 균형값(36px) 사용 */
+   - 버튼 크기를 기존 대비 80%로 줄임 */
 .btn-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(29px, 1fr)); /* 기존 36px → 29px */
+  gap: 5px; /* 간격도 살짝 줄임 */
 }
 
 /* 기본 번호 버튼(무채색) */
@@ -66,10 +65,10 @@
   border: 1px solid var(--line);
   background: rgba(255,255,255,0.03);
   color: var(--ink);
-  border-radius: 8px;
-  padding: 8px 0;
+  border-radius: 6px;          /* 8px → 6px */
+  padding: 6px 0;              /* 8px → 6px */
   font-weight: 800;
-  font-size: 13px; /* 문항 번호 읽기 좋은 크기 */
+  font-size: 11px;             /* 13px → 11px */
   line-height: 1;
   cursor: default;
 }
@@ -85,18 +84,18 @@
 .qbtn.fire {
   animation: blazing 0.6s ease-in-out infinite alternate;
   box-shadow:
-    0 0 20px #ff4500,
-    0 0 40px #ff6b35,
-    0 0 60px #ff8c42;
-  border-color: #ff7a3a; /* 미묘한 강조 */
+    0 0 16px #ff4500,
+    0 0 32px #ff6b35,
+    0 0 48px #ff8c42;
+  border-color: #ff7a3a;
 }
 
-/* 🔥 이모지 위치(오른쪽 위 살짝 떠 있게) */
+/* 🔥 이모지 위치 */
 .qbtn.fire .flame-emoji {
   position: absolute;
-  top: -7px;
-  right: -6px;
-  font-size: 14px;
+  top: -6px;    /* 기존 -7px → 살짝 조정 */
+  right: -5px;
+  font-size: 13px; /* 글자 크기 줄어든 만큼 조정 */
   transform-origin: center;
   animation: flame-wiggle 0.9s ease-in-out infinite;
   pointer-events: none;
@@ -105,11 +104,11 @@
 /* 불타는 글로우 & 살짝 커졌다 작아짐 */
 @keyframes blazing {
   0% {
-    box-shadow: 0 0 20px #ff4500, 0 0 40px #ff6b35, 0 0 60px #ff8c42;
+    box-shadow: 0 0 16px #ff4500, 0 0 32px #ff6b35, 0 0 48px #ff8c42;
     transform: scale(1);
   }
   100% {
-    box-shadow: 0 0 28px #ff4500, 0 0 56px #ff6b35, 0 0 84px #ff8c42;
+    box-shadow: 0 0 22px #ff4500, 0 0 44px #ff6b35, 0 0 66px #ff8c42;
     transform: scale(1.04);
   }
 }
@@ -121,7 +120,7 @@
   100% { transform: translateY(0) rotate(0deg) scale(1); }
 }
 
-/* 좁은 화면에서 버튼이 과하게 작아지지 않도록 최소 높이 보정 */
+/* 아주 작은 화면에서 더 줄이기 */
 @media (max-width: 380px) {
-  .qbtn { padding: 7px 0; font-size: 12.5px; }
+  .qbtn { padding: 5px 0; font-size: 10.5px; }
 }
