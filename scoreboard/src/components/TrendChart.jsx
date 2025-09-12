@@ -1,4 +1,4 @@
-/ src/components/TrendChart.jsx
+// src/components/TrendChart.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { getPrebinnedDistribution, calcPercentileFromBins } from '../utils/helpers';
 
