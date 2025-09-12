@@ -5,25 +5,24 @@
     "rewrites": [
       {
         "source": "/api/prebinned",
-        "function": { "functionId": "getPrebinnedDistribution", "region": "asia-northeast3" }
+        "function": { "functionId": "getPrebinnedDistribution", "region": "us-central1" }
       },
       {
         "source": "/api/highError",
-        "function": { "functionId": "getHighErrorRateQuestions", "region": "asia-northeast3" }
+        "function": { "functionId": "getHighErrorRateQuestions", "region": "us-central1" }
       },
       {
         "source": "/api/questionStats",
-        "function": { "functionId": "getQuestionChoiceStats", "region": "asia-northeast3" }
+        "function": { "functionId": "getQuestionChoiceStats", "region": "us-central1" }
       },
       {
         "source": "/api/overallStatus",
-        "function": { "functionId": "getOverallStatus", "region": "asia-northeast3" }
+        "function": { "functionId": "getOverallStatus", "region": "us-central1" }
       },
       {
         "source": "/api/manualUpdate",
-        "function": { "functionId": "manualUpdateAnalytics", "region": "asia-northeast3" }
+        "function": { "functionId": "manualUpdateAnalytics", "region": "us-central1" }
       },
-
       { "source": "**", "destination": "/index.html" }
     ]
   },
