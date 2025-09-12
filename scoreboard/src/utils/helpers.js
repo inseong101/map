@@ -458,7 +458,7 @@ export async function getPrebinnedDistribution(roundLabel) {
   try {
     // Hosting 리라이트가 있다면 이 상대경로로 OK.
     // 없다면 전체 URL(예: https://asia-northeast3-<project>.cloudfunctions.net/getPrebinnedDistribution?roundLabel=1차)로 바꿔주세요.
-    const url = `/getPrebinnedDistribution?roundLabel=${encodeURIComponent(roundLabel)}`;
+    const url = `/api/prebinned?roundLabel=${encodeURIComponent(roundLabel)}`;
     const resp = await fetch(url, { method: 'GET' });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     return await resp.json(); // { success, data }
