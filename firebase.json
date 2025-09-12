@@ -7,14 +7,13 @@
       "**/node_modules/**"
     ],
     "rewrites": [
-      {
-        "source": "/api/prebinned",
-        "function": "getPrebinnedDistribution"
-      },
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
+      { "source": "/api/prebinned",      "function": "getPrebinnedDistribution" },
+      { "source": "/api/highError",      "function": "getHighErrorRateQuestions" },
+      { "source": "/api/questionStats",  "function": "getQuestionChoiceStats" },
+      { "source": "/api/overallStatus",  "function": "getOverallStatus" },
+      { "source": "/api/manualUpdate",   "function": "manualUpdateAnalytics" },
+
+      { "source": "**", "destination": "/index.html" }
     ]
   },
   "functions": {
