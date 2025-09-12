@@ -69,13 +69,8 @@ async function getRoundTotalFromFirestore(roundLabel, sid) {
 }
 
 // ===== (임시) 비밀번호 검증 스텁 =====
-// - PASSWORD_REQUIRED=false 면 언제나 true 반환 (=검사 생략)
-// - PASSWORD_REQUIRED=true 로 바꾸면, 여기서 실제 검증 로직(예: Firestore/Cloud Function 호출)로 교체
 async function verifyPassword(studentId, password) {
   if (!PASSWORD_REQUIRED) return true;
-  // TODO: 운영 시 실제 검증 구현
-  // 예시) const ok = await callCloudFunction('verifyPassword', { sid: studentId, pw: password });
-  // return ok;
   return false;
 }
 
@@ -99,6 +94,19 @@ function App() {
     const lu = parseInt(localStorage.getItem('pw_lock_until') || '0', 10);
     setPwFailCount(Number.isFinite(fc) ? fc : 0);
     setLockUntil(Number.isFinite(lu) ? lu : 0);
+  }, []);
+
+  // ✅ URL로 관리자 바로 열기: #admin 또는 ?mode=admin
+  useEffect(() => {
+    const pickViewFromURL = () => {
+      const params = new URLSearchParams(window.location.search);
+      if (window.location.hash === '#admin' || params.get('mode') === 'admin') {
+        setCurrentView('admin');
+      }
+    };
+    pickViewFromURL();
+    window.addEventListener('hashchange', pickViewFromURL);
+    return () => window.removeEventListener('hashchange', pickViewFromURL);
   }, []);
 
   const isLocked = () => {
@@ -157,12 +165,11 @@ function App() {
       const foundRounds = await discoverRoundsFor(id);
 
       if (foundRounds.length === 0) {
-        // 🔔 학수번호 부재 안내 그대로 유지
         setError('존재하지 않는 학수번호입니다.');
         return;
       }
 
-      // 💡 결과 화면 진입 즉시 로딩 화면 먼저 띄우기 (플리커 방지)
+      // 결과 화면으로 전환 후 보정 로딩
       setCurrentView('result');
       setHydrating(true);
       setRounds(foundRounds);
