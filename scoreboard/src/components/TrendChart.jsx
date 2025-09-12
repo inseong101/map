@@ -1,3 +1,4 @@
+// src/components/TrendChart.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import {
   getPrebinnedDistribution,
@@ -11,7 +12,6 @@ const nameToCode = (name) => ({
   '상지대': '09', '세명대': '10', '우석대': '11', '원광대': '12',
 }[name] || '01');
 
-const BIN_SIZE = 5;
 const CUTOFF_SCORE = 204;
 
 function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
@@ -110,7 +110,7 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
     drawCurrent(bundle, selectedRoundIdx, isSchoolMode);
   }, [bundle, selectedRoundIdx, isSchoolMode]);
 
-  // === 캔버스 그리기 함수들 (기존 그대로) ===
+  // === 캔버스 그리기 함수들 ===
   function drawCurrent(data, roundIdx, schoolMode) {
     const cur = data?.[roundIdx];
     if (!cur) return;
@@ -152,7 +152,7 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
 
     const yMax = drawAxes(ctx, padding, chartW, chartH, bins, min, max);
     const color = schoolMode ? '#22c55e' : '#7ea2ff';
-    drawBarsWithLabels(ctx, padding, chartW, chartH, bins, color, yMax, min, max);
+    drawBars(ctx, padding, chartW, chartH, bins, color, yMax, min, max);
     drawCutoff(ctx, padding, chartW, chartH, cur.cutoff, min, max);
   }
 
@@ -223,7 +223,7 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
     return base * 10;
   }
 
-  function drawBarsWithLabels(ctx, padding, chartW, chartH, bins, primaryColor, yMax, minX, maxX) {
+  function drawBars(ctx, padding, chartW, chartH, bins, primaryColor, yMax, minX, maxX) {
     const barCount = bins.length;
     const binWidth = chartW / barCount;
 
@@ -265,23 +265,104 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
     ctx.setLineDash([]);
   }
 
-  // 컨트롤 UI (TopControls, SummaryLine, LegendRow) 그대로 유지
-  // ... (생략: 기존 코드 사용) ...
+  // === 상단 컨트롤 UI ===
+  const TopControls = () => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {rounds.map((round, idx) => (
+          <button
+            key={round.label ?? idx}
+            onClick={() => setSelectedRoundIdx(idx)}
+            style={{
+              padding: '6px 12px',
+              borderRadius: 8,
+              border: selectedRoundIdx === idx ? '2px solid var(--primary)' : '1px solid var(--line)',
+              background: selectedRoundIdx === idx ? 'var(--primary)' : 'var(--surface)',
+              color: selectedRoundIdx === idx ? '#fff' : 'var(--ink)',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              minWidth: 56,
+            }}
+          >
+            {round.label}
+          </button>
+        ))}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>전국</span>
+        <label style={{ position: 'relative', display: 'inline-block', width: 46, height: 24 }}>
+          <input
+            type="checkbox"
+            checked={isSchoolMode}
+            onChange={(e) => setIsSchoolMode(e.target.checked)}
+            style={{ opacity: 0, width: 0, height: 0 }}
+          />
+          <span style={{ position: 'absolute', inset: 0, cursor: 'pointer', backgroundColor: isSchoolMode ? '#22c55e55' : '#7ea2ff55', transition: '.2s', borderRadius: 24 }} />
+          <span style={{ position: 'absolute', height: 18, width: 18, left: isSchoolMode ? 24 : 4, bottom: 3, backgroundColor: '#fff', transition: '.2s', borderRadius: '50%', boxShadow: '0 1px 3px rgba(0,0,0,0.35)' }} />
+        </label>
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>학교</span>
+      </div>
+    </div>
+  );
+
+  const current = bundle[selectedRoundIdx];
+
+  const SummaryLine = () => {
+    if (!current) return null;
+    const pct = isSchoolMode ? current.mySchPct : current.myNatPct;
+    return (
+      <div style={{ marginBottom: 8, padding: 10, background: 'rgba(21,29,54,0.5)', borderRadius: 8, fontSize: 14, color: 'var(--muted)', display: 'flex', justifyContent: 'center', gap: 60 }}>
+        <div style={{ textAlign: 'center' }}>
+          <strong style={{ color: 'var(--ink)' }}>{current.label}</strong>
+          {' '}—{' '}
+          <span style={{ color: '#ef4444', fontWeight: 'bold' }}>
+            {Number.isFinite(current.studentScore) ? `${current.studentScore}점` : '표시 안함'}
+          </span>
+          {pct != null && <div>(상위 {pct.toFixed(1)}%)</div>}
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div>유효응시자: {isSchoolMode ? current.totalSchool : current.totalNational}</div>
+        </div>
+      </div>
+    );
+  };
+
+  const LegendRow = () => (
+    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, alignItems: 'center', margin: '0 0 8px 0', fontSize: 12 }}>
+      <LegendItem color="#7ea2ff" label="전국 분포" />
+      <LegendItem color="#22c55e" label="학교 분포" />
+      <LegendItem color="#ef4444" label="본인 위치" />
+      <LegendLine color="#f59e0b" label="합격선(204)" />
+    </div>
+  );
+
+  const LegendItem = ({ color, label }) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 2, background: color }} />
+      <span style={{ color: 'var(--muted)' }}>{label}</span>
+    </div>
+  );
+
+  const LegendLine = ({ color, label }) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ display: 'inline-block', width: 18, height: 0, borderTop: `2px dashed ${color}` }} />
+      <span style={{ color: 'var(--muted)' }}>{label}</span>
+    </div>
+  );
 
   return (
     <div>
-      {/* TopControls, SummaryLine, LegendRow 그대로 */}
-      <canvas
-        ref={canvasRef}
-        style={{
-          width: '100%',
-          height: 380,
-          display: 'block',
-          opacity: isLoading ? 0 : 1,
-          transition: 'opacity .25s ease',
-        }}
-      />
-      {isLoading && <div>로딩 중...</div>}
+      <TopControls />
+      <SummaryLine />
+      <LegendRow />
+      <div style={{ position: 'relative', borderRadius: 8, border: '1px solid var(--line)', overflow: 'hidden', minHeight: 380 }}>
+        <canvas
+          ref={canvasRef}
+          style={{ width: '100%', height: 380, display: 'block', opacity: isLoading ? 0 : 1, transition: 'opacity .25s ease' }}
+        />
+        {isLoading && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>로딩 중...</div>}
+      </div>
     </div>
   );
 }
