@@ -1,32 +1,33 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import './WrongPanel.css';
 
+// 교시별 문항 수
 const SESSION_LENGTH = { '1교시': 80, '2교시': 100, '3교시': 80, '4교시': 80 };
 
-// 가장 큰 셀 면적(=여백 최소)을 만드는 cols 선택
+/** 가장 큰 셀 면적(=여백 최소)을 만드는 cols/rows 계산 */
 function bestGrid(n, W, H, gap = 5, aspect = 1) {
   if (!n || !W || !H) return { cols: 1, rows: 1, cellW: 0, cellH: 0 };
   let best = { cols: 1, rows: n, cellW: 0, cellH: 0, score: -1 };
 
   for (let cols = 1; cols <= n; cols++) {
     const rows = Math.ceil(n / cols);
-    // 가용 너비/높이에서 gap 빼고 셀 크기 계산
+
     const totalGapW = gap * (cols - 1);
     const totalGapH = gap * (rows - 1);
     const maxCellW = Math.floor((W - totalGapW) / cols);
     const maxCellH = Math.floor((H - totalGapH) / rows);
 
-    // 셀 비율 보정(정사각: aspect=1)
+    // 정사각형 기준(aspect=1). 비율 바꾸려면 aspect 조정.
     const fitW = Math.min(maxCellW, Math.floor(maxCellH * aspect));
     const fitH = Math.min(maxCellH, Math.floor(maxCellW / aspect));
-    const score = fitW * fitH; // 면적 최대화
+    const score = fitW * fitH;
 
     if (score > best.score) best = { cols, rows, cellW: fitW, cellH: fitH, score };
   }
   return best;
 }
 
-function WrongAnswerPanel({ roundLabel, data }) {
+export default function WrongAnswerPanel({ roundLabel, data }) {
   const [activeSession, setActiveSession] = useState('1교시');
   const gridWrapRef = useRef(null);
   const [gridStyle, setGridStyle] = useState({ cols: 1, cellW: 30, cellH: 30 });
@@ -42,7 +43,7 @@ function WrongAnswerPanel({ roundLabel, data }) {
     return out;
   }, [data]);
 
-  // 🔥 특별 해설 제공(교시별 Set)
+  // 🔥 특별 해설 제공(교시별 Set) — 다양한 키명 지원
   const fireBySession = useMemo(() => {
     const out = { '1교시': new Set(), '2교시': new Set(), '3교시': new Set(), '4교시': new Set() };
     const source = data?.fireBySession || data?.featuredBySession || data?.hotBySession || data?.specialBySession || {};
@@ -52,19 +53,28 @@ function WrongAnswerPanel({ roundLabel, data }) {
     return out;
   }, [data]);
 
-  // 레이아웃 자동 계산
+  // 레이아웃 자동 계산(컨테이너 크기 변동/탭 전환 시)
   useEffect(() => {
     const el = gridWrapRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => {
+
+    const compute = () => {
       const { width, height } = el.getBoundingClientRect();
       const total = SESSION_LENGTH[activeSession] || 80;
-      const gap = 5;        // CSS의 gap과 일치
-      const aspect = 1;     // 정사각형 버튼
+      const gap = 5;
+      const aspect = 1; // 정사각
       const { cols, cellW, cellH } = bestGrid(total, Math.max(0, width), Math.max(0, height), gap, aspect);
-      setGridStyle({ cols: Math.max(1, cols), cellW: Math.max(22, cellW), cellH: Math.max(22, cellH) });
-    });
+      setGridStyle({
+        cols: Math.max(1, cols),
+        cellW: Math.max(22, cellW),
+        cellH: Math.max(22, cellH),
+      });
+    };
+
+    const ro = new ResizeObserver(compute);
     ro.observe(el);
+    compute(); // 최초 1회
+
     return () => ro.disconnect();
   }, [activeSession]);
 
@@ -76,7 +86,6 @@ function WrongAnswerPanel({ roundLabel, data }) {
       <div
         className="btn-grid"
         style={{
-          // 컨테이너 높이에 맞춰 꽉 채우기
           gridTemplateColumns: `repeat(${cols}, ${cellW}px)`,
           gridTemplateRows: `repeat(${Math.ceil(total / cols)}, ${cellH}px)`,
         }}
@@ -130,12 +139,10 @@ function WrongAnswerPanel({ roundLabel, data }) {
         ))}
       </div>
 
-      {/* 탭 콘텐츠 — 내부 스크롤 없음, 카드 뒷면 크기에 맞춰 꽉 채움 */}
+      {/* 탭 콘텐츠 — 카드 높이 내에서만 꽉 채움(내부 스크롤 없음) */}
       <div className="tab-content" role="tabpanel" aria-label={`${activeSession} 문항`} ref={gridWrapRef}>
         {renderButtons(activeSession)}
       </div>
     </div>
   );
 }
-
-export default WrongAnswerPanel;
