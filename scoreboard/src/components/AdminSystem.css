@@ -123,3 +123,20 @@
   min-width: 136px;         /* 학수번호(80) + 상태(56) 합과 비슷하게 */
   border-right: 1px solid var(--line);
 }
+
+/* 헤더 가운데 정렬 */
+.answers-table thead th { text-align: center; }
+
+/* rowhead 병합 라벨 셀 */
+.answers-table th.rowhead {
+  position: sticky;
+  left: 0;
+  z-index: 12;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-weight: 800;
+  text-align: center;   /* ← left 대신 center */
+  padding: 6px 10px;
+  min-width: 136px;
+  border-right: 1px solid var(--line);
+}
