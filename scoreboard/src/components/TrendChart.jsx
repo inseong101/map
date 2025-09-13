@@ -2,9 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   getAverages,
-  getPrebinnedDistribution,     // ✅ 사전집계 분포 사용
-  getParticipationStats,
-  calcPercentileFromScores,
+  getPrebinnedDistribution,   // ✅ 사전집계 분포만 사용
+  calcPercentileFromBins,      // ✅ bin 기반 백분위
 } from '../utils/helpers';
 
 // 학교명 → 코드 변환
@@ -59,12 +58,8 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
           ? Number(roundData.totalScore)
           : null;
 
-        // ✅ 평균
+        // ✅ 평균 (내부에서 prebinned 사용)
         const averages = await getAverages(school, label);
-
-        // ✅ 참여 통계(유효/무효·백분위 계산용 점수 목록)
-        const natStats = await getParticipationStats(label, null);
-        const schStats = await getParticipationStats(label, schCode);
 
         // ✅ 사전집계 분포
         const prebinned = await getPrebinnedDistribution(label);
@@ -78,6 +73,10 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
         const natBinsRaw = Array.isArray(d?.national) ? d.national : [];
         const schBinsRaw = Array.isArray(d?.bySchool?.[schCode]) ? d.bySchool[schCode] : [];
 
+        // ✅ 분포 합계 → 총 유효응시자 수
+        const totalNational = natBinsRaw.reduce((s,b)=>s+(b?.count||0),0);
+        const totalSchool   = schBinsRaw.reduce((s,b)=>s+(b?.count||0),0);
+
         // 내 점수 bin에 표시 플래그
         const tagStudent = (bins) => {
           if (!Number.isFinite(studentScore)) return bins || [];
@@ -89,37 +88,29 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
           });
         };
 
-        // 백분위(상위%)
-        const myNatPct =
-          Number.isFinite(studentScore) && Array.isArray(natStats?.completedScores) && natStats.completedScores.length > 0
-            ? calcPercentileFromScores(natStats.completedScores, studentScore)
-            : null;
-
-        const mySchPct =
-          Number.isFinite(studentScore) && Array.isArray(schStats?.completedScores) && schStats.completedScores.length > 0
-            ? calcPercentileFromScores(schStats.completedScores, studentScore)
-            : null;
-
-        // 타이틀에 쓰는 "무효응시자 제외 총 X명"은 completed 기준
-        const totalNational = natStats?.completed ?? 0;
-        const totalSchool   = schStats?.completed ?? 0;
+        // ✅ 백분위(상위%) — bin 기반으로 직접 계산
+        const myNatPct = Number.isFinite(studentScore)
+          ? calcPercentileFromBins(natBinsRaw, studentScore)
+          : null;
+        const mySchPct = Number.isFinite(studentScore)
+          ? calcPercentileFromBins(schBinsRaw, studentScore)
+          : null;
 
         out.push({
           label,
           studentScore,
 
           nationalAvg: averages?.nationalAvg ?? '-',
-          schoolAvg: averages?.schoolAvg ?? '-',
+          schoolAvg:   averages?.schoolAvg ?? '-',
 
           // prebinned bins + 공통 x범위 유지
           nationalBins: { bins: tagStudent(natBinsRaw), min: minX, max: maxX },
           schoolBins:   { bins: tagStudent(schBinsRaw), min: minX, max: maxX },
 
-          // 참여 통계(원형 UI에서 사용)
-          natStats, // {total, completed, absent, dropout, completedScores}
-          schStats, // {total, completed, absent, dropout, completedScores}
+          // 참여 통계 대체(분포 합계 = 유효 응시자수)
+          natStats: { total: totalNational, completed: totalNational, absent: 0, dropout: 0, completedScores: [] },
+          schStats: { total: totalSchool,   completed: totalSchool,   absent: 0, dropout: 0, completedScores: [] },
 
-          // 유효 수(= completed)
           totalNational,
           totalSchool,
 
@@ -170,7 +161,7 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
     const chartW = W - padding.left - padding.right;
     const chartH = H - padding.top - padding.bottom;
 
-    // 타이틀/평균 (원형 텍스트 유지)
+    // 타이틀/평균
     const title = schoolMode
       ? `학교 분포 (무효응시자 제외 총 ${cur.totalSchool}명)`
       : `전국 분포 (무효응시자 제외 총 ${cur.totalNational}명)`;
@@ -192,7 +183,7 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
 
     // 막대
     const color = schoolMode ? '#22c55e' : '#7ea2ff';
-    drawBarsWithLabels(ctx, padding, chartW, chartH, bins, color, yMax, data, roundIdx, schoolMode, min, max);
+    drawBarsWithLabels(ctx, padding, chartW, chartH, bins, color, yMax);
 
     // 커트라인
     drawCutoff(ctx, padding, chartW, chartH, cur.cutoff ?? CUTOFF_DEFAULT, min, max);
@@ -271,7 +262,7 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
     return base * 10;
   }
 
-  function drawBarsWithLabels(ctx, padding, chartW, chartH, bins, primaryColor, yMax/*, data, roundIdx, schoolMode, minX, maxX */) {
+  function drawBarsWithLabels(ctx, padding, chartW, chartH, bins, primaryColor, yMax) {
     const barCount = Math.max(1, (bins?.length || 0));
     const binWidth = chartW / barCount;
 
@@ -315,7 +306,7 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
     ctx.setLineDash([]);
   }
 
-  // 컨트롤/범례/헤더 (원형 유지)
+  // 컨트롤/범례/헤더
   const TopControls = () => (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: 12, flexWrap: 'wrap' }}>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -396,7 +387,7 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
 
   const current = bundle[selectedRoundIdx];
 
-  // 상단 상태 라인(토글에 따라 바뀜) — 중앙 배치 + 내부 좌/우 2열 (원형 유지)
+  // 상단 상태 라인(토글에 따라 바뀜)
   const SummaryLine = () => {
     if (!current) return null;
     const isNat = !isSchoolMode;
