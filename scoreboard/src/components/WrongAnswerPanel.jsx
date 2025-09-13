@@ -1,6 +1,7 @@
+// scoreboard/src/components/WrongAnswerPanel.jsx
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import "./WrongPanel.css";
-import PdfModalIframe from './PdfModalIframe';
+import PdfModalIframe from "./PdfModalIframe";
 import { getFunctions, httpsCallable } from "firebase/functions";
 
 // 교시별 문항 수
@@ -135,12 +136,20 @@ export default function WrongAnswerPanel({ roundLabel, data, sid }) {
               title={label}
               aria-label={label}
               onClick={
-                hasExp ? (e) => { e.stopPropagation(); openExplanation(session, qNum); } : undefined
+                hasExp
+                  ? (e) => {
+                      e.stopPropagation();
+                      openExplanation(session, qNum);
+                    }
+                  : undefined
               }
               style={{
                 width: `${cellW}px`,
                 height: `${cellH}px`,
                 cursor: hasExp ? "pointer" : "default",
+                // ✅ 해설 없는 버튼은 클릭 이벤트 자체를 비활성화하여
+                // 부모 카드의 flip을 가로채지 않도록 한다.
+                pointerEvents: hasExp ? "auto" : "none",
               }}
             >
               {qNum}
@@ -158,15 +167,25 @@ export default function WrongAnswerPanel({ roundLabel, data, sid }) {
 
       {/* 설명 줄 */}
       <div className="legend-line">
-        <span>색상: <b className="legend-red">빨강</b>=내 오답, 회색=정답/없음,</span>
+        <span>
+          색상: <b className="legend-red">빨강</b>=내 오답, 회색=정답/없음,
+        </span>
         <span className="legend-example">
           <button
             type="button"
             className="qbtn fire sample"
             aria-label="특별 해설 제공 예시"
             style={{ width: `${gridStyle.cellW}px`, height: `${gridStyle.cellH}px` }}
+            // 예시 버튼은 실제 클릭 동작 없음
+            onClick={(e) => e.stopPropagation()}
           >
-            해설<br />제공<br /><span className="flame-emoji" aria-hidden>🔥</span>
+            해설
+            <br />
+            제공
+            <br />
+            <span className="flame-emoji" aria-hidden>
+              🔥
+            </span>
           </button>
           <span className="legend-label">특별 해설 제공</span>
         </span>
@@ -180,7 +199,10 @@ export default function WrongAnswerPanel({ roundLabel, data, sid }) {
             role="tab"
             aria-selected={activeSession === s}
             className={`tab-btn ${activeSession === s ? "active" : ""}`}
-            onClick={() => setActiveSession(s)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveSession(s);
+            }}
             type="button"
           >
             {s}
@@ -189,7 +211,14 @@ export default function WrongAnswerPanel({ roundLabel, data, sid }) {
       </div>
 
       {/* 탭 콘텐츠 */}
-      <div className="tab-content" role="tabpanel" aria-label={`${activeSession} 문항`} ref={gridWrapRef}>
+      <div
+        className="tab-content"
+        role="tabpanel"
+        aria-label={`${activeSession} 문항`}
+        ref={gridWrapRef}
+        // 내부 클릭이 flip에 영향 주지 않게 컨테이너 레벨에서도 방지
+        onClick={(e) => e.stopPropagation()}
+      >
         {renderButtons(activeSession)}
       </div>
 
