@@ -873,3 +873,93 @@ exports.getPrebinnedDistribution = functions.https.onRequest(async (req, res) =>
   }
 });
 
+// functions/index.js
+const functions = require("firebase-functions");
+const admin = require("firebase-admin");
+const { PDFDocument, rgb, degrees } = require("pdf-lib");
+
+try { admin.app(); } catch { admin.initializeApp(); }
+
+// 공통: 로그 저장
+async function writeAudit({ uid, sid, filePath, action, meta = {}, req }) {
+  const col = admin.firestore().collection("pdf_audit");
+  const doc = {
+    uid: uid || null,
+    sid: sid || null,
+    filePath,
+    action,                       // 'view' | 'download_attempt' | 'print_attempt' | ...
+    ts: admin.firestore.FieldValue.serverTimestamp(),
+    ip: req?.ip || req?.headers?.["x-forwarded-for"] || null,
+    ua: req?.headers?.["user-agent"] || null,
+    ...meta,
+  };
+  await col.add(doc);
+}
+
+// ① 워터마크 PDF 제공 (Callable)
+exports.serveWatermarkedPdf = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
+  }
+  const { filePath, sid } = data || {};
+  if (!filePath || !sid) {
+    throw new functions.https.HttpsError("invalid-argument", "filePath, sid가 필요합니다.");
+  }
+
+  // Storage에서 원본 PDF 읽기
+  const bucket = admin.storage().bucket(); // 기본 버킷
+  const [bytes] = await bucket.file(filePath).download();
+
+  // PDF-lib로 워터마크 삽입
+  const pdfDoc = await PDFDocument.load(bytes);
+  const pages = pdfDoc.getPages();
+
+  const text = `SID: ${sid}`;
+  pages.forEach((page) => {
+    const { width, height } = page.getSize();
+    page.drawText(text, {
+      x: width / 4,
+      y: height / 2,
+      size: 18,
+      color: rgb(0.95, 0.1, 0.1),
+      opacity: 0.25,
+      rotate: degrees(45),
+    });
+    // 모서리에도 작게
+    page.drawText(text, { x: 24, y: 24, size: 10, color: rgb(0.9, 0.2, 0.2), opacity: 0.6 });
+  });
+
+  const out = await pdfDoc.save();
+
+  // 열람(view) 로그
+  await writeAudit({
+    uid: context.auth.uid,
+    sid,
+    filePath,
+    action: "view",
+    req: context.rawRequest
+  });
+
+  // base64로 반환 (프론트에서 Blob 변환)
+  return Buffer.from(out).toString("base64");
+});
+
+// ② 프론트에서 “시도” 감지 시 호출하는 로거 (Callable)
+exports.logPdfAction = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
+  }
+  const { filePath, sid, action, meta } = data || {};
+  if (!filePath || !sid || !action) {
+    throw new functions.https.HttpsError("invalid-argument", "filePath, sid, action이 필요합니다.");
+  }
+  await writeAudit({
+    uid: context.auth.uid,
+    sid,
+    filePath,
+    action,        // 'download_attempt' | 'print_attempt' ...
+    meta: meta || {},
+    req: context.rawRequest
+  });
+  return { ok: true };
+});
