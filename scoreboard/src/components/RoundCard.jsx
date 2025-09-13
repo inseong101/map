@@ -35,11 +35,11 @@ function RoundCard({ label, data, sid }) {
   };
 
   const getReasonText = () => {
-  if (!meets60 && anyGroupFail) return '과락 및 평락으로 인한 불합격';
-  if (!meets60) return '평락으로 인한 불합격';
-  if (anyGroupFail) return '과락으로 인한 불합격';
-  return '';
-};
+    if (!meets60 && anyGroupFail) return '과락 및 평락으로 인한 불합격';
+    if (!meets60) return '평락으로 인한 불합격';
+    if (anyGroupFail) return '과락으로 인한 불합격';
+    return '';
+  };
 
   const renderGroupBoxes = () => {
     if (!groupResults) return null;
@@ -169,7 +169,7 @@ function RoundCard({ label, data, sid }) {
 
         {/* 뒷면 — 무효 차수여도 오답 패널은 그대로 표시 */}
         <div className={`flip-face flip-back card ${statusClass}`} style={fixedHeightStyle}>
-          <WrongAnswerPanel roundLabel={label} data={data} />
+          <WrongAnswerPanel roundLabel={label} data={data} sid={sid} />
         </div>
       </div>
     </div>
