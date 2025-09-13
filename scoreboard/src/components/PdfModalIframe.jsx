@@ -21,7 +21,6 @@ export default function PdfModalIframe({ open, onClose, filePath, sid, title }) 
       ].join(" "),
     []
   );
-
   useEffect(() => {
     if (!open || !filePath || !sid) return;
     let revoked = false;
@@ -53,7 +52,6 @@ export default function PdfModalIframe({ open, onClose, filePath, sid, title }) 
         setLoading(false);
       }
     })();
-
     return () => {
       revoked = true;
       if (urlToRevoke) URL.revokeObjectURL(urlToRevoke);
@@ -121,7 +119,6 @@ export default function PdfModalIframe({ open, onClose, filePath, sid, title }) 
     </div>
   );
 }
-
 const backdrop = {
   position: "fixed", inset: 0, background: "rgba(0,0,0,.6)",
   display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999
