@@ -1,7 +1,7 @@
 // scoreboard/src/components/WrongAnswerPanel.jsx
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import "./WrongPanel.css";
-import PdfJsModal from "./PdfJsModal"; // ✅ PDF.js 모달 컴포넌트
+import PdfModalIframe from './PdfModalIframe';
 
 // 교시별 문항 수
 const SESSION_LENGTH = {
@@ -179,7 +179,7 @@ export default function WrongAnswerPanel({ roundLabel, data, sid }) {
       </div>
 
       {/* PDF 모달 */}
-      <PdfJsModal
+      <PdfModalIframe
         open={pdfOpen}
         onClose={() => setPdfOpen(false)}
         filePath={pdfPath}
