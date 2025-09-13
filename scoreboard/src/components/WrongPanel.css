@@ -152,3 +152,59 @@
 /* " = 특별 해설 제공" 을 한 줄로 버튼 옆에 고정 */
 .legend-example { display: inline-flex; align-items: center; gap: 6px; }
 .legend-label { white-space: nowrap; }
+
+
+/* 불 아이콘이 버튼 클릭을 가로채지 않도록 */
+.flame-emoji {
+  position: absolute;
+  right: 2px;
+  top: 2px;
+  font-size: 0.9em;
+  line-height: 1;
+  pointer-events: none; /* 중요! 클릭 차단 */
+}
+
+/* flip 기본 레이아웃 */
+.qbtn {
+  position: relative;
+  perspective: 600px;
+  transform-style: preserve-3d;
+  transition: transform 0.3s ease;
+}
+
+/* 앞/뒤 면 */
+.qbtn .qbtn-front,
+.qbtn .qbtn-back {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  backface-visibility: hidden;
+  border-radius: inherit;
+}
+
+/* 뒤면 */
+.qbtn .qbtn-back {
+  transform: rotateY(180deg);
+  opacity: 0.85;
+}
+
+/* 해설 없는 문제는 hover에만 flip (클릭 안 뺏음) */
+.qbtn.noexp:hover {
+  transform: rotateY(180deg);
+}
+
+/* 샘플 버튼도 동일하게 보여주기 */
+.qbtn.sample {
+  cursor: default;
+}
+
+/* 혹시 상위 그리드가 이벤트를 막는 스타일이 있을 경우 대비 */
+.btn-grid {
+  pointer-events: auto;
+}
+
+/* 혹시 qbtn에 pointer-events: none 이 들어갔던 경우 복구 */
+.qbtn {
+  pointer-events: auto;
+}
