@@ -214,60 +214,22 @@ function isValidStudentId(sid) {
   return validCodes.includes(schoolCode);
 }
 
-// 실제 평균 계산용
-export async function getAverages(schoolName, roundLabel) {
+// ✅ prebinned 기반 참여 통계(총원/유효응시자)
+export async function getParticipationStats(roundLabel, schoolCodeOrNull = null) {
   try {
-    const { db } = await import('../services/firebase');
-    const { collection, getDocs } = await import('firebase/firestore');
-    const schoolCode = getSchoolCodeFromName(schoolName);
+    const preb = await getPrebinnedDistribution(roundLabel);
+    const d = preb?.data || {};
+    const bins = schoolCodeOrNull
+      ? (Array.isArray(d?.bySchool?.[schoolCodeOrNull]) ? d.bySchool[schoolCodeOrNull] : [])
+      : (Array.isArray(d?.national) ? d.national : []);
 
-    const sessions = ['1교시','2교시','3교시','4교시'];
-    const allScores = {};              // sid -> totalScore
-    const completedFlags = {};         // sid -> { '1교시':true, ... }
-    const nationalScores = [];
-    const schoolScores = [];
+    const total = bins.reduce((s, b) => s + (b?.count || 0), 0);
 
-    // 교시별 점수 집계 + completed 판정
-    for (const session of sessions) {
-      const sessionRef = collection(db, 'scores_raw', roundLabel, session);
-      const snap = await getDocs(sessionRef);
-      snap.forEach(doc => {
-        const sid = doc.id;
-        if (!isValidStudentId(sid)) return;
-        const d = doc.data() || {};
-        if (!completedFlags[sid]) completedFlags[sid] = {};
-        completedFlags[sid][session] = (d.status === 'completed');
-
-        if (allScores[sid] == null) allScores[sid] = 0;
-        // 🔥 서버에서 totalScore를 이미 저장했다면 사용, 없으면 오답 기반 추산(안전장치)
-        if (typeof d.totalScore === 'number') {
-          allScores[sid] += d.totalScore;
-        } else {
-          const wrong = Array.isArray(d.wrongQuestions) ? d.wrongQuestions.length : 0;
-          // 이 추산은 세션별 총문항(=해당 교시 max)을 알아야 하므로, 보수적으로 0 가산
-          // (서버 totalScore가 없는 극히 예외 케이스 대비)
-          allScores[sid] += 0;
-        }
-      });
-    }
-
-    // 4교시 모두 completed 인 학생만 유효
-    Object.entries(allScores).forEach(([sid, score]) => {
-      const flags = completedFlags[sid] || {};
-      const completedCount = ['1교시','2교시','3교시','4교시'].reduce((c, s) => c + (flags[s] ? 1 : 0), 0);
-      if (completedCount < 4) return;
-      nationalScores.push(score);
-      if (sid.slice(0,2) === getSchoolCodeFromName(schoolName)) schoolScores.push(score);
-    });
-
-    const avg = arr => arr.length ? Math.round(arr.reduce((a,b) => a+b, 0) / arr.length) : null;
-    return {
-      nationalAvg: avg(nationalScores) ?? '-',
-      schoolAvg:   avg(schoolScores)   ?? '-',
-    };
+    // absent/dropout는 사전집계에 없으므로 0 처리(필요하면 나중에 analytics/_overall_status에서 보강)
+    return { total, completed: total, absent: 0, dropout: 0, completedScores: [] };
   } catch (e) {
-    console.error('평균 조회 오류:', e);
-    return { nationalAvg: '-', schoolAvg: '-' };
+    console.error('participation(prebinned) 조회 오류:', e);
+    return { total: 0, completed: 0, absent: 0, dropout: 0, completedScores: [] };
   }
 }
 
