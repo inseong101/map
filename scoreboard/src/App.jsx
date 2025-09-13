@@ -1,17 +1,18 @@
-// src/App.jsx - 관리자 시스템 + RoundCard 점수 보정(교시별 totalScore 합산)
+// src/App.jsx - 관리자 시스템 + RoundCard 점수 보정(교시별 totalScore 합산) + 익명 로그인 & 바인딩
 import React, { useState, useEffect } from 'react';
 import StudentCard from './components/StudentCard';
 import RoundCard from './components/RoundCard';
 import AdminSystem from './components/AdminSystem';
 import './App.css';
 import { discoverRoundsFor, getSchoolFromSid } from './services/dataService';
-import { getFirestore, doc, getDoc } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+import { auth, db } from './firebase';
+import { signInAnonymously } from 'firebase/auth';
 
 // === 모든 회차 라벨(프로젝트 규칙에 맞게 수정 가능) ===
 const ALL_ROUND_LABELS = ['1차', '2차'];
 
-// 🔧 테스트 모드: 비밀번호 요구 여부
-// 실제 운영 시 true 로 변경하세요.
+// 🔧 테스트 모드: 비밀번호 요구 여부 (운영 시 true)
 const PASSWORD_REQUIRED = false;
 
 // === rounds 보정: 누락된 회차는 미응시(status:'absent')로 채워서 항상 보이게 ===
@@ -22,6 +23,7 @@ function normalizeRounds(inputRounds) {
   return ALL_ROUND_LABELS.map(label => {
     const found = byLabel.get(label);
     if (found) {
+      // 존재하면 기존 데이터 유지 (없을 때만 기본 absent)
       return { label, data: { status: 'absent', ...(found.data || {}) } };
     }
     return { label, data: { status: 'absent' } };
@@ -30,14 +32,15 @@ function normalizeRounds(inputRounds) {
 
 const SESSIONS = ['1교시', '2교시', '3교시', '4교시'];
 
+// 교시별 Firestore 점수 합산
 async function getRoundTotalFromFirestore(roundLabel, sid) {
-  const db = getFirestore();
+  const dbFS = getFirestore();
   const perSession = [];
   let completedCount = 0;
 
   for (const session of SESSIONS) {
     try {
-      const ref = doc(db, 'scores_raw', roundLabel, session, sid);
+      const ref = doc(dbFS, 'scores_raw', roundLabel, session, sid);
       const snap = await getDoc(ref);
 
       if (!snap.exists()) {
@@ -71,7 +74,31 @@ async function getRoundTotalFromFirestore(roundLabel, sid) {
 // ===== (임시) 비밀번호 검증 스텁 =====
 async function verifyPassword(studentId, password) {
   if (!PASSWORD_REQUIRED) return true;
+  // TODO: 운영 시 서버/Functions로 검증
   return false;
+}
+
+/** ✅ 익명 로그인 + bindings/{uid}.sids 에 학수번호 등록 */
+async function ensureAuthAndBind(sid) {
+  // 1) 익명 로그인 (없으면)
+  let user = auth.currentUser;
+  if (!user) {
+    const cred = await signInAnonymously(auth);
+    user = cred.user;
+  }
+  const uid = user.uid;
+
+  // 2) bindings/{uid} 문서에 sid 추가(중복 방지)
+  const ref = doc(db, 'bindings', uid);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    await setDoc(ref, { sids: [sid] }, { merge: true });
+  } else {
+    const sids = Array.isArray(snap.data()?.sids) ? snap.data().sids : [];
+    if (!sids.includes(sid)) {
+      await setDoc(ref, { sids: [...sids, sid] }, { merge: true });
+    }
+  }
 }
 
 function App() {
@@ -162,6 +189,10 @@ function App() {
 
     setLoading(true);
     try {
+      // ✅ 먼저 로그인 + 바인딩
+      await ensureAuthAndBind(id);
+
+      // ✅ 바인딩이 된 상태에서 성적 조회
       const foundRounds = await discoverRoundsFor(id);
 
       if (foundRounds.length === 0) {
