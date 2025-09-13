@@ -1,7 +1,12 @@
 // scoreboard/src/components/PdfJsModal.jsx
-import React, { useEffect, useState } from "react";
-import PdfViewer, { base64ToUint8Array } from "./PdfViewer";
-import { getFunctions, httpsCallable } from "firebase/functions";
+import React, { useEffect } from "react";
+import * as pdfjsLib from "pdfjs-dist";
+import "pdfjs-dist/web/pdf_viewer.css";
+
+// ✅ 워커는 따로 지정해줘야 함
+import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 export default function PdfJsModal({ open, onClose, filePath, sid, title }) {
   const [pdfData, setPdfData] = useState(null);
