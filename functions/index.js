@@ -7,6 +7,7 @@ const { PDFDocument, rgb, degrees } = require("pdf-lib");
 try { admin.app(); } catch { admin.initializeApp(); }
 const db = admin.firestore();
 
+
 // 과목별 최대 점수
 const SUBJECT_MAX = {
   "간":16, "심":16, "비":16, "폐":16, "신":16,
