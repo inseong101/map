@@ -13,7 +13,7 @@
     "react-dom": "^18.2.0",
     "firebase": "^10.12.2",
     "react-scripts": "5.0.1",
-    "pdfjs-dist": "^4.7.76"
+    "pdfjs-dist": "3.11.174"
   },
   "browserslist": {
     "production": [
