@@ -1,8 +1,9 @@
+// scoreboard/src/components/PdfJsModal.jsx
 import React, { useEffect, useState } from "react";
 import PdfViewer, { base64ToUint8Array } from "./PdfViewer";
 import { getFunctions, httpsCallable } from "firebase/functions";
 
-export default function PdfModal({ open, onClose, filePath, sid }) {
+export default function PdfJsModal({ open, onClose, filePath, sid, title }) {
   const [pdfData, setPdfData] = useState(null);
   const [err, setErr] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -18,7 +19,7 @@ export default function PdfModal({ open, onClose, filePath, sid }) {
         const functions = getFunctions();
         const serve = httpsCallable(functions, "serveWatermarkedPdf");
         const res = await serve({ filePath, sid });
-        const base64 = res.data; // functions.https.onCall은 data에 담겨옴
+        const base64 = res.data;
         setPdfData(base64ToUint8Array(base64));
       } catch (e) {
         setErr(e?.message || "PDF 로드 실패");
@@ -34,7 +35,7 @@ export default function PdfModal({ open, onClose, filePath, sid }) {
     <div style={backdrop}>
       <div style={modal}>
         <div style={modalHeader}>
-          <div>특별 해설</div>
+          <div>{title}</div>
           <button onClick={onClose} style={closeBtn} aria-label="닫기">✕</button>
         </div>
         <div style={{ flex: 1, overflow: "auto", background: "var(--surface)" }}>
@@ -48,8 +49,8 @@ export default function PdfModal({ open, onClose, filePath, sid }) {
 }
 
 const backdrop = {
-  position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", display: "flex",
-  alignItems: "center", justifyContent: "center", zIndex: 9999
+  position: "fixed", inset: 0, background: "rgba(0,0,0,.6)",
+  display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999
 };
 const modal = {
   width: "min(900px, 96vw)", height: "min(90vh, 800px)",
@@ -61,7 +62,7 @@ const modalHeader = {
   padding: "0 12px", borderBottom: "1px solid var(--line)", fontWeight: 800, color: "var(--ink)"
 };
 const closeBtn = {
-  appearance: "none", border: "1px solid var(--line)", borderRadius: 6, background: "var(--surface)",
+  border: "1px solid var(--line)", borderRadius: 6, background: "var(--surface)",
   padding: "4px 8px", cursor: "pointer", color: "var(--ink)"
 };
 const center = { padding: 24, textAlign: "center", color: "var(--ink)" };
