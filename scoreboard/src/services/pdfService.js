@@ -13,3 +13,4 @@ export async function logPdfAction({ filePath, sid, action, meta = {} }) {
   const logger = httpsCallable(functions, "logPdfAction");
   try { await logger({ filePath, sid, action, meta }); } catch {}
 }
+
