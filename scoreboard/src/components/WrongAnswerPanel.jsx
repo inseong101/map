@@ -3,7 +3,6 @@ import React, { useMemo, useState, useRef, useEffect } from "react";
 import "./WrongPanel.css";
 import PdfModalIframe from "./PdfModalIframe";
 import { getFunctions, httpsCallable } from "firebase/functions";
-
 // 교시별 문항 수
 const SESSION_LENGTH = {
   "1교시": 80,
@@ -11,7 +10,6 @@ const SESSION_LENGTH = {
   "3교시": 80,
   "4교시": 80,
 };
-
 /** 가장 큰 셀 면적(=여백 최소)을 만드는 cols/rows 계산 */
 function bestGrid(n, W, H, gap = 5, aspect = 1) {
   if (!n || !W || !H) return { cols: 1, rows: 1, cellW: 0, cellH: 0 };
@@ -39,7 +37,6 @@ export default function WrongAnswerPanel({ roundLabel, data, sid }) {
   // ===== PDF 모달 상태 =====
   const [pdfOpen, setPdfOpen] = useState(false);
   const [pdfPath, setPdfPath] = useState(null);
-
   // 내 오답(교시별 Set)
   const wrongBySession = useMemo(() => {
     const out = { "1교시": new Set(), "2교시": new Set(), "3교시": new Set(), "4교시": new Set() };
