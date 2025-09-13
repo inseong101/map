@@ -13,7 +13,7 @@
     "react-dom": "^18.2.0",
     "firebase": "^10.12.2",
     "react-scripts": "5.0.1",
-    "pdfjs-dist": "2.16.105"        // ✅ 뷰어용
+    "pdfjs-dist": "2.16.105"       
   },
   "browserslist": {
     "production": [
