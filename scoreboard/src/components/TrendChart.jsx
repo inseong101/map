@@ -6,7 +6,6 @@ import {
   calcPercentileFromBins,      // ✅ bin 기반 백분위
 } from '../utils/helpers';
 
-// 학교명 → 코드 변환
 const nameToCode = (name) => ({
   '가천대': '01', '경희대': '02', '대구한': '03', '대전대': '04',
   '동국대': '05', '동신대': '06', '동의대': '07', '부산대': '08',
