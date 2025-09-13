@@ -1,9 +1,10 @@
 // functions/index.js
-const functions = require('firebase-functions');
-const admin = require('firebase-admin');
-const XLSX = require('xlsx');
+const functions = require("firebase-functions");
+const admin = require("firebase-admin");
+const XLSX = require("xlsx");
+const { PDFDocument, rgb, degrees } = require("pdf-lib");
 
-admin.initializeApp();
+try { admin.app(); } catch { admin.initializeApp(); }
 const db = admin.firestore();
 
 // 과목별 최대 점수
@@ -872,13 +873,6 @@ exports.getPrebinnedDistribution = functions.https.onRequest(async (req, res) =>
     res.status(500).json({ success: false, error: '서버 오류', details: e.message });
   }
 });
-
-// functions/index.js
-const functions = require("firebase-functions");
-const admin = require("firebase-admin");
-const { PDFDocument, rgb, degrees } = require("pdf-lib");
-
-try { admin.app(); } catch { admin.initializeApp(); }
 
 // 공통: 로그 저장
 async function writeAudit({ uid, sid, filePath, action, meta = {}, req }) {
