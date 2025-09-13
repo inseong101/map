@@ -1,4 +1,4 @@
-// src/services/pdfService.js
+// scoreboard/src/services/pdfService.js
 import { getFunctions, httpsCallable } from "firebase/functions";
 
 export async function fetchWatermarkedPdfBase64(filePath, sid) {
@@ -11,10 +11,5 @@ export async function fetchWatermarkedPdfBase64(filePath, sid) {
 export async function logPdfAction({ filePath, sid, action, meta = {} }) {
   const functions = getFunctions();
   const logger = httpsCallable(functions, "logPdfAction");
-  try {
-    await logger({ filePath, sid, action, meta });
-  } catch (e) {
-    // 로깅 실패는 UI 막지 않음
-    console.warn("logPdfAction failed", e);
-  }
+  try { await logger({ filePath, sid, action, meta }); } catch {}
 }
