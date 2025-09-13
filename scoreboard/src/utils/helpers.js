@@ -30,7 +30,7 @@ export function chunk(arr, sizes) {
   return out;
 }
 
-// ----- 점수/분포 계산 계층 (🔥 새로 추가되는 부분) -----
+// ----- 점수/분포 계산 계층 -----
 import { SESSION_SUBJECT_RANGES, SUBJECT_MAX, TOTAL_MAX } from '../services/dataService';
 
 /**
@@ -39,11 +39,9 @@ import { SESSION_SUBJECT_RANGES, SUBJECT_MAX, TOTAL_MAX } from '../services/data
  * - 오답 1개당 1점 차감
  */
 export function buildSubjectScores(wrongBySession = {}) {
-  // 모든 과목 만점으로 초기화
   const scores = {};
   Object.keys(SUBJECT_MAX).forEach(s => { scores[s] = SUBJECT_MAX[s]; });
 
-  // 교시별 오답 차감
   Object.entries(wrongBySession).forEach(([session, wrongList]) => {
     const ranges = SESSION_SUBJECT_RANGES[session] || [];
     (wrongList || []).forEach(qNum => {
@@ -59,11 +57,6 @@ export function buildSubjectScores(wrongBySession = {}) {
 
 /**
  * 4개 교시를 그룹으로 묶어 그룹 점수 생성
- * - label: "1교시", "2교시" ...
- * - subjects: 해당 교시 과목 배열
- * - layoutChunks: 칩(과목 표시) 줄바꿈 레이아웃 제안 (UI용)
- * - score/max/rate/pass
- *   - pass 기준은 임시로 rate >= 40 으로 설정 (원 규칙이 있으면 여기만 조정)
  */
 export function buildGroupResults(subjectScores) {
   const groupsDef = {
@@ -79,44 +72,31 @@ export function buildGroupResults(subjectScores) {
     const score = subjects.reduce((s, subj) => s + (subjectScores?.[subj] || 0), 0);
     const max   = subjects.reduce((s, subj) => s + (SUBJECT_MAX[subj] || 0), 0);
     const rate  = pct(score, max);
-    const pass  = rate >= 40; // 필요시 규칙 조정
+    const pass  = rate >= 40;
 
-    // 보기 좋은 칩 배치 (대충 3~6개 기준으로 2줄 정도)
-    const layoutChunks = subjects.length <= 4 ? [subjects.length] : [Math.ceil(subjects.length/2), Math.floor(subjects.length/2)];
+    const layoutChunks = subjects.length <= 4
+      ? [subjects.length]
+      : [Math.ceil(subjects.length/2), Math.floor(subjects.length/2)];
 
-    out.push({
-      name: label,
-      label,
-      subjects,
-      layoutChunks,
-      score,
-      max,
-      rate,
-      pass
-    });
+    out.push({ name: label, label, subjects, layoutChunks, score, max, rate, pass });
   });
 
   return out;
 }
 
 /**
- * Round 데이터 한 건을 계산해서 최소 필드 보장
- * - subjectScores이 없으면 wrongBySession으로부터 재계산
- * - groupResults이 없으면 subjectScores로부터 생성
- * - totalScore/totalMax/overallPass/meets60/anyGroupFail 보장
+ * Round 데이터 보강
  */
 export function enrichRoundData(roundData = {}) {
   const wrongBySession = roundData.wrongBySession || {};
   const subjectScores  = roundData.subjectScores || buildSubjectScores(wrongBySession);
   const groupResults   = roundData.groupResults  || buildGroupResults(subjectScores);
 
-  // 총점
   const totalScore = Object.values(subjectScores).reduce((a, b) => a + (b || 0), 0);
   const totalMax   = TOTAL_MAX || 340;
 
-  // 통과 여부
-  const meets60 = totalScore >= totalMax * 0.6;          // 60% 컷
-  const anyGroupFail = groupResults.some(g => !g.pass);  // 그룹 과락 여부
+  const meets60 = totalScore >= totalMax * 0.6;
+  const anyGroupFail = groupResults.some(g => !g.pass);
   const overallPass = meets60 && !anyGroupFail;
 
   return {
@@ -132,7 +112,7 @@ export function enrichRoundData(roundData = {}) {
   };
 }
 
-// ----- 라인 차트 (기존) -----
+// ----- 라인 차트 -----
 export function drawLineChart(canvas, labels, series, maxValue) {
   if (!canvas) return;
 
@@ -203,185 +183,11 @@ export function drawLineChart(canvas, labels, series, maxValue) {
   });
 }
 
-// ==== 아래 함수들은 그대로 유지 (이름 중복 주의) ====
-
-// 유효한 학수번호인지 확인 (01~12로 시작하는 6자리)
-function isValidStudentId(sid) {
-  if (!sid || typeof sid !== 'string') return false;
-  if (sid.length !== 6) return false;
-  const schoolCode = sid.slice(0, 2);
-  const validCodes = ['01','02','03','04','05','06','07','08','09','10','11','12'];
-  return validCodes.includes(schoolCode);
-}
-
-// ✅ prebinned 기반 참여 통계(총원/유효응시자)
-export async function getParticipationStats(roundLabel, schoolCodeOrNull = null) {
-  try {
-    const preb = await getPrebinnedDistribution(roundLabel);
-    const d = preb?.data || {};
-    const bins = schoolCodeOrNull
-      ? (Array.isArray(d?.bySchool?.[schoolCodeOrNull]) ? d.bySchool[schoolCodeOrNull] : [])
-      : (Array.isArray(d?.national) ? d.national : []);
-
-    const total = bins.reduce((s, b) => s + (b?.count || 0), 0);
-
-    // absent/dropout는 사전집계에 없으므로 0 처리(필요하면 나중에 analytics/_overall_status에서 보강)
-    return { total, completed: total, absent: 0, dropout: 0, completedScores: [] };
-  } catch (e) {
-    console.error('participation(prebinned) 조회 오류:', e);
-    return { total: 0, completed: 0, absent: 0, dropout: 0, completedScores: [] };
-  }
-}
-
-// 실제 점수 분포 (유효응시자 4교시 모두 completed만 포함)
-export async function getRealScoreDistribution(roundLabel) {
-  try {
-    const { db } = await import('../services/firebase');
-    const { collection, getDocs } = await import('firebase/firestore');
-
-    const sessions = ['1교시','2교시','3교시','4교시'];
-    const totals = {};         // sid -> 누적 점수
-    const completedFlags = {}; // sid -> 세션 완료 플래그
-
-    for (const session of sessions) {
-      const sessionRef = collection(db, 'scores_raw', roundLabel, session);
-      const snap = await getDocs(sessionRef);
-      snap.forEach(doc => {
-        const sid = doc.id;
-        const d = doc.data() || {};
-        if (!isValidStudentId(sid)) return;
-        if (!completedFlags[sid]) completedFlags[sid] = {};
-        completedFlags[sid][session] = (d.status === 'completed');
-
-        if (totals[sid] == null) totals[sid] = 0;
-        if (typeof d.totalScore === 'number') {
-          totals[sid] += d.totalScore;
-        } else {
-          // 안전장치: 서버 totalScore 없으면 0 가산 (추산하지 않음)
-          totals[sid] += 0;
-        }
-      });
-    }
-
-    const bySchool = {};
-    const national = [];
-
-    Object.entries(totals).forEach(([sid, score]) => {
-      const flags = completedFlags[sid] || {};
-      const completedCount = ['1교시','2교시','3교시','4교시'].reduce((c, s) => c + (flags[s] ? 1 : 0), 0);
-      if (completedCount < 4) return; // 유효응시자만
-
-      national.push(score);
-      const sc = sid.slice(0,2);
-      if (!bySchool[sc]) bySchool[sc] = [];
-      bySchool[sc].push(score);
-    });
-
-    return { national, bySchool, school: bySchool };
-  } catch (e) {
-    console.error('점수 분포 조회 오류:', e);
-    return { national: [], bySchool: {}, school: {} };
-  }
-}
-
-// 학교명 → 코드
-function getSchoolCodeFromName(name) {
-  const map = {
-    '가천대': '01','경희대': '02','대구한': '03','대전대': '04',
-    '동국대': '05','동신대': '06','동의대': '07','부산대': '08',
-    '상지대': '09','세명대': '10','우석대': '11','원광대': '12',
-  };
-  return map[name] || '01';
-}
-
-// ✅ 4교시 모두 completed 학생만 집계한 참여/분포/백분위용 통계
-export async function getParticipationStats(roundLabel, schoolCodeOrNull = null) {
-  const { db } = await import('../services/firebase');
-  const { collection, getDocs } = await import('firebase/firestore');
-
-  const sessions = ['1교시', '2교시', '3교시', '4교시'];
-  const perSid = {}; // sid -> {completed:0..4, any:boolean, sum: number}
-
-  for (const session of sessions) {
-    const ref = collection(db, 'scores_raw', roundLabel, session);
-    const snap = await getDocs(ref);
-
-    snap.forEach(doc => {
-      const sid = doc.id;
-      const code = String(sid).slice(0, 2);
-
-      // 유효 학번 + (학교 필터가 있으면 해당 학교만)
-      if (!['01','02','03','04','05','06','07','08','09','10','11','12'].includes(code)) return;
-      if (schoolCodeOrNull && code !== schoolCodeOrNull) return;
-
-      const data = doc.data() || {};
-      const st = data.status; // 'completed' | 'absent'
-      const sc = Number.isFinite(data.totalScore) ? Number(data.totalScore) : 0;
-
-      if (!perSid[sid]) perSid[sid] = { completed: 0, any: false, sum: 0 };
-      if (st === 'completed') {
-        perSid[sid].any = true;
-        perSid[sid].completed += 1;
-        perSid[sid].sum += sc; // 교시별 totalScore 합산(총점)
-      }
-    });
-  }
-
-  let total = 0, completed = 0, absent = 0, dropout = 0;
-  const completedScores = [];
-
-  Object.values(perSid).forEach(v => {
-    total += 1;
-    if (v.completed === 4) {
-      completed += 1;
-      completedScores.push(v.sum);
-    } else if (v.completed === 0) {
-      absent += 1;
-    } else {
-      dropout += 1;
-    }
-  });
-
-  return { total, completed, absent, dropout, completedScores };
-}
-
-// ✅ 백분위(1등=0.0%, 꼴등=100.0%) — 유효 응시자 점수 배열 기준
-export function calculatePercentileStrict(scores, myScore) {
-  if (!Array.isArray(scores) || scores.length === 0 || !Number.isFinite(myScore)) return null;
-
-  // 내림차순 정렬 (높은 점수가 1등)
-  const sorted = [...scores].sort((a, b) => b - a);
-
-  // 내 점수 이하가 처음으로 나오는 인덱스(0-based)
-  let idx = sorted.findIndex(s => s <= myScore);
-  if (idx === -1) idx = sorted.length - 1; // 모두 내 점수보다 큼 → 최하위 취급
-
-  if (sorted.length === 1) return 0.0;
-
-  // 0.0 ~ 100.0로 선형 맵핑 (1등=0.0, 꼴등=100.0)
-  const pct = (idx / (sorted.length - 1)) * 100;
-  const clamped = Math.min(100, Math.max(0, pct));
-
-  return +clamped.toFixed(1);
-}
-export function calcPercentileFromScores(scores, myScore) {
-  if (!Array.isArray(scores) || scores.length === 0 || myScore == null) return null;
-  const sorted = [...scores].sort((a, b) => b - a);
-  const n = sorted.length;
-  if (n === 1) return 0.0;
-
-  let idx = sorted.findIndex(s => s <= myScore);
-  if (idx < 0) idx = n - 1;
-
-  const p = (idx / (n - 1)) * 100;
-  return Math.max(0, Math.min(100, +p.toFixed(1)));
-}
-// 01~12로 시작하는 6자리만 유효
+// ==== 신원/상태 유틸 ====
 export function isValidSid(sid) {
   return typeof sid === 'string' && /^(0[1-9]|1[0-2])\d{4}$/.test(sid);
 }
 
-// 4교시 모두 completed 여부
 export function isCompleted4(r) {
   return r?.s1?.status === 'completed' &&
          r?.s2?.status === 'completed' &&
@@ -391,11 +197,6 @@ export function isCompleted4(r) {
 
 /**
  * 라운드별 학생 상태 판정
- * 반환값: 'completed' | 'absent' | 'dropout' | 'invalid'
- * - invalid: 학수번호 형식 위반(01~12 아님)
- * - absent: 4교시 중 하나라도 'absent'
- * - dropout: 4교시 중 하나라도 'dropout'
- * - completed: 4교시 모두 completed
  */
 export function deriveRoundStatus(roundData, sid) {
   if (!isValidSid(sid)) return 'invalid';
@@ -405,21 +206,16 @@ export function deriveRoundStatus(roundData, sid) {
     roundData?.s3?.status, roundData?.s4?.status
   ].filter(Boolean);
 
-  if (statuses.length < 4) return 'absent'; // 데이터 불완전은 absent 취급(원한다면 'unknown' 등 별도 분류)
-
+  if (statuses.length < 4) return 'absent';
   if (statuses.some(s => s === 'dropout')) return 'dropout';
   if (statuses.some(s => s === 'absent')) return 'absent';
   if (statuses.every(s => s === 'completed')) return 'completed';
-
-  // 그 외 예외 상태가 섞여 있으면 미응시 취급
   return 'absent';
 }
 
 // === 사전집계 분포 조회 (Cloud Functions HTTPS) ===
 export async function getPrebinnedDistribution(roundLabel) {
   try {
-    // Hosting 리라이트가 있다면 이 상대경로로 OK.
-    // 없다면 전체 URL(예: https://asia-northeast3-<project>.cloudfunctions.net/getPrebinnedDistribution?roundLabel=1차)로 바꿔주세요.
     const url = `/api/prebinned?roundLabel=${encodeURIComponent(roundLabel)}`;
     const resp = await fetch(url, { method: 'GET' });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -430,7 +226,46 @@ export async function getPrebinnedDistribution(roundLabel) {
   }
 }
 
-// === bin 기반 백분위(상위%) 계산 유틸 ===
+// === prebinned 기반 참여 통계(총원/유효응시자) ===
+export async function getParticipationStats(roundLabel, schoolCodeOrNull = null) {
+  try {
+    const preb = await getPrebinnedDistribution(roundLabel);
+    const d = preb?.data || {};
+    const bins = schoolCodeOrNull
+      ? (Array.isArray(d?.bySchool?.[schoolCodeOrNull]) ? d.bySchool[schoolCodeOrNull] : [])
+      : (Array.isArray(d?.national) ? d.national : []);
+
+    const total = bins.reduce((s, b) => s + (b?.count || 0), 0);
+    // absent/dropout는 사전집계에 없으므로 0 처리
+    return { total, completed: total, absent: 0, dropout: 0, completedScores: [] };
+  } catch (e) {
+    console.error('participation(prebinned) 조회 오류:', e);
+    return { total: 0, completed: 0, absent: 0, dropout: 0, completedScores: [] };
+  }
+}
+
+// === 백분위(상위%) 계산 유틸 ===
+export function calculatePercentileStrict(scores, myScore) {
+  if (!Array.isArray(scores) || scores.length === 0 || !Number.isFinite(myScore)) return null;
+  const sorted = [...scores].sort((a, b) => b - a);
+  let idx = sorted.findIndex(s => s <= myScore);
+  if (idx === -1) idx = sorted.length - 1;
+  if (sorted.length === 1) return 0.0;
+  const pctVal = (idx / (sorted.length - 1)) * 100;
+  return +Math.min(100, Math.max(0, pctVal)).toFixed(1);
+}
+
+export function calcPercentileFromScores(scores, myScore) {
+  if (!Array.isArray(scores) || scores.length === 0 || myScore == null) return null;
+  const sorted = [...scores].sort((a, b) => b - a);
+  const n = sorted.length;
+  if (n === 1) return 0.0;
+  let idx = sorted.findIndex(s => s <= myScore);
+  if (idx < 0) idx = n - 1;
+  const p = (idx / (n - 1)) * 100;
+  return Math.max(0, Math.min(100, +p.toFixed(1)));
+}
+
 export function calcPercentileFromBins(bins, studentScore) {
   if (!Array.isArray(bins) || bins.length === 0 || !Number.isFinite(studentScore)) return null;
   const total = bins.reduce((s,b)=>s + (b.count||0), 0);
@@ -445,7 +280,6 @@ export function calcPercentileFromBins(bins, studentScore) {
   const tieAdj = myBin ? Math.max(0, (myBin.count || 0) - 1) * 0.5 : 0;
   const rankLike = higher + tieAdj;
 
-  const pct = (rankLike / (total - 1)) * 100;
-  const clamped = Math.max(0, Math.min(100, +pct.toFixed(1)));
-  return clamped;
+  const pctVal = (rankLike / (total - 1)) * 100;
+  return Math.max(0, Math.min(100, +pctVal.toFixed(1)));
 }
