@@ -1,217 +1,206 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState, useRef, useEffect } from "react";
+import "./WrongPanel.css";
+import PdfModalIframe from './PdfModalIframe';
+import { getFunctions, httpsCallable } from "firebase/functions";
 
-/**
- * PdfModalIframe
- * props:
- * - open: boolean
- * - onClose: () => void
- * - filePath: "explanation/1-1-1.pdf" 같은 Storage 내부 경로
- * - src: (옵션) 만약 절대 URL로 바로 넘기고 싶으면 이걸 사용
- * - title: 모달 제목
- * - sid: 학수번호(로그/분석용, UI에는 안 씀)
- */
-export default function PdfModalIframe({ open, onClose, filePath, src, title, sid }) {
-  const [loading, setLoading] = useState(false);
-  const [iframeUrl, setIframeUrl] = useState("");
-  const [err, setErr] = useState(null);
+// 교시별 문항 수
+const SESSION_LENGTH = {
+  "1교시": 80,
+  "2교시": 100,
+  "3교시": 80,
+  "4교시": 80,
+};
 
-  const wantUrl = useMemo(() => {
-    // src가 http(s)면 우선 사용
-    if (src && /^https?:\/\//i.test(src)) return src;
-    // filePath가 http(s)면 그대로
-    if (filePath && /^https?:\/\//i.test(filePath)) return filePath;
-    return null;
-  }, [src, filePath]);
+/** 가장 큰 셀 면적(=여백 최소)을 만드는 cols/rows 계산 */
+function bestGrid(n, W, H, gap = 5, aspect = 1) {
+  if (!n || !W || !H) return { cols: 1, rows: 1, cellW: 0, cellH: 0 };
+  let best = { cols: 1, rows: n, cellW: 0, cellH: 0, score: -1 };
+
+  for (let cols = 1; cols <= n; cols++) {
+    const rows = Math.ceil(n / cols);
+    const totalGapW = gap * (cols - 1);
+    const totalGapH = gap * (rows - 1);
+    const maxCellW = Math.floor((W - totalGapW) / cols);
+    const maxCellH = Math.floor((H - totalGapH) / rows);
+    const fitW = Math.min(maxCellW, Math.floor(maxCellH * aspect));
+    const fitH = Math.min(maxCellH, Math.floor(maxCellW / aspect));
+    const score = fitW * fitH;
+    if (score > best.score) best = { cols, rows, cellW: fitW, cellH: fitH, score };
+  }
+  return best;
+}
+
+export default function WrongAnswerPanel({ roundLabel, data, sid }) {
+  const [activeSession, setActiveSession] = useState("1교시");
+  const gridWrapRef = useRef(null);
+  const [gridStyle, setGridStyle] = useState({ cols: 1, cellW: 30, cellH: 30 });
+
+  // ===== PDF 모달 상태 =====
+  const [pdfOpen, setPdfOpen] = useState(false);
+  const [pdfPath, setPdfPath] = useState(null);
+
+  // 내 오답(교시별 Set)
+  const wrongBySession = useMemo(() => {
+    const out = { "1교시": new Set(), "2교시": new Set(), "3교시": new Set(), "4교시": new Set() };
+    if (data?.wrongBySession) {
+      for (const [sess, arr] of Object.entries(data.wrongBySession)) {
+        if (Array.isArray(arr)) arr.forEach((n) => out[sess]?.add(Number(n)));
+      }
+    }
+    return out;
+  }, [data]);
+
+  // 🔥 특별 해설 제공 인덱스 (Cloud Function에서 불러옴)
+  const [fireBySession, setFireBySession] = useState({
+    "1교시": new Set(),
+    "2교시": new Set(),
+    "3교시": new Set(),
+    "4교시": new Set(),
+  });
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!open) return;              // 닫혀 있으면 아무 것도 안 함
-      setErr(null);
-      setLoading(true);
-      setIframeUrl("");
-
       try {
-        // 1) 이미 절대 URL을 받은 경우 (CDN, 직접 링크 등)
-        if (wantUrl) {
-          if (!cancelled) setIframeUrl(wantUrl);
-          return;
-        }
-
-        // 2) Storage 내부 경로인 경우 getDownloadURL로 변환
-        //    버킷: gs://jeonjolhyup.firebasestorage.app
-        //    경로: explanation/1-1-1.pdf
-        if (!filePath) throw new Error("파일 경로가 비어있어요.");
-
-        const { initializeApp, getApps } = await import("firebase/app");
-        const { getStorage, ref, getDownloadURL } = await import("firebase/storage");
-
-        // 이미 초기화되어 있다면 재사용, 아니면 환경설정 필요
-        // (프로젝트에 이미 firebase/app 초기화 되어 있다면 이 블록은 무시됨)
-        if (getApps().length === 0) {
-          // ⚠️ 이미 /services/firebase 등에서 initializeApp이 되어 있다면
-          // 이 config는 무시되니 걱정 X. (혹시 없다면 아래를 채워주세요)
-          initializeApp({
-            apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_PROJECT.firebaseapp.com",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "jeonjolhyup.firebasestorage.app", // 중요: 웹용 버킷 도메인
-            appId: "YOUR_APP_ID",
-          });
-        }
-
-        // 버킷 명시 (gs://… 형태도 지원)
-        const storage = getStorage(undefined, "gs://jeonjolhyup.firebasestorage.app");
-        const storageRef = ref(storage, filePath);
-        const url = await getDownloadURL(storageRef);
-
-        if (!cancelled) setIframeUrl(url);
+        const functions = getFunctions();
+        const getIndex = httpsCallable(functions, "getExplanationIndex");
+        const res = await getIndex({ roundLabel });
+        const idx = res.data || {};
+        const mapped = {
+          "1교시": new Set(idx["1교시"] || []),
+          "2교시": new Set(idx["2교시"] || []),
+          "3교시": new Set(idx["3교시"] || []),
+          "4교시": new Set(idx["4교시"] || []),
+        };
+        if (!cancelled) setFireBySession(mapped);
       } catch (e) {
-        console.error("PDF URL 로드 실패:", e);
-        if (!cancelled) setErr(e);
-      } finally {
-        if (!cancelled) setLoading(false);
+        console.error("해설 인덱스 조회 실패:", e);
       }
     })();
     return () => { cancelled = true; };
-  }, [open, filePath, wantUrl]);
+  }, [roundLabel]);
 
-  if (!open) return null;
+  // 레이아웃 자동 계산
+  useEffect(() => {
+    const el = gridWrapRef.current;
+    if (!el) return;
+    const compute = () => {
+      const { width, height } = el.getBoundingClientRect();
+      const total = SESSION_LENGTH[activeSession] || 80;
+      const { cols, cellW, cellH } = bestGrid(total, Math.max(0, width), Math.max(0, height), 5, 1);
+      setGridStyle({
+        cols: Math.max(1, cols),
+        cellW: Math.max(22, cellW),
+        cellH: Math.max(22, cellH),
+      });
+    };
+    const ro = new ResizeObserver(compute);
+    ro.observe(el);
+    compute();
+    return () => ro.disconnect();
+  }, [activeSession]);
 
-  return (
-    <div
-      className="pdf-modal-backdrop"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label={title || "PDF 보기"}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.5)",
-        zIndex: 9999,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-      }}
-    >
+  // ✅ 특별해설 PDF 열기
+  const openExplanation = (session, qNum) => {
+    const rNum = parseInt(String(roundLabel).replace(/\D/g, ""), 10) || 1; // "1차" -> 1
+    const sNum = parseInt(String(session).replace(/\D/g, ""), 10) || 1;   // "1교시" -> 1
+    const path = `explanation/${rNum}-${sNum}-${qNum}.pdf`; // Storage 경로 규칙
+    setPdfPath(path);
+    setPdfOpen(true);
+  };
+
+  // 버튼 렌더
+  const renderButtons = (session) => {
+    const total = SESSION_LENGTH[session] || 80;
+    const { cols, cellW, cellH } = gridStyle;
+    return (
       <div
-        className="pdf-modal"
-        onClick={(e) => e.stopPropagation()}
+        className="btn-grid"
         style={{
-          position: "relative",
-          width: "min(1100px, 96vw)",
-          height: "min(90vh, 900px)",
-          background: "#0b1020",
-          border: "1px solid rgba(255,255,255,0.12)",
-          borderRadius: 12,
-          overflow: "hidden",
-          boxShadow: "0 10px 30px rgba(0,0,0,0.45)",
+          gridTemplateColumns: `repeat(${cols}, ${cellW}px)`,
+          gridTemplateRows: `repeat(${Math.ceil(total / cols)}, ${cellH}px)`,
         }}
       >
-        {/* 헤더 */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            justifyContent: "space-between",
-            padding: "10px 14px",
-            background: "rgba(255,255,255,0.04)",
-            borderBottom: "1px solid rgba(255,255,255,0.08)",
-          }}
-        >
-          <div style={{ color: "#e8eeff", fontWeight: 700, fontSize: 14 }}>
-            {title || "특별 해설"}
-          </div>
+        {Array.from({ length: total }, (_, i) => {
+          const qNum = i + 1;
+          const isWrong = wrongBySession[session]?.has(qNum);
+          const hasExp = fireBySession[session]?.has(qNum);
+          const cls = `qbtn${isWrong ? " red" : ""}${hasExp ? " fire" : ""}`;
+          const label = `문항 ${qNum}${isWrong ? " (내 오답)" : ""}${hasExp ? " · 특별 해설" : ""}`;
+          return (
+            <button
+              key={qNum}
+              type="button"
+              className={cls}
+              title={label}
+              aria-label={label}
+              onClick={
+                hasExp ? (e) => { e.stopPropagation(); openExplanation(session, qNum); } : undefined
+              }
+              style={{
+                width: `${cellW}px`,
+                height: `${cellH}px`,
+                cursor: hasExp ? "pointer" : "default",
+              }}
+            >
+              {qNum}
+              {hasExp && <span className="flame-emoji" aria-hidden>🔥</span>}
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
+
+  return (
+    <div className="wrong-panel-root">
+      <h2 style={{ marginTop: 0 }}>{roundLabel} 오답 보기</h2>
+
+      {/* 설명 줄 */}
+      <div className="legend-line">
+        <span>색상: <b className="legend-red">빨강</b>=내 오답, 회색=정답/없음,</span>
+        <span className="legend-example">
           <button
             type="button"
-            onClick={onClose}
-            style={{
-              border: "1px solid rgba(255,255,255,0.2)",
-              background: "transparent",
-              color: "#e8eeff",
-              borderRadius: 8,
-              padding: "6px 10px",
-              cursor: "pointer",
-              fontWeight: 600,
-            }}
+            className="qbtn fire sample"
+            aria-label="특별 해설 제공 예시"
+            style={{ width: `${gridStyle.cellW}px`, height: `${gridStyle.cellH}px` }}
           >
-            닫기
+            해설<br />제공<br /><span className="flame-emoji" aria-hidden>🔥</span>
           </button>
-        </div>
-
-        {/* 콘텐츠 */}
-        <div style={{ position: "absolute", inset: 44 }}>
-          {loading && (
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                display: "grid",
-                placeItems: "center",
-                background:
-                  "linear-gradient(90deg, rgba(255,255,255,0.03), rgba(255,255,255,0.06), rgba(255,255,255,0.03))",
-                backgroundSize: "200% 100%",
-                animation: "pdf-skeleton 1.2s ease-in-out infinite",
-              }}
-            >
-              <div
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: "50%",
-                  border: "3px solid rgba(255,255,255,0.2)",
-                  borderTopColor: "var(--primary, #7ea2ff)",
-                  animation: "spin 0.9s linear infinite",
-                }}
-                aria-label="PDF 로딩 중"
-              />
-            </div>
-          )}
-
-          {err && (
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                display: "grid",
-                placeItems: "center",
-                color: "#ff9aa2",
-                fontSize: 14,
-                padding: 16,
-                textAlign: "center",
-              }}
-            >
-              <div>
-                PDF를 불러오지 못했습니다.
-                <br />
-                <code style={{ opacity: 0.8 }}>{String(err?.message || err)}</code>
-                <br />
-                <div style={{ marginTop: 8, opacity: 0.8 }}>
-                  파일 경로: <code>{filePath || src}</code>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {!loading && !err && iframeUrl && (
-            <iframe
-              title={title || "PDF"}
-              src={iframeUrl}
-              style={{ width: "100%", height: "100%", border: "none" }}
-              allow="fullscreen"
-            />
-          )}
-        </div>
+          <span className="legend-label">특별 해설 제공</span>
+        </span>
       </div>
 
-      {/* 키프레임 */}
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes pdf-skeleton { 0% { background-position: 0% 0; } 100% { background-position: -200% 0; } }
-      `}</style>
+      {/* 상단 탭 */}
+      <div className="session-tabs" role="tablist" aria-label="교시 선택">
+        {["1교시", "2교시", "3교시", "4교시"].map((s) => (
+          <button
+            key={s}
+            role="tab"
+            aria-selected={activeSession === s}
+            className={`tab-btn ${activeSession === s ? "active" : ""}`}
+            onClick={() => setActiveSession(s)}
+            type="button"
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+
+      {/* 탭 콘텐츠 */}
+      <div className="tab-content" role="tabpanel" aria-label={`${activeSession} 문항`} ref={gridWrapRef}>
+        {renderButtons(activeSession)}
+      </div>
+
+      {/* PDF 모달 */}
+      <PdfModalIframe
+        open={pdfOpen}
+        onClose={() => setPdfOpen(false)}
+        filePath={pdfPath}
+        sid={sid}
+        title={`${roundLabel} ${activeSession} 특별해설`}
+      />
     </div>
   );
 }
