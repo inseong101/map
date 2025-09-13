@@ -13,11 +13,10 @@
   },
   "main": "index.js",
   "dependencies": {
-  "firebase-admin": "^11.11.1",
-  "firebase-functions": "^4.4.1",
-  "xlsx": "^0.18.5",
-  "pdf-lib": "^1.17.1"
-}
+    "firebase-admin": "^11.11.1",
+    "firebase-functions": "^5.1.0",   // ⚠️ 최신 버전 사용 권장
+    "xlsx": "^0.18.5",
+    "pdf-lib": "^1.17.1"              // ✅ 워터마크 삽입용
   },
   "devDependencies": {
     "firebase-functions-test": "^3.1.0"
