@@ -34,7 +34,7 @@ export function chunk(arr, sizes) {
 import { SESSION_SUBJECT_RANGES, SUBJECT_MAX, TOTAL_MAX } from '../services/dataService';
 
 /**
- * wrongBySession(교시별 오답 문항 배열)을 과목별(간/심/...) 점수로 환산
+ * wrongBySession(교시별 오답 문항 배열)을 과목별 점수로 환산
  * - 각 과목은 SUBJECT_MAX의 만점에서 시작
  * - 오답 1개당 1점 차감
  */
@@ -78,14 +78,23 @@ export function buildGroupResults(subjectScores) {
       ? [subjects.length]
       : [Math.ceil(subjects.length/2), Math.floor(subjects.length/2)];
 
-    out.push({ name: label, label, subjects, layoutChunks, score, max, rate, pass });
+    out.push({
+      name: label,
+      label,
+      subjects,
+      layoutChunks,
+      score,
+      max,
+      rate,
+      pass
+    });
   });
 
   return out;
 }
 
 /**
- * Round 데이터 보강
+ * Round 데이터 한 건을 enrichment
  */
 export function enrichRoundData(roundData = {}) {
   const wrongBySession = roundData.wrongBySession || {};
@@ -112,7 +121,7 @@ export function enrichRoundData(roundData = {}) {
   };
 }
 
-// ----- 라인 차트 -----
+// ----- 라인 차트 (기존) -----
 export function drawLineChart(canvas, labels, series, maxValue) {
   if (!canvas) return;
 
@@ -183,20 +192,140 @@ export function drawLineChart(canvas, labels, series, maxValue) {
   });
 }
 
-// ==== 신원/상태 유틸 ====
+// ======== 사전집계(prebinned) 기반 API & 유틸 ========
+
+// 학교명 → 코드
+export function getSchoolCodeFromName(name) {
+  const map = {
+    '가천대': '01','경희대': '02','대구한': '03','대전대': '04',
+    '동국대': '05','동신대': '06','동의대': '07','부산대': '08',
+    '상지대': '09','세명대': '10','우석대': '11','원광대': '12',
+  };
+  return map[name] || '01';
+}
+
+// === 사전집계 분포 조회 (Cloud Functions HTTPS - Hosting rewrite 가정) ===
+export async function getPrebinnedDistribution(roundLabel) {
+  try {
+    const url = `/api/prebinned?roundLabel=${encodeURIComponent(roundLabel)}`;
+    const resp = await fetch(url, { method: 'GET' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return await resp.json(); // { success, data }
+  } catch (e) {
+    console.error('getPrebinnedDistribution error:', e);
+    return { success: false, data: null };
+  }
+}
+
+/**
+ * ✅ 평균 계산 (prebinned bins 기반)
+ * - bins가 min/max/count 또는 mean 값을 가질 수 있다고 가정
+ * - mean 있으면 그걸 사용, 없으면 (min+max)/2 중앙값을 사용해 가중 평균
+ * - 반환: { nationalAvg: number | '-', schoolAvg: number | '-' }
+ */
+export async function getAverages(schoolName, roundLabel) {
+  try {
+    const sch = getSchoolCodeFromName(schoolName);
+    const preb = await getPrebinnedDistribution(roundLabel);
+    const d = preb?.data || {};
+    const natBins = Array.isArray(d?.national) ? d.national : [];
+    const schBins = Array.isArray(d?.bySchool?.[sch]) ? d.bySchool[sch] : [];
+
+    const avgFromBins = (bins) => {
+      const total = bins.reduce((s,b)=> s + (b?.count||0), 0);
+      if (total <= 0) return '-';
+      let sum = 0;
+      for (const b of bins) {
+        const c = b?.count || 0;
+        const mean = Number.isFinite(b?.mean)
+          ? b.mean
+          : (Number.isFinite(b?.min) && Number.isFinite(b?.max))
+            ? (b.min + b.max) / 2
+            : 0;
+        sum += mean * c;
+      }
+      const avg = sum / total;
+      // 소수점 1자리로 표시 (필요시 변경)
+      return Math.round(avg * 10) / 10;
+    };
+
+    return {
+      nationalAvg: avgFromBins(natBins),
+      schoolAvg:   avgFromBins(schBins),
+    };
+  } catch (e) {
+    console.error('getAverages(prebinned) error:', e);
+    return { nationalAvg: '-', schoolAvg: '-' };
+  }
+}
+
+// ✅ prebinned 기반 참여 통계(총원/유효응시자)
+export async function getParticipationStats(roundLabel, schoolCodeOrNull = null) {
+  try {
+    const preb = await getPrebinnedDistribution(roundLabel);
+    const d = preb?.data || {};
+    const bins = schoolCodeOrNull
+      ? (Array.isArray(d?.bySchool?.[schoolCodeOrNull]) ? d.bySchool[schoolCodeOrNull] : [])
+      : (Array.isArray(d?.national) ? d.national : []);
+    const total = bins.reduce((s, b) => s + (b?.count || 0), 0);
+    return { total, completed: total, absent: 0, dropout: 0, completedScores: [] };
+  } catch (e) {
+    console.error('participation(prebinned) 조회 오류:', e);
+    return { total: 0, completed: 0, absent: 0, dropout: 0, completedScores: [] };
+  }
+}
+
+// === bin 기반 백분위(상위%) 계산
+export function calcPercentileFromBins(bins, studentScore) {
+  if (!Array.isArray(bins) || bins.length === 0 || !Number.isFinite(studentScore)) return null;
+  const total = bins.reduce((s,b)=>s + (b.count||0), 0);
+  if (total <= 1) return 0.0;
+
+  // 내 점수보다 높은 구간 합
+  let higher = 0;
+  for (const b of bins) {
+    // 해당 bin 전체가 내 점수보다 "높은 점수 영역"일 때만 더함
+    if (Number.isFinite(b.max) && b.max <= studentScore) continue;
+    if (Number.isFinite(b.min) && Number.isFinite(b.max) && b.min >= studentScore) {
+      higher += (b.count || 0);
+    }
+  }
+
+  // 내 bin 동점 보정 (동점자 가운데쯤)
+  const myBin = bins.find(b =>
+    Number.isFinite(b.min) && Number.isFinite(b.max) &&
+    ((b.min <= studentScore) && (studentScore < b.max || (b.min===b.max && studentScore===b.max)))
+  );
+  const tieAdj = myBin ? Math.max(0, (myBin.count || 0) - 1) * 0.5 : 0;
+
+  const rankLike = higher + tieAdj;
+  const pct = (rankLike / (total - 1)) * 100;
+  const clamped = Math.max(0, Math.min(100, +pct.toFixed(1)));
+  return clamped;
+}
+
+// (다른 곳에서 쓸 수 있어 남겨둠) 점수배열 기반 백분위
+export function calcPercentileFromScores(scores, myScore) {
+  if (!Array.isArray(scores) || scores.length === 0 || myScore == null) return null;
+  const sorted = [...scores].sort((a, b) => b - a);
+  const n = sorted.length;
+  if (n === 1) return 0.0;
+
+  let idx = sorted.findIndex(s => s <= myScore);
+  if (idx < 0) idx = n - 1;
+
+  const p = (idx / (n - 1)) * 100;
+  return Math.max(0, Math.min(100, +p.toFixed(1)));
+}
+
+// 01~12로 시작하는 6자리만 유효
 export function isValidSid(sid) {
   return typeof sid === 'string' && /^(0[1-9]|1[0-2])\d{4}$/.test(sid);
 }
 
-export function isCompleted4(r) {
-  return r?.s1?.status === 'completed' &&
-         r?.s2?.status === 'completed' &&
-         r?.s3?.status === 'completed' &&
-         r?.s4?.status === 'completed';
-}
-
 /**
  * 라운드별 학생 상태 판정
+ * 반환: 'completed' | 'absent' | 'dropout' | 'invalid'
  */
 export function deriveRoundStatus(roundData, sid) {
   if (!isValidSid(sid)) return 'invalid';
@@ -211,75 +340,4 @@ export function deriveRoundStatus(roundData, sid) {
   if (statuses.some(s => s === 'absent')) return 'absent';
   if (statuses.every(s => s === 'completed')) return 'completed';
   return 'absent';
-}
-
-// === 사전집계 분포 조회 (Cloud Functions HTTPS) ===
-export async function getPrebinnedDistribution(roundLabel) {
-  try {
-    const url = `/api/prebinned?roundLabel=${encodeURIComponent(roundLabel)}`;
-    const resp = await fetch(url, { method: 'GET' });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    return await resp.json(); // { success, data }
-  } catch (e) {
-    console.error('getPrebinnedDistribution error:', e);
-    return { success: false, data: null };
-  }
-}
-
-// === prebinned 기반 참여 통계(총원/유효응시자) ===
-export async function getParticipationStats(roundLabel, schoolCodeOrNull = null) {
-  try {
-    const preb = await getPrebinnedDistribution(roundLabel);
-    const d = preb?.data || {};
-    const bins = schoolCodeOrNull
-      ? (Array.isArray(d?.bySchool?.[schoolCodeOrNull]) ? d.bySchool[schoolCodeOrNull] : [])
-      : (Array.isArray(d?.national) ? d.national : []);
-
-    const total = bins.reduce((s, b) => s + (b?.count || 0), 0);
-    // absent/dropout는 사전집계에 없으므로 0 처리
-    return { total, completed: total, absent: 0, dropout: 0, completedScores: [] };
-  } catch (e) {
-    console.error('participation(prebinned) 조회 오류:', e);
-    return { total: 0, completed: 0, absent: 0, dropout: 0, completedScores: [] };
-  }
-}
-
-// === 백분위(상위%) 계산 유틸 ===
-export function calculatePercentileStrict(scores, myScore) {
-  if (!Array.isArray(scores) || scores.length === 0 || !Number.isFinite(myScore)) return null;
-  const sorted = [...scores].sort((a, b) => b - a);
-  let idx = sorted.findIndex(s => s <= myScore);
-  if (idx === -1) idx = sorted.length - 1;
-  if (sorted.length === 1) return 0.0;
-  const pctVal = (idx / (sorted.length - 1)) * 100;
-  return +Math.min(100, Math.max(0, pctVal)).toFixed(1);
-}
-
-export function calcPercentileFromScores(scores, myScore) {
-  if (!Array.isArray(scores) || scores.length === 0 || myScore == null) return null;
-  const sorted = [...scores].sort((a, b) => b - a);
-  const n = sorted.length;
-  if (n === 1) return 0.0;
-  let idx = sorted.findIndex(s => s <= myScore);
-  if (idx < 0) idx = n - 1;
-  const p = (idx / (n - 1)) * 100;
-  return Math.max(0, Math.min(100, +p.toFixed(1)));
-}
-
-export function calcPercentileFromBins(bins, studentScore) {
-  if (!Array.isArray(bins) || bins.length === 0 || !Number.isFinite(studentScore)) return null;
-  const total = bins.reduce((s,b)=>s + (b.count||0), 0);
-  if (total <= 1) return 0.0;
-
-  let higher = 0;
-  for (const b of bins) {
-    if (b.max <= studentScore) continue;
-    higher += (b.count || 0);
-  }
-  const myBin = bins.find(b => (b.min <= studentScore) && (studentScore < b.max || (b.min===b.max && studentScore===b.max)));
-  const tieAdj = myBin ? Math.max(0, (myBin.count || 0) - 1) * 0.5 : 0;
-  const rankLike = higher + tieAdj;
-
-  const pctVal = (rankLike / (total - 1)) * 100;
-  return Math.max(0, Math.min(100, +pctVal.toFixed(1)));
 }
