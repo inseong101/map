@@ -958,3 +958,41 @@ exports.logPdfAction = functions.https.onCall(async (data, context) => {
   });
   return { ok: true };
 });
+
+// ③ 해설 인덱스 제공 (Callable): explanation/ 폴더 스캔
+exports.getExplanationIndex = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
+  }
+  const { roundLabel } = data || {}; // "1차" 형태(없어도 OK: 전체 반환)
+  const bucket = admin.storage().bucket();
+
+  // explanation/ 밑의 파일 전부 나열
+  const [files] = await bucket.getFiles({ prefix: "explanation/" });
+
+  // { "1교시": [1,2,...], "2교시":[...], "3교시":[...], "4교시":[...] }
+  const bySession = { "1교시": [], "2교시": [], "3교시": [], "4교시": [] };
+
+  files.forEach(f => {
+    // 형식: explanation/1-2-44.pdf  => 회차-교시-문항
+    const m = f.name.match(/^explanation\/(\d+)-(\d+)-(\d+)\.pdf$/);
+    if (!m) return;
+    const [_, r, s, q] = m;
+    const rLabel = `${parseInt(r,10)}차`;
+    const sLabel = `${parseInt(s,10)}교시`;
+    const qNum   = parseInt(q, 10);
+
+    // 특정 회차만 요청했다면 필터
+    if (roundLabel && roundLabel !== rLabel) return;
+
+    if (bySession[sLabel]) bySession[sLabel].push(qNum);
+  });
+
+  // 중복 제거 + 정렬
+  Object.keys(bySession).forEach(k => {
+    const set = new Set(bySession[k]);
+    bySession[k] = Array.from(set).sort((a,b)=>a-b);
+  });
+
+  return bySession; // 프런트에서 세트로 변환해 씀
+});
