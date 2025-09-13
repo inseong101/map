@@ -1,14 +1,12 @@
-// scoreboard/src/components/PdfJsModal.jsx
 import React, { useEffect, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import "pdfjs-dist/web/pdf_viewer.css";
 
-// ✅ CRA + pdfjs-dist v3.x 환경에서는 이 경로 사용
-import pdfjsWorker from "pdfjs-dist/build/pdf.worker.entry";
+// ✅ v2.x는 이 경로 사용
+import pdfjsWorker from "pdfjs-dist/build/pdf.worker.js";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
-// base64 → Uint8Array 변환 도우미
 function base64ToUint8Array(base64) {
   const binary = atob(base64);
   const len = binary.length;
@@ -17,7 +15,6 @@ function base64ToUint8Array(base64) {
   return bytes;
 }
 
-// 간단한 PDF 뷰어 (Canvas 기반)
 function PdfViewer({ data }) {
   const containerRef = React.useRef(null);
 
@@ -25,8 +22,6 @@ function PdfViewer({ data }) {
     (async () => {
       if (!data) return;
       const pdf = await pdfjsLib.getDocument({ data }).promise;
-
-      // 컨테이너 초기화
       const container = containerRef.current;
       container.innerHTML = "";
 
@@ -61,7 +56,6 @@ export default function PdfJsModal({ open, onClose, filePath, sid, title }) {
 
     (async () => {
       try {
-        // ✅ Firebase Functions 연동 부분 (serveWatermarkedPdf 호출)
         const { getFunctions, httpsCallable } = await import("firebase/functions");
         const functions = getFunctions();
         const serve = httpsCallable(functions, "serveWatermarkedPdf");
