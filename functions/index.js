@@ -879,8 +879,8 @@ exports.serveWatermarkedPdf = functions.https.onCall(async (data, context) => {
     const textWidth = font.widthOfTextAtSize(text, fontSize);
     const textHeight = fontSize;
 
-    const stepX = textWidth * 2.2;
-    const stepY = textHeight * 1.4;
+    const stepX = textWidth * 1.5;
+    const stepY = textHeight * 1.8;
 
     for (let y = -stepY; y < height + stepY; y += stepY) {
       const xOffset = (y / stepY) % 2 === 0 ? 0 : stepX / 2;
