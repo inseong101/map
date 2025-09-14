@@ -2,10 +2,11 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import * as pdfjsLib from "pdfjs-dist";
+import "pdfjs-dist/web/pdf_viewer.css";
 
-// 🔧 워커 경로(CDN) — CRA 환경에서 가장 호환 잘됨
+// CRA에서 안전하게 동작하는 워커 경로(CDN 고정 버전 권장)
 pdfjsLib.GlobalWorkerOptions.workerSrc =
-  `https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js`;
+  "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
 
 export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   const canvasRef = useRef(null);
@@ -21,7 +22,6 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
 
-    // 디바이스 픽셀 레티나 대응 + 모달 너비 기준 스케일
     const containerWidth = canvas.parentElement?.clientWidth || 800;
     const viewport = page.getViewport({ scale: 1 });
     const scale = fitWidth ? Math.min(1.75, containerWidth / viewport.width) : 1.2;
@@ -34,11 +34,9 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     canvas.style.height = `${Math.floor(scaledViewport.height)}px`;
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
     await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise;
   }, []);
 
-  // PDF 로드
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -70,8 +68,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         setPageNum(1);
         await renderPage(doc, 1, true);
 
-        // 리사이즈 시 현재 페이지 다시 그리기
-        const onResize = () => renderPage(doc, pageNum, true);
+        const onResize = () => renderPage(doc, 1, true);
         window.addEventListener("resize", onResize);
         return () => window.removeEventListener("resize", onResize);
       } catch (e) {
@@ -80,11 +77,9 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         if (!cancelled) setLoading(false);
       }
     })();
-
     return () => { cancelled = true; };
-  }, [open, filePath, sid, renderPage, pageNum]);
+  }, [open, filePath, sid, renderPage]);
 
-  // 좌/우 방향키로 페이지 이동
   useEffect(() => {
     if (!open || !pdfDoc) return;
     const handler = async (e) => {
