@@ -157,19 +157,23 @@ export default function WrongAnswerPanel({ roundLabel, data, sid }) {
       </div>
 
       <div className="session-tabs" role="tablist" aria-label="교시 선택">
-        {["1교시", "2교시", "3교시", "4교시"].map((s) => (
-          <button
-            key={s}
-            role="tab"
-            aria-selected={activeSession === s}
-            className={`tab-btn ${activeSession === s ? "active" : ""}`}
-            onClick={() => setActiveSession(s)}
-            type="button"
-          >
-            {s}
-          </button>
-        ))}
-      </div>
+  {["1교시", "2교시", "3교시", "4교시"].map((s) => (
+    <button
+      key={s}
+      role="tab"
+      aria-selected={activeSession === s}
+      className={`tab-btn ${activeSession === s ? "active" : ""}`}
+      type="button"
+      data-click-role="tab"                 // ✅ 플립 방지 식별자
+      onClick={(e) => {                    // ✅ 플립 버블링 차단
+        e.stopPropagation();
+        setActiveSession(s);
+      }}
+    >
+      {s}
+    </button>
+  ))}
+</div>
 
       <div className="tab-content" role="tabpanel" aria-label={`${activeSession} 문항`} ref={gridWrapRef}>
         {renderButtons(activeSession)}
