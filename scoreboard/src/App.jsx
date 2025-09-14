@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import StudentCard from './components/StudentCard';
 import RoundCard from './components/RoundCard';
 import './App.css';
@@ -7,22 +7,20 @@ import './App.css';
 import {
   discoverRoundsFor,
   getSchoolFromSid,
-  fetchRoundData, // ✅ 세부데이터(그룹/과목/오답) 가져오기
+  fetchRoundData, // 세부데이터(그룹/과목/오답)
 } from './services/dataService';
 
 import { doc, getDoc } from 'firebase/firestore';
-import { auth, db, functions } from './firebase'; // ✅ functions도 여기서 가져오면 region 일치
-import {
-  RecaptchaVerifier,
-  signInWithPhoneNumber
-} from 'firebase/auth';
+import { auth, db, functions } from './firebase';
+import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 
-// === 모든 회차 라벨(보정용) ===
-// 필요에 맞게 늘리세요. (ex. '3차','4차' ...)
+// 필요에 맞게 늘리세요.
 const ALL_ROUND_LABELS = ['1차', '2차'];
+const SESSIONS = ['1교시', '2교시', '3교시', '4교시'];
+const RESEND_COOLDOWN = 60; // 인증번호 재전송 쿨다운(초)
 
-// === rounds 보정: 누락 회차 absent 처리 ===
+// 누락 회차 absent 처리
 function normalizeRounds(inputRounds) {
   const arr = Array.isArray(inputRounds) ? inputRounds : [];
   const byLabel = new Map(arr.map(r => [r.label, r]));
@@ -30,8 +28,6 @@ function normalizeRounds(inputRounds) {
     byLabel.get(label) || { label, data: { status: 'absent' } }
   );
 }
-
-const SESSIONS = ['1교시', '2교시', '3교시', '4교시'];
 
 // 교시별 Firestore 점수 합산
 async function getRoundTotalFromFirestore(roundLabel, sid) {
@@ -63,6 +59,28 @@ async function getRoundTotalFromFirestore(roundLabel, sid) {
   return { total, sessionScores: perSession, roundStatus };
 }
 
+// 에러코드 → 친절한 한국어 메시지
+function mapAuthError(err) {
+  const code = err?.code || '';
+  switch (code) {
+    case 'auth/too-many-requests':
+      return '요청이 너무 많이 시도되어 잠시 차단되었습니다. 잠시 후 다시 시도해주세요.';
+    case 'auth/invalid-phone-number':
+      return '전화번호 형식이 올바르지 않습니다. (예: +821012345678 또는 010-1234-5678)';
+    case 'auth/missing-phone-number':
+      return '전화번호를 입력해주세요.';
+    case 'auth/invalid-verification-code':
+      return '인증번호가 올바르지 않습니다.';
+    case 'auth/code-expired':
+      return '인증번호가 만료되었습니다. 다시 요청해주세요.';
+    case 'functions/internal':
+    case 'functions/invalid-argument':
+      return '서버 검증 중 오류가 발생했습니다. 정보를 확인하고 다시 시도해주세요.';
+    default:
+      return err?.message || '요청 처리 중 오류가 발생했습니다.';
+  }
+}
+
 function App() {
   const [currentView, setCurrentView] = useState('home');
   const [studentId, setStudentId] = useState('');
@@ -70,13 +88,22 @@ function App() {
   const [smsCode, setSmsCode] = useState('');
   const [confirmation, setConfirmation] = useState(null);
 
+  // 상태
   const [rounds, setRounds] = useState([]);
   const [hydratedRounds, setHydratedRounds] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [hydrating, setHydrating] = useState(false);
   const [error, setError] = useState('');
 
-  // reCAPTCHA 세팅 (v9)
+  // 버튼/플로우 락
+  const [sending, setSending] = useState(false);     // 인증번호 보내는 중
+  const [verifying, setVerifying] = useState(false); // 코드 검증/바인딩 중
+  const [loading, setLoading] = useState(false);     // 성적 조회 중
+  const [hydrating, setHydrating] = useState(false); // 결과 상세 합성 중
+
+  // 재전송 쿨다운
+  const [resendLeft, setResendLeft] = useState(0);
+  const cooldownTimerRef = useRef(null);
+
+  // reCAPTCHA (v9)
   useEffect(() => {
     if (!window.recaptchaVerifier) {
       window.recaptchaVerifier = new RecaptchaVerifier(
@@ -85,19 +112,54 @@ function App() {
         { size: 'invisible' }
       );
     }
+    return () => {
+      if (cooldownTimerRef.current) {
+        clearInterval(cooldownTimerRef.current);
+        cooldownTimerRef.current = null;
+      }
+    };
   }, []);
+
+  // 쿨다운 타이머 시작
+  const startCooldown = () => {
+    setResendLeft(RESEND_COOLDOWN);
+    if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
+    cooldownTimerRef.current = setInterval(() => {
+      setResendLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(cooldownTimerRef.current);
+          cooldownTimerRef.current = null;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
 
   // 인증번호 요청
   const handleSendCode = async () => {
+    if (sending || verifying || loading || resendLeft > 0) return; // 중복 방지
+    setError('');
+
+    // 간단한 입력 유효성
+    const cleanPhone = String(phone).trim();
+    if (!cleanPhone) {
+      setError('전화번호를 입력해주세요.');
+      return;
+    }
+
     try {
-      setError('');
+      setSending(true);
       const appVerifier = window.recaptchaVerifier;
-      const conf = await signInWithPhoneNumber(auth, phone, appVerifier);
+      const conf = await signInWithPhoneNumber(auth, cleanPhone, appVerifier);
       setConfirmation(conf);
+      startCooldown();
       alert('인증번호가 전송되었습니다.');
     } catch (err) {
       console.error('SMS 전송 오류:', err);
-      setError(err?.message || 'SMS 전송에 실패했습니다.');
+      setError(mapAuthError(err));
+    } finally {
+      setSending(false);
     }
   };
 
@@ -118,11 +180,15 @@ function App() {
 
   // 인증번호 검증 + 바인딩까지
   const handleVerifyCode = async () => {
+    if (verifying) return false;
+    setError('');
+
+    if (!confirmation) {
+      setError('먼저 인증번호를 받아주세요.');
+      return false;
+    }
     try {
-      if (!confirmation) {
-        setError('먼저 인증번호를 받아주세요.');
-        return false;
-      }
+      setVerifying(true);
       // ① 전화번호 인증(로그인)
       await confirmation.confirm(smsCode);
       // ② 서버 검증 + bindings/{uid}.sids 에 추가
@@ -130,13 +196,18 @@ function App() {
       return true;
     } catch (err) {
       console.error('코드/바인딩 검증 오류:', err);
-      setError(err?.message || '인증 또는 바인딩에 실패했습니다.');
+      setError(mapAuthError(err));
       return false;
+    } finally {
+      setVerifying(false);
     }
   };
 
+  // 성적 조회 제출
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loading) return;
+
     setError('');
 
     if (!/^\d{6}$/.test(studentId)) {
@@ -155,7 +226,6 @@ function App() {
     try {
       // 존재 회차 탐색(실데이터 기반)
       const foundRounds = await discoverRoundsFor(studentId);
-
       if (foundRounds.length === 0) {
         setError('존재하지 않는 학수번호이거나 점수 데이터가 없습니다.');
         return;
@@ -171,7 +241,7 @@ function App() {
     }
   };
 
-  // 결과 화면 Hydrate (✅ 세부데이터까지 병합해서 RoundCard로 전달)
+  // 결과 화면 Hydrate: 교시합산 + 세부데이터(그룹/과목/오답)
   useEffect(() => {
     async function hydrate() {
       if (currentView !== 'result') return;
@@ -183,18 +253,14 @@ function App() {
       try {
         const out = [];
         for (const { label, data } of rounds) {
-          // 1) 교시별 합산/상태
           const { total, sessionScores, roundStatus } =
             await getRoundTotalFromFirestore(label, studentId);
+          const detailed = await fetchRoundData(studentId, label); // WrongPanel/그룹용
 
-          // 2) 세부 데이터(그룹별 점수/과목별 점수/오답 by 세션)
-          const detailed = await fetchRoundData(studentId, label);
-
-          // 3) 병합
           out.push({
             label,
             data: {
-              ...(detailed || {}),   // groupResults, subjectScores, wrongBySession 등
+              ...(detailed || {}),
               ...(data || {}),
               sessionScores,
               totalScore: total,
@@ -214,9 +280,8 @@ function App() {
     hydrate();
   }, [currentView, studentId, rounds]);
 
-  /* =========================
-     화면 렌더
-     ========================= */
+  /* ============ 렌더링 ============ */
+
   if (currentView === 'result') {
     const school = getSchoolFromSid(studentId);
     const base = hydratedRounds.length ? hydratedRounds : rounds;
@@ -244,7 +309,12 @@ function App() {
     );
   }
 
-  // 홈(인증/조회 폼) — 깔끔한 카드 UI
+  // 홈(인증/조회 폼)
+  const sendDisabled =
+    sending || verifying || loading || resendLeft > 0 || !phone.trim();
+  const submitDisabled =
+    sending || verifying || loading || !studentId || !smsCode;
+
   return (
     <div className="container">
       <h1>본인 점수 확인</h1>
@@ -257,6 +327,7 @@ function App() {
             value={studentId}
             onChange={(e) => setStudentId(e.target.value.replace(/\D/g, '').slice(0, 6))}
             placeholder="예) 015001"
+            disabled={sending || verifying || loading}
           />
 
           <label style={{ fontWeight: 800, marginTop: 6 }}>전화번호</label>
@@ -268,9 +339,20 @@ function App() {
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="+821012345678 또는 010-1234-5678"
+              disabled={sending || verifying || loading}
             />
-            <button type="button" className="btn secondary" onClick={handleSendCode}>
-              인증번호 받기
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={handleSendCode}
+              disabled={sendDisabled}
+              title={resendLeft > 0 ? `재전송까지 ${resendLeft}초` : ''}
+            >
+              {sending
+                ? '전송 중...'
+                : resendLeft > 0
+                  ? `재전송(${resendLeft}s)`
+                  : '인증번호 받기'}
             </button>
           </div>
 
@@ -281,14 +363,24 @@ function App() {
             value={smsCode}
             onChange={(e) => setSmsCode(e.target.value)}
             placeholder="예) 123456"
+            disabled={sending || verifying || loading}
           />
 
-          <button type="submit" className="btn" disabled={loading} style={{ marginTop: 6 }}>
-            {loading ? '조회 중...' : '인증 확인 후 성적 보기'}
+          <button
+            type="submit"
+            className="btn"
+            disabled={submitDisabled}
+            style={{ marginTop: 6 }}
+          >
+            {verifying
+              ? '인증 확인 중...'
+              : loading
+                ? '조회 중...'
+                : '인증 확인 후 성적 보기'}
           </button>
         </form>
 
-        {error && <div className="alert">{error}</div>}
+        {error && <div className="alert" style={{ whiteSpace: 'pre-line' }}>{error}</div>}
       </div>
 
       <div id="recaptcha-container"></div>
