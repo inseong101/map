@@ -706,45 +706,22 @@ exports.getOverallStatus = functions.https.onRequest(async (req, res) => {
 });
 
 
-// ====== [NEW] 사전 집계 설정 ======
+// functions/src/distributions.ts (또는 js)
+// 필요 상수
 const BIN_SIZE = 5;
 const CUTOFF_SCORE = 204;
 
-/**
- * 4교시 모두 completed 학생들만 대상으로
- * - 전국/학교별 총점 분포를 5점 단위 bin으로 사전 집계하여 저장합니다.
- * 저장 위치: distributions/{roundLabel}
- * 구조:
- * {
- *   roundLabel,
- *   range: { min, max },
- *   cutoff: 204,
- *   national: [{min,max,count}, ...],
- *   bySchool: { "01":[...], "02":[...], ... },
- *   averages: {
- *     nationalAvg: number|null,
- *     bySchool: { "01": number|null, ... }
- *   },
- *   stats: {
- *     national: { total, completed },        // completed == 유효응시자(4교시 완료)
- *     bySchool: { "01": { total, completed }, ... }
- *   },
- *   updatedAt: serverTimestamp
- * }
- */
-async function buildPrebinnedDistributions(roundLabel) {
+export async function buildPrebinnedDistributions(roundLabel: string) {
+  // 1) 4개 교시에서 수집
   const sessions = ['1교시','2교시','3교시','4교시'];
-  // sid별 상태: { completed:0..4, sum: number, code }
-  const perSid = {};
-  // 최종 집계
-  const nationalTotals = { total: 0, completed: 0, absent: 0, dropout: 0 };
-  const schoolTotals = {}; // code -> { total, completed, absent, dropout }
+  const perSid: Record<string, { completed: number; sum: number; code: string }> = {};
+  const seenSid: Set<string> = new Set();
 
-  // (1) 4개 교시 스캔
   for (const session of sessions) {
     const snap = await db.collection('scores_raw').doc(roundLabel).collection(session).get();
     snap.forEach(doc => {
       const sid = doc.id;
+      seenSid.add(sid);
       const data = doc.data() || {};
       const code = String(sid).slice(0,2);
       if (!/^(0[1-9]|1[0-2])$/.test(code)) return;
@@ -757,34 +734,40 @@ async function buildPrebinnedDistributions(roundLabel) {
     });
   }
 
-  // (2) 상태 분류 + 점수 모으기
-  const nationalScores = [];
-  const bySchoolScores = {};  // code -> number[]
-  for (const v of Object.values(perSid)) {
-    const code = v.code;
-    if (!schoolTotals[code]) {
-      schoolTotals[code] = { total: 0, completed: 0, absent: 0, dropout: 0 };
-    }
+  // 2) 상태 분류 & 점수 배열 구축
+  const nationalScores: number[] = [];
+  const bySchoolScores: Record<string, number[]> = {};
+  const nationalStats = { total: 0, completed: 0, absent: 0, dropout: 0 };
+  const bySchoolStats: Record<string, { total: number; completed: number; absent: number; dropout: number }> = {};
 
-    nationalTotals.total += 1;
-    schoolTotals[code].total += 1;
+  // “해당 회차에 한 번도 문서가 없었던 완전 결석자”는 별도 로스터 없이는 알 수 없음.
+  // 여기서는 4개 교시 중 하나라도 문서가 있던 SID만 분모에 포함.
+  for (const sid of seenSid) {
+    const rec = perSid[sid] || { completed: 0, sum: 0, code: String(sid).slice(0,2) };
+    const code = rec.code;
+    if (!/^(0[1-9]|1[0-2])$/.test(code)) continue;
 
-    if (v.completed === 4) {
-      nationalTotals.completed += 1;
-      schoolTotals[code].completed += 1;
-      nationalScores.push(v.sum);
+    nationalStats.total += 1;
+    if (!bySchoolStats[code]) bySchoolStats[code] = { total: 0, completed: 0, absent: 0, dropout: 0 };
+    bySchoolStats[code].total += 1;
+
+    if (rec.completed === 0) {
+      nationalStats.absent += 1;
+      bySchoolStats[code].absent += 1;
+    } else if (rec.completed > 0 && rec.completed < 4) {
+      nationalStats.dropout += 1;
+      bySchoolStats[code].dropout += 1;
+    } else if (rec.completed === 4) {
+      nationalStats.completed += 1;
+      bySchoolStats[code].completed += 1;
+
+      nationalScores.push(rec.sum);
       if (!bySchoolScores[code]) bySchoolScores[code] = [];
-      bySchoolScores[code].push(v.sum);
-    } else if (v.completed === 0) {
-      nationalTotals.absent += 1;
-      schoolTotals[code].absent += 1;
-    } else {
-      nationalTotals.dropout += 1;
-      schoolTotals[code].dropout += 1;
+      bySchoolScores[code].push(rec.sum);
     }
   }
 
-  // (3) 동적 범위 계산
+  // 3) 점수 범위 산출
   let minScore = nationalScores.length ? Math.min(...nationalScores) : 0;
   let maxScore = nationalScores.length ? Math.max(...nationalScores) : 0;
   if (minScore === maxScore) {
@@ -796,43 +779,36 @@ async function buildPrebinnedDistributions(roundLabel) {
   minScore = Math.max(0, Math.floor(minScore / BIN_SIZE) * BIN_SIZE);
   maxScore = Math.min(340, Math.ceil(maxScore / BIN_SIZE) * BIN_SIZE);
 
-  // (4) bin 생성
-  const makeBins = (scores) => {
+  // 4) bins 생성
+  const makeBins = (scores: number[]) => {
+    const out: { min: number; max: number; count: number }[] = [];
     if (!scores || !scores.length) {
-      const out = [];
-      for (let x = minScore; x < maxScore; x += BIN_SIZE) {
-        out.push({ min: x, max: x + BIN_SIZE, count: 0 });
-      }
+      for (let x = minScore; x < maxScore; x += BIN_SIZE) out.push({ min: x, max: x + BIN_SIZE, count: 0 });
       out.push({ min: maxScore, max: maxScore, count: 0 });
       return out;
     }
-    const counts = [];
     for (let x = minScore; x < maxScore; x += BIN_SIZE) {
       const c = scores.filter(s => s >= x && s < x + BIN_SIZE).length;
-      counts.push({ min: x, max: x + BIN_SIZE, count: c });
+      out.push({ min: x, max: x + BIN_SIZE, count: c });
     }
     const lastCount = scores.filter(s => s === maxScore).length;
-    counts.push({ min: maxScore, max: maxScore, count: lastCount });
-    return counts;
+    out.push({ min: maxScore, max: maxScore, count: lastCount });
+    return out;
   };
 
   const national = makeBins(nationalScores);
-  const bySchool = {};
-  Object.entries(bySchoolScores).forEach(([code, arr]) => {
-    bySchool[code] = makeBins(arr);
-  });
+  const bySchool: Record<string, any[]> = {};
+  Object.entries(bySchoolScores).forEach(([code, arr]) => { bySchool[code] = makeBins(arr); });
 
-  // (5) 평균
-  const avg = (arr) => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0) / arr.length) : null;
-  const averages = {
+  // 5) 평균
+  const avg = (arr: number[]) => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0) / arr.length) : null;
+  const averages: { nationalAvg: number | null; bySchool: Record<string, number | null> } = {
     nationalAvg: avg(nationalScores),
-    bySchool: {}
+    bySchool: {},
   };
-  Object.entries(bySchoolScores).forEach(([code, arr]) => {
-    averages.bySchool[code] = avg(arr);
-  });
+  Object.entries(bySchoolScores).forEach(([code, arr]) => { averages.bySchool[code] = avg(arr); });
 
-  // (6) 저장
+  // 6) 저장 (stats에 absent/dropout 포함)
   await db.collection('distributions').doc(roundLabel).set({
     roundLabel,
     range: { min: minScore, max: maxScore },
@@ -841,18 +817,13 @@ async function buildPrebinnedDistributions(roundLabel) {
     bySchool,
     averages,
     stats: {
-      national: {
-        total: nationalTotals.total,
-        completed: nationalTotals.completed,
-        absent: nationalTotals.absent,
-        dropout: nationalTotals.dropout
-      },
-      bySchool: schoolTotals
+      national: nationalStats,
+      bySchool: bySchoolStats,
     },
-    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, { merge: true });
 
-  console.log(`[dist] saved distributions/${roundLabel}  (N=${nationalTotals.completed})`);
+  console.log(`[dist] saved distributions/${roundLabel}  (N=${nationalStats.completed}, total=${nationalStats.total}, absent=${nationalStats.absent}, dropout=${nationalStats.dropout})`);
 }
 
 /**
