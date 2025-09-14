@@ -149,9 +149,8 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, filePath, sid]); // pdfDoc 렌더링은 내부에서 캐시로 처리
-
+  }, [open, filePath, sid, renderFirstPageAfterLayout, pdfDoc]);
+  
   // 리사이즈: 컨테이너 폭 변화 관찰해서 디바운스 재렌더
   useLayoutEffect(() => {
     if (!open) return;
