@@ -1,80 +1,79 @@
 // src/components/PdfModalPdfjs.jsx
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import * as pdfjsLib from "pdfjs-dist";
-import "pdfjs-dist/web/pdf_viewer.css";
 
-// pdf.js 워커 경로 설정 (필수)
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+// 🔧 워커 경로(CDN) — CRA 환경에서 가장 호환 잘됨
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  `https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js`;
 
 export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
-  const [err, setErr] = useState(null);
-  const [loading, setLoading] = useState(false);
   const canvasRef = useRef(null);
-
-  // 여러 페이지 지원을 위한 상태
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState(null);
+  const [pdfDoc, setPdfDoc] = useState(null);
+  const [pageNum, setPageNum] = useState(1);
   const [numPages, setNumPages] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
 
-  const renderPage = async (pdfDoc, pageNum) => {
-    const page = await pdfDoc.getPage(pageNum);
-    const viewport = page.getViewport({ scale: 1.2 });
+  const renderPage = useCallback(async (doc, num, fitWidth = true) => {
+    if (!doc || !canvasRef.current) return;
+    const page = await doc.getPage(num);
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
 
-    const context = canvas.getContext("2d");
-    canvas.height = viewport.height;
-    canvas.width = viewport.width;
+    // 디바이스 픽셀 레티나 대응 + 모달 너비 기준 스케일
+    const containerWidth = canvas.parentElement?.clientWidth || 800;
+    const viewport = page.getViewport({ scale: 1 });
+    const scale = fitWidth ? Math.min(1.75, containerWidth / viewport.width) : 1.2;
+    const scaledViewport = page.getViewport({ scale });
 
-    const renderContext = {
-      canvasContext: context,
-      viewport: viewport,
-    };
-    await page.render(renderContext).promise;
-  };
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(scaledViewport.width * dpr);
+    canvas.height = Math.floor(scaledViewport.height * dpr);
+    canvas.style.width = `${Math.floor(scaledViewport.width)}px`;
+    canvas.style.height = `${Math.floor(scaledViewport.height)}px`;
 
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise;
+  }, []);
+
+  // PDF 로드
   useEffect(() => {
-    if (!open || !filePath || !sid) return;
     let cancelled = false;
-
     (async () => {
+      if (!open || !filePath || !sid) return;
       setLoading(true);
       setErr(null);
+      setPdfDoc(null);
+      setPageNum(1);
+      setNumPages(0);
+
       try {
-        // Functions 호출
-        const functions = getFunctions();
+        const functions = getFunctions(undefined, "us-central1");
         const serve = httpsCallable(functions, "serveWatermarkedPdf");
         const res = await serve({ filePath, sid });
-        const base64 = res.data;
+        const base64 = res?.data;
+        if (!base64) throw new Error("빈 응답");
 
-        // base64 -> Uint8Array
-        const byteChars = atob(base64);
-        const byteNums = new Array(byteChars.length);
-        for (let i = 0; i < byteChars.length; i++) byteNums[i] = byteChars.charCodeAt(i);
-        const bytes = new Uint8Array(byteNums);
+        // base64 → Uint8Array
+        const bin = atob(base64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
 
-        // pdf.js 로드
-        const pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise;
+        const loadingTask = pdfjsLib.getDocument({ data: bytes });
+        const doc = await loadingTask.promise;
         if (cancelled) return;
-        setNumPages(pdfDoc.numPages);
-        setCurrentPage(1);
-        await renderPage(pdfDoc, 1);
 
-        // 페이지 넘김 이벤트 핸들링
-        const handleKey = async (e) => {
-          if (e.key === "ArrowRight" && currentPage < pdfDoc.numPages) {
-            const next = currentPage + 1;
-            setCurrentPage(next);
-            await renderPage(pdfDoc, next);
-          } else if (e.key === "ArrowLeft" && currentPage > 1) {
-            const prev = currentPage - 1;
-            setCurrentPage(prev);
-            await renderPage(pdfDoc, prev);
-          }
-        };
-        window.addEventListener("keydown", handleKey);
+        setPdfDoc(doc);
+        setNumPages(doc.numPages);
+        setPageNum(1);
+        await renderPage(doc, 1, true);
 
-        return () => window.removeEventListener("keydown", handleKey);
+        // 리사이즈 시 현재 페이지 다시 그리기
+        const onResize = () => renderPage(doc, pageNum, true);
+        window.addEventListener("resize", onResize);
+        return () => window.removeEventListener("resize", onResize);
       } catch (e) {
         if (!cancelled) setErr(e?.message || "PDF 로드 실패");
       } finally {
@@ -82,10 +81,26 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       }
     })();
 
-    return () => {
-      cancelled = true;
+    return () => { cancelled = true; };
+  }, [open, filePath, sid, renderPage, pageNum]);
+
+  // 좌/우 방향키로 페이지 이동
+  useEffect(() => {
+    if (!open || !pdfDoc) return;
+    const handler = async (e) => {
+      if (e.key === "ArrowRight" && pageNum < numPages) {
+        const next = pageNum + 1;
+        setPageNum(next);
+        await renderPage(pdfDoc, next, true);
+      } else if (e.key === "ArrowLeft" && pageNum > 1) {
+        const prev = pageNum - 1;
+        setPageNum(prev);
+        await renderPage(pdfDoc, prev, true);
+      }
     };
-  }, [open, filePath, sid]);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open, pdfDoc, pageNum, numPages, renderPage]);
 
   if (!open) return null;
 
@@ -100,16 +115,34 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         <div style={{ flex: 1, background: "#111", position: "relative", overflow: "auto" }}>
           {loading && <div style={center}>불러오는 중…</div>}
           {err && <div style={{ ...center, color: "#ef4444" }}>{String(err)}</div>}
-          {!loading && !err && (
-            <canvas ref={canvasRef} style={{ display: "block", margin: "0 auto" }} />
-          )}
+          {!loading && !err && <canvas ref={canvasRef} style={{ display: "block", margin: "0 auto" }} />}
         </div>
 
-        {/* 페이지 이동 UI */}
         {numPages > 1 && (
           <div style={footer}>
-            <span>Page {currentPage} / {numPages}</span>
-            <span style={{ opacity: 0.7 }}>← → 키로 넘길 수 있음</span>
+            <button
+              style={navBtn}
+              onClick={async () => {
+                if (!pdfDoc || pageNum <= 1) return;
+                const prev = pageNum - 1;
+                setPageNum(prev);
+                await renderPage(pdfDoc, prev, true);
+              }}
+            >
+              ← 이전
+            </button>
+            <span>Page {pageNum} / {numPages}</span>
+            <button
+              style={navBtn}
+              onClick={async () => {
+                if (!pdfDoc || pageNum >= numPages) return;
+                const next = pageNum + 1;
+                setPageNum(next);
+                await renderPage(pdfDoc, next, true);
+              }}
+            >
+              다음 →
+            </button>
           </div>
         )}
       </div>
@@ -141,5 +174,10 @@ const footer = {
   padding: "8px 12px",
   display: "flex",
   justifyContent: "space-between",
+  alignItems: "center",
   background: "#15181c"
+};
+const navBtn = {
+  border: "1px solid #2d333b", background: "transparent", color: "#e5e7eb",
+  borderRadius: 8, padding: "6px 10px", cursor: "pointer"
 };
