@@ -225,41 +225,95 @@ function App() {
     );
   }
 
-  return (
-    <div className="container">
-      <h1>본인 점수 확인</h1>
-      <form onSubmit={handleSubmit} className="flex-column">
-        <label>학수번호</label>
-        <input
-          type="text"
-          value={studentId}
-          onChange={(e) => setStudentId(e.target.value.replace(/\D/g, '').slice(0, 6))}
-          placeholder="예) 015001"
-        />
+  {/* ...생략... */}
+return (
+  <div className="container">
+    <h1>본인 점수 확인</h1>
 
-        <label>전화번호</label>
-        <input
-          type="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="+821012345678 또는 010-1234-5678"
-        />
-        <button type="button" onClick={handleSendCode}>인증번호 받기</button>
+    <div className="card narrow">
+      <form onSubmit={handleSubmit} className="form">
+        {/* 학수번호 */}
+        <div className="field">
+          <div className="label-row">
+            <label htmlFor="sid">학수번호</label>
+            <span className="hint">숫자 6자리</span>
+          </div>
+          <input
+            id="sid"
+            className="input big"
+            type="text"
+            inputMode="numeric"
+            pattern="\d{6}"
+            maxLength={6}
+            value={studentId}
+            onChange={(e) =>
+              setStudentId(e.target.value.replace(/\D/g, '').slice(0, 6))
+            }
+            placeholder="예) 015001"
+            autoComplete="one-time-code"
+            required
+          />
+        </div>
 
-        <label>인증번호</label>
-        <input
-          type="text"
-          value={smsCode}
-          onChange={(e) => setSmsCode(e.target.value)}
-        />
-        <button type="submit" disabled={loading}>
-          {loading ? '조회 중...' : '인증 확인 후 성적 보기'}
-        </button>
+        {/* 전화번호 */}
+        <div className="field">
+          <div className="label-row">
+            <label htmlFor="phone">전화번호</label>
+            <span className="hint">국가코드 또는 하이픈 허용</span>
+          </div>
+          <div className="input-row">
+            <input
+              id="phone"
+              className="input big"
+              type="tel"
+              inputMode="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+821012345678 또는 010-1234-5678"
+              autoComplete="tel"
+              required
+            />
+            <button
+              type="button"
+              className="btn primary"
+              onClick={handleSendCode}
+            >
+              인증번호 받기
+            </button>
+          </div>
+        </div>
+
+        {/* 인증번호 */}
+        <div className="field">
+          <div className="label-row">
+            <label htmlFor="code">인증번호</label>
+            <span className="hint">문자(SMS)로 받은 6자리</span>
+          </div>
+          <input
+            id="code"
+            className="input big"
+            type="text"
+            inputMode="numeric"
+            maxLength={6}
+            value={smsCode}
+            onChange={(e) => setSmsCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            placeholder="예) 123456"
+            required
+          />
+        </div>
+
+        <div className="actions">
+          <button type="submit" className="btn primary wide" disabled={loading}>
+            {loading ? '조회 중…' : '인증 확인 후 성적 보기'}
+          </button>
+        </div>
+
+        {error && <div className="form-alert">{error}</div>}
+        <div id="recaptcha-container" />
       </form>
-      <div id="recaptcha-container"></div>
-      {error && <div className="alert">{error}</div>}
     </div>
-  );
+  </div>
+);
 }
 
 export default App;
