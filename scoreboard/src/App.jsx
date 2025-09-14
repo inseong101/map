@@ -4,16 +4,22 @@ import StudentCard from './components/StudentCard';
 import RoundCard from './components/RoundCard';
 import './App.css';
 
-import { discoverRoundsFor, getSchoolFromSid } from './services/dataService';
+import {
+  discoverRoundsFor,
+  getSchoolFromSid,
+  fetchRoundData, // ✅ 세부데이터(그룹/과목/오답) 가져오기
+} from './services/dataService';
+
 import { doc, getDoc } from 'firebase/firestore';
-import { auth, db } from './firebase';
+import { auth, db, functions } from './firebase'; // ✅ functions도 여기서 가져오면 region 일치
 import {
   RecaptchaVerifier,
   signInWithPhoneNumber
 } from 'firebase/auth';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { httpsCallable } from 'firebase/functions';
 
 // === 모든 회차 라벨(보정용) ===
+// 필요에 맞게 늘리세요. (ex. '3차','4차' ...)
 const ALL_ROUND_LABELS = ['1차', '2차'];
 
 // === rounds 보정: 누락 회차 absent 처리 ===
@@ -63,13 +69,12 @@ function App() {
   const [phone, setPhone] = useState('');
   const [smsCode, setSmsCode] = useState('');
   const [confirmation, setConfirmation] = useState(null);
+
   const [rounds, setRounds] = useState([]);
   const [hydratedRounds, setHydratedRounds] = useState([]);
   const [loading, setLoading] = useState(false);
   const [hydrating, setHydrating] = useState(false);
   const [error, setError] = useState('');
-
-  const functions = getFunctions();
 
   // reCAPTCHA 세팅 (v9)
   useEffect(() => {
@@ -120,11 +125,8 @@ function App() {
       }
       // ① 전화번호 인증(로그인)
       await confirmation.confirm(smsCode);
-
-      // ② 서버에서 검증 + bindings/{uid}.sids 에 추가
+      // ② 서버 검증 + bindings/{uid}.sids 에 추가
       await serverVerifyAndBind(phone, studentId);
-
-      // 여기까지 끝나면 Firestore 룰 통과 가능
       return true;
     } catch (err) {
       console.error('코드/바인딩 검증 오류:', err);
@@ -169,7 +171,7 @@ function App() {
     }
   };
 
-  // 결과 화면 Hydrate
+  // 결과 화면 Hydrate (✅ 세부데이터까지 병합해서 RoundCard로 전달)
   useEffect(() => {
     async function hydrate() {
       if (currentView !== 'result') return;
@@ -181,11 +183,18 @@ function App() {
       try {
         const out = [];
         for (const { label, data } of rounds) {
+          // 1) 교시별 합산/상태
           const { total, sessionScores, roundStatus } =
             await getRoundTotalFromFirestore(label, studentId);
+
+          // 2) 세부 데이터(그룹별 점수/과목별 점수/오답 by 세션)
+          const detailed = await fetchRoundData(studentId, label);
+
+          // 3) 병합
           out.push({
             label,
             data: {
+              ...(detailed || {}),   // groupResults, subjectScores, wrongBySession 등
               ...(data || {}),
               sessionScores,
               totalScore: total,
@@ -205,13 +214,23 @@ function App() {
     hydrate();
   }, [currentView, studentId, rounds]);
 
+  /* =========================
+     화면 렌더
+     ========================= */
   if (currentView === 'result') {
     const school = getSchoolFromSid(studentId);
     const base = hydratedRounds.length ? hydratedRounds : rounds;
     const effectiveRounds = normalizeRounds(base);
 
     if (hydrating) {
-      return <div className="container">불러오는 중...</div>;
+      return (
+        <div className="container">
+          <div className="card narrow">
+            <div className="spinner" />
+            <div style={{ textAlign: 'center', fontWeight: 800 }}>불러오는 중...</div>
+          </div>
+        </div>
+      );
     }
 
     return (
@@ -225,95 +244,56 @@ function App() {
     );
   }
 
-  {/* ...생략... */}
-return (
-  <div className="container">
-    <h1>본인 점수 확인</h1>
-
-    <div className="card narrow">
-      <form onSubmit={handleSubmit} className="form">
-        {/* 학수번호 */}
-        <div className="field">
-          <div className="label-row">
-            <label htmlFor="sid">학수번호</label>
-            <span className="hint">숫자 6자리</span>
-          </div>
+  // 홈(인증/조회 폼) — 깔끔한 카드 UI
+  return (
+    <div className="container">
+      <h1>본인 점수 확인</h1>
+      <div className="card narrow">
+        <form onSubmit={handleSubmit} className="flex-column">
+          <label style={{ fontWeight: 800 }}>학수번호</label>
           <input
-            id="sid"
-            className="input big"
+            className="input"
             type="text"
-            inputMode="numeric"
-            pattern="\d{6}"
-            maxLength={6}
             value={studentId}
-            onChange={(e) =>
-              setStudentId(e.target.value.replace(/\D/g, '').slice(0, 6))
-            }
+            onChange={(e) => setStudentId(e.target.value.replace(/\D/g, '').slice(0, 6))}
             placeholder="예) 015001"
-            autoComplete="one-time-code"
-            required
           />
-        </div>
 
-        {/* 전화번호 */}
-        <div className="field">
-          <div className="label-row">
-            <label htmlFor="phone">전화번호</label>
-            <span className="hint">국가코드 또는 하이픈 허용</span>
-          </div>
-          <div className="input-row">
+          <label style={{ fontWeight: 800, marginTop: 6 }}>전화번호</label>
+          <div className="flex" style={{ gap: 8 }}>
             <input
-              id="phone"
-              className="input big"
+              className="input"
+              style={{ flex: 1 }}
               type="tel"
-              inputMode="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="+821012345678 또는 010-1234-5678"
-              autoComplete="tel"
-              required
             />
-            <button
-              type="button"
-              className="btn primary"
-              onClick={handleSendCode}
-            >
+            <button type="button" className="btn secondary" onClick={handleSendCode}>
               인증번호 받기
             </button>
           </div>
-        </div>
 
-        {/* 인증번호 */}
-        <div className="field">
-          <div className="label-row">
-            <label htmlFor="code">인증번호</label>
-            <span className="hint">문자(SMS)로 받은 6자리</span>
-          </div>
+          <label style={{ fontWeight: 800, marginTop: 6 }}>인증번호</label>
           <input
-            id="code"
-            className="input big"
+            className="input"
             type="text"
-            inputMode="numeric"
-            maxLength={6}
             value={smsCode}
-            onChange={(e) => setSmsCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            onChange={(e) => setSmsCode(e.target.value)}
             placeholder="예) 123456"
-            required
           />
-        </div>
 
-        <div className="actions">
-          <button type="submit" className="btn primary wide" disabled={loading}>
-            {loading ? '조회 중…' : '인증 확인 후 성적 보기'}
+          <button type="submit" className="btn" disabled={loading} style={{ marginTop: 6 }}>
+            {loading ? '조회 중...' : '인증 확인 후 성적 보기'}
           </button>
-        </div>
+        </form>
 
-        {error && <div className="form-alert">{error}</div>}
-        <div id="recaptcha-container" />
-      </form>
+        {error && <div className="alert">{error}</div>}
+      </div>
+
+      <div id="recaptcha-container"></div>
     </div>
-  </div>
-);
+  );
 }
 
 export default App;
