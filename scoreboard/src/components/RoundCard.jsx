@@ -27,7 +27,7 @@ function RoundCard({ label, data, sid }) {
   const statusClass = isInvalid ? 'rc-invalid' : (overallPass ? 'rc-pass' : 'rc-fail');
 
   const handleCardClick = (e) => {
-    // ⬇️ 해설 버튼만 클릭 가로채기 (data-click-role="exp" 인 경우에만)
+    // 해설 버튼만 플립 가로채기
     const expBtn = e.target.closest('button[data-click-role="exp"]');
     if (expBtn) return;
     setIsFlipped(prev => !prev);
@@ -96,6 +96,7 @@ function RoundCard({ label, data, sid }) {
   };
 
   const fixedHeightStyle = isInvalid ? { height: INVALID_CARD_HEIGHT } : undefined;
+
 
   return (
     <div
