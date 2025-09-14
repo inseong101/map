@@ -16,13 +16,18 @@ const X_MIN_DEFAULT = 0;
 const X_MAX_DEFAULT = 340;
 const CUTOFF_DEFAULT = 204;
 
+/**
+ * props:
+ * - rounds, school, sid
+ * - onReady?: (bundle) => void
+ */
 function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
   const canvasRef = useRef(null);
 
   const [selectedRoundIdx, setSelectedRoundIdx] = useState(0);
-  const [isSchoolMode, setIsSchoolMode] = useState(false);
-  const [bundle, setBundle] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isSchoolMode, setIsSchoolMode] = useState(false); // false=전국, true=학교
+  const [bundle, setBundle] = useState([]);                 // 회차별 계산 결과
+  const [isLoading, setIsLoading] = useState(true);         // 내부 로딩(스피너/스켈레톤)
 
   useEffect(() => {
     const onResize = () => drawCurrent(bundle, selectedRoundIdx, isSchoolMode);
@@ -49,7 +54,10 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
           ? Number(roundData.totalScore)
           : null;
 
+        // ✅ 평균 (Cloud Functions 사전집계 사용)
         const averages = await getAverages(school, label);
+
+        // ✅ 사전집계 분포
         const prebinned = await getPrebinnedDistribution(label);
         const d = prebinned?.data || {};
 
@@ -83,14 +91,20 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
         out.push({
           label,
           studentScore,
+
           nationalAvg: averages?.nationalAvg ?? '-',
           schoolAvg:   averages?.schoolAvg ?? '-',
+
           nationalBins: { bins: tagStudent(natBinsRaw), min: minX, max: maxX },
           schoolBins:   { bins: tagStudent(schBinsRaw), min: minX, max: maxX },
+
+          // 분포 합계 = 유효 응시자수 (무효/미응시는 0으로 표현)
           natStats: { total: totalNational, completed: totalNational, absent: 0, dropout: 0, completedScores: [] },
           schStats: { total: totalSchool,   completed: totalSchool,   absent: 0, dropout: 0, completedScores: [] },
+
           totalNational,
           totalSchool,
+
           cutoff,
           myNatPct,
           mySchPct,
@@ -163,16 +177,19 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
     ctx.strokeStyle = '#213056';
     ctx.lineWidth = 1;
 
+    // Y
     ctx.beginPath();
     ctx.moveTo(padding.left, padding.top);
     ctx.lineTo(padding.left, padding.top + chartH);
     ctx.stroke();
 
+    // X
     ctx.beginPath();
     ctx.moveTo(padding.left, padding.top + chartH);
     ctx.lineTo(padding.left + chartW, padding.top + chartH);
     ctx.stroke();
 
+    // X ticks
     ctx.fillStyle = '#9db0d6';
     ctx.font = '10px system-ui';
     ctx.textAlign = 'center';
@@ -192,6 +209,7 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
       }
     }
 
+    // Y ticks
     const maxCount = Math.max(1, ...bins.map((b) => b?.count || 0));
     const steps = 4;
     const niceStep = makeNiceStep(maxCount / steps);
@@ -382,9 +400,7 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
               {Number.isFinite(current.studentScore) ? `${current.studentScore}점` : '표시 안함'}
             </span>
             <br />
-            {pct != null && (
-              <span>(상위 {pct.toFixed(1)}%)</span>
-            )}
+            {pct != null && <span>(상위 {pct.toFixed(1)}%)</span>}
           </div>
           <div style={{ marginTop: 4 }}>
             응시대상자: {stats?.total ?? 0}
@@ -410,7 +426,51 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
       <TopControls />
       <SummaryLine />
       <LegendRow />
+
       <div
         style={{
           position: 'relative',
-          background
+          background: 'rgba(0,0,0,0.1)',
+          borderRadius: 8,
+          border: '1px solid var(--line)',
+          overflow: 'hidden',
+          minHeight: 380,
+        }}
+      >
+        <canvas
+          ref={canvasRef}
+          style={{ width: '100%', height: 380, display: 'block', opacity: isLoading ? 0 : 1, transition: 'opacity .25s ease' }}
+        />
+
+        {isLoading && (
+          <div
+            style={{
+              position: 'absolute', inset: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.08), rgba(255,255,255,0.04))',
+              backgroundSize: '200% 100%',
+              animation: 'chart-skeleton 1.2s ease-in-out infinite',
+            }}
+          >
+            <div
+              style={{
+                width: 28, height: 28, borderRadius: '50%',
+                border: '3px solid rgba(255,255,255,0.2)',
+                borderTopColor: 'var(--primary)',
+                animation: 'spin 0.9s linear infinite',
+              }}
+              aria-label="차트 로딩 중"
+            />
+          </div>
+        )}
+      </div>
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes chart-skeleton { 0% { background-position: 0% 0; } 100% { background-position: -200% 0; } }
+      `}</style>
+    </div>
+  );
+}
+
+export default TrendChart;
