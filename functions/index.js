@@ -1000,3 +1000,161 @@ exports.getExplanationIndex = functions.https.onCall(async (data, context) => {
 
   return bySession; // 프런트에서 세트로 변환해 씀
 });
+
+
+// functions/index.js 맨 아래 추가
+exports.seedPhoneBindingsAll = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
+  }
+
+  const batch = db.batch();
+  const col = db.collection("phoneBindings");
+
+  // 01 가천대 (이하영, 010-4276-2945)
+  batch.set(col.doc("015001"), { phone: "010-4276-2945", school: "가천대" });
+  batch.set(col.doc("015002"), { phone: "010-4276-2945", school: "가천대" });
+  batch.set(col.doc("015003"), { phone: "010-4276-2945", school: "가천대" });
+  batch.set(col.doc("015004"), { phone: "010-4276-2945", school: "가천대" });
+  batch.set(col.doc("015005"), { phone: "010-4276-2945", school: "가천대" });
+  batch.set(col.doc("015006"), { phone: "010-4276-2945", school: "가천대" });
+  batch.set(col.doc("015007"), { phone: "010-4276-2945", school: "가천대" });
+  batch.set(col.doc("015008"), { phone: "010-4276-2945", school: "가천대" });
+  batch.set(col.doc("015009"), { phone: "010-4276-2945", school: "가천대" });
+  batch.set(col.doc("015010"), { phone: "010-4276-2945", school: "가천대" });
+
+  // 02 경희대 (이다인, 010-5221-0159)
+  batch.set(col.doc("025001"), { phone: "010-5221-0159", school: "경희대" });
+  batch.set(col.doc("025002"), { phone: "010-5221-0159", school: "경희대" });
+  batch.set(col.doc("025003"), { phone: "010-5221-0159", school: "경희대" });
+  batch.set(col.doc("025004"), { phone: "010-5221-0159", school: "경희대" });
+  batch.set(col.doc("025005"), { phone: "010-5221-0159", school: "경희대" });
+  batch.set(col.doc("025006"), { phone: "010-5221-0159", school: "경희대" });
+  batch.set(col.doc("025007"), { phone: "010-5221-0159", school: "경희대" });
+  batch.set(col.doc("025008"), { phone: "010-5221-0159", school: "경희대" });
+  batch.set(col.doc("025009"), { phone: "010-5221-0159", school: "경희대" });
+  batch.set(col.doc("025010"), { phone: "010-5221-0159", school: "경희대" });
+
+  // 03 대구한의대 (신태민, 010-8449-4677)
+  batch.set(col.doc("035001"), { phone: "010-8449-4677", school: "대구한의대" });
+  batch.set(col.doc("035002"), { phone: "010-8449-4677", school: "대구한의대" });
+  batch.set(col.doc("035003"), { phone: "010-8449-4677", school: "대구한의대" });
+  batch.set(col.doc("035004"), { phone: "010-8449-4677", school: "대구한의대" });
+  batch.set(col.doc("035005"), { phone: "010-8449-4677", school: "대구한의대" });
+  batch.set(col.doc("035006"), { phone: "010-8449-4677", school: "대구한의대" });
+  batch.set(col.doc("035007"), { phone: "010-8449-4677", school: "대구한의대" });
+  batch.set(col.doc("035008"), { phone: "010-8449-4677", school: "대구한의대" });
+  batch.set(col.doc("035009"), { phone: "010-8449-4677", school: "대구한의대" });
+  batch.set(col.doc("035010"), { phone: "010-8449-4677", school: "대구한의대" });
+
+  // 04 대전대 (하윤덕, 010-9535-8681)
+  batch.set(col.doc("045001"), { phone: "010-9535-8681", school: "대전대" });
+  batch.set(col.doc("045002"), { phone: "010-9535-8681", school: "대전대" });
+  batch.set(col.doc("045003"), { phone: "010-9535-8681", school: "대전대" });
+  batch.set(col.doc("045004"), { phone: "010-9535-8681", school: "대전대" });
+  batch.set(col.doc("045005"), { phone: "010-9535-8681", school: "대전대" });
+  batch.set(col.doc("045006"), { phone: "010-9535-8681", school: "대전대" });
+  batch.set(col.doc("045007"), { phone: "010-9535-8681", school: "대전대" });
+  batch.set(col.doc("045008"), { phone: "010-9535-8681", school: "대전대" });
+  batch.set(col.doc("045009"), { phone: "010-9535-8681", school: "대전대" });
+  batch.set(col.doc("045010"), { phone: "010-9535-8681", school: "대전대" });
+
+  // 05 동국대 (김중일, 010-9113-2439)
+  batch.set(col.doc("055001"), { phone: "010-9113-2439", school: "동국대" });
+  batch.set(col.doc("055002"), { phone: "010-9113-2439", school: "동국대" });
+  batch.set(col.doc("055003"), { phone: "010-9113-2439", school: "동국대" });
+  batch.set(col.doc("055004"), { phone: "010-9113-2439", school: "동국대" });
+  batch.set(col.doc("055005"), { phone: "010-9113-2439", school: "동국대" });
+  batch.set(col.doc("055006"), { phone: "010-9113-2439", school: "동국대" });
+  batch.set(col.doc("055007"), { phone: "010-9113-2439", school: "동국대" });
+  batch.set(col.doc("055008"), { phone: "010-9113-2439", school: "동국대" });
+  batch.set(col.doc("055009"), { phone: "010-9113-2439", school: "동국대" });
+  batch.set(col.doc("055010"), { phone: "010-9113-2439", school: "동국대" });
+
+  // 06 동신대 (연휘웅, 010-6800-0061)
+  batch.set(col.doc("065001"), { phone: "010-6800-0061", school: "동신대" });
+  batch.set(col.doc("065002"), { phone: "010-6800-0061", school: "동신대" });
+  batch.set(col.doc("065003"), { phone: "010-6800-0061", school: "동신대" });
+  batch.set(col.doc("065004"), { phone: "010-6800-0061", school: "동신대" });
+  batch.set(col.doc("065005"), { phone: "010-6800-0061", school: "동신대" });
+  batch.set(col.doc("065006"), { phone: "010-6800-0061", school: "동신대" });
+  batch.set(col.doc("065007"), { phone: "010-6800-0061", school: "동신대" });
+  batch.set(col.doc("065008"), { phone: "010-6800-0061", school: "동신대" });
+  batch.set(col.doc("065009"), { phone: "010-6800-0061", school: "동신대" });
+  batch.set(col.doc("065010"), { phone: "010-6800-0061", school: "동신대" });
+
+  // 07 동의대 (김정곤, 010-5661-3157)
+  batch.set(col.doc("075001"), { phone: "010-5661-3157", school: "동의대" });
+  batch.set(col.doc("075002"), { phone: "010-5661-3157", school: "동의대" });
+  batch.set(col.doc("075003"), { phone: "010-5661-3157", school: "동의대" });
+  batch.set(col.doc("075004"), { phone: "010-5661-3157", school: "동의대" });
+  batch.set(col.doc("075005"), { phone: "010-5661-3157", school: "동의대" });
+  batch.set(col.doc("075006"), { phone: "010-5661-3157", school: "동의대" });
+  batch.set(col.doc("075007"), { phone: "010-5661-3157", school: "동의대" });
+  batch.set(col.doc("075008"), { phone: "010-5661-3157", school: "동의대" });
+  batch.set(col.doc("075009"), { phone: "010-5661-3157", school: "동의대" });
+  batch.set(col.doc("075010"), { phone: "010-5661-3157", school: "동의대" });
+
+  // 08 부산대 (이인성, 010-4482-0654)
+  batch.set(col.doc("085001"), { phone: "010-4482-0654", school: "부산대" });
+  batch.set(col.doc("085002"), { phone: "010-4482-0654", school: "부산대" });
+  batch.set(col.doc("085003"), { phone: "010-4482-0654", school: "부산대" });
+  batch.set(col.doc("085004"), { phone: "010-4482-0654", school: "부산대" });
+  batch.set(col.doc("085005"), { phone: "010-4482-0654", school: "부산대" });
+  batch.set(col.doc("085006"), { phone: "010-4482-0654", school: "부산대" });
+  batch.set(col.doc("085007"), { phone: "010-4482-0654", school: "부산대" });
+  batch.set(col.doc("085008"), { phone: "010-4482-0654", school: "부산대" });
+  batch.set(col.doc("085009"), { phone: "010-4482-0654", school: "부산대" });
+  batch.set(col.doc("085010"), { phone: "010-4482-0654", school: "부산대" });
+
+  // 09 상지대 (성우현, 010-4759-7903)
+  batch.set(col.doc("095001"), { phone: "010-4759-7903", school: "상지대" });
+  batch.set(col.doc("095002"), { phone: "010-4759-7903", school: "상지대" });
+  batch.set(col.doc("095003"), { phone: "010-4759-7903", school: "상지대" });
+  batch.set(col.doc("095004"), { phone: "010-4759-7903", school: "상지대" });
+  batch.set(col.doc("095005"), { phone: "010-4759-7903", school: "상지대" });
+  batch.set(col.doc("095006"), { phone: "010-4759-7903", school: "상지대" });
+  batch.set(col.doc("095007"), { phone: "010-4759-7903", school: "상지대" });
+  batch.set(col.doc("095008"), { phone: "010-4759-7903", school: "상지대" });
+  batch.set(col.doc("095009"), { phone: "010-4759-7903", school: "상지대" });
+  batch.set(col.doc("095010"), { phone: "010-4759-7903", school: "상지대" });
+
+  // 10 세명대 (천영서, 010-4608-8510)
+  batch.set(col.doc("105001"), { phone: "010-4608-8510", school: "세명대" });
+  batch.set(col.doc("105002"), { phone: "010-4608-8510", school: "세명대" });
+  batch.set(col.doc("105003"), { phone: "010-4608-8510", school: "세명대" });
+  batch.set(col.doc("105004"), { phone: "010-4608-8510", school: "세명대" });
+  batch.set(col.doc("105005"), { phone: "010-4608-8510", school: "세명대" });
+  batch.set(col.doc("105006"), { phone: "010-4608-8510", school: "세명대" });
+  batch.set(col.doc("105007"), { phone: "010-4608-8510", school: "세명대" });
+  batch.set(col.doc("105008"), { phone: "010-4608-8510", school: "세명대" });
+  batch.set(col.doc("105009"), { phone: "010-4608-8510", school: "세명대" });
+  batch.set(col.doc("105010"), { phone: "010-4608-8510", school: "세명대" });
+
+  // 11 우석대 (조창현, 010-9937-0194)
+  batch.set(col.doc("115001"), { phone: "010-9937-0194", school: "우석대" });
+  batch.set(col.doc("115002"), { phone: "010-9937-0194", school: "우석대" });
+  batch.set(col.doc("115003"), { phone: "010-9937-0194", school: "우석대" });
+  batch.set(col.doc("115004"), { phone: "010-9937-0194", school: "우석대" });
+  batch.set(col.doc("115005"), { phone: "010-9937-0194", school: "우석대" });
+  batch.set(col.doc("115006"), { phone: "010-9937-0194", school: "우석대" });
+  batch.set(col.doc("115007"), { phone: "010-9937-0194", school: "우석대" });
+  batch.set(col.doc("115008"), { phone: "010-9937-0194", school: "우석대" });
+  batch.set(col.doc("115009"), { phone: "010-9937-0194", school: "우석대" });
+  batch.set(col.doc("115010"), { phone: "010-9937-0194", school: "우석대" });
+
+  // 12 원광대 (구형선, 010-9956-3860)
+  batch.set(col.doc("125001"), { phone: "010-9956-3860", school: "원광대" });
+  batch.set(col.doc("125002"), { phone: "010-9956-3860", school: "원광대" });
+  batch.set(col.doc("125003"), { phone: "010-9956-3860", school: "원광대" });
+  batch.set(col.doc("125004"), { phone: "010-9956-3860", school: "원광대" });
+  batch.set(col.doc("125005"), { phone: "010-9956-3860", school: "원광대" });
+  batch.set(col.doc("125006"), { phone: "010-9956-3860", school: "원광대" });
+  batch.set(col.doc("125007"), { phone: "010-9956-3860", school: "원광대" });
+  batch.set(col.doc("125008"), { phone: "010-9956-3860", school: "원광대" });
+  batch.set(col.doc("125009"), { phone: "010-9956-3860", school: "원광대" });
+  batch.set(col.doc("125010"), { phone: "010-9956-3860", school: "원광대" });
+
+  await batch.commit();
+  return { ok: true, message: "총 120명 phoneBindings 설정 완료" };
+});
