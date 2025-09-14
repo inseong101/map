@@ -346,3 +346,77 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+
+/* === Form polish === */
+.card.narrow { max-width: 520px; margin: 16px auto; }
+
+.form { display: flex; flex-direction: column; gap: 16px; }
+
+.field { display: flex; flex-direction: column; gap: 8px; }
+
+.label-row {
+  display: flex; align-items: baseline; justify-content: space-between;
+}
+.label-row label {
+  font-weight: 800; letter-spacing: .2px;
+}
+.label-row .hint {
+  color: var(--muted); font-size: 12px;
+}
+
+.input.big {
+  height: 44px; padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 15px; font-weight: 700;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.input.big::placeholder { color: #7b86a5; font-weight: 600; }
+.input.big:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(126,162,255,.18);
+  background: #121a2f;
+}
+
+.input-row {
+  display: grid; grid-template-columns: 1fr auto; gap: 8px;
+}
+
+.btn.primary {
+  border: 1px solid var(--primary);
+  background: rgba(126,162,255,.12);
+  color: var(--ink);
+  font-weight: 800;
+  border-radius: 12px;
+  padding: 10px 14px;
+  transition: transform .15s ease, background .15s ease, border-color .15s ease;
+  height: 44px;
+}
+.btn.primary:hover {
+  background: rgba(126,162,255,.2);
+  transform: translateY(-1px);
+}
+.btn.primary.wide { width: 100%; }
+
+.actions { margin-top: 4px; }
+
+.form-alert{
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(239,68,68,.55);
+  background: rgba(239,68,68,.14);
+  color: #ffd8d8;
+  font-weight: 700;
+}
+
+/* 모바일 간격 다듬기 */
+@media (max-width: 560px){
+  .card.narrow { margin: 12px auto; padding: 14px; }
+  .input-row { grid-template-columns: 1fr; }
+  .btn.primary { width: 100%; }
+}
