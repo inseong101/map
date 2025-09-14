@@ -346,3 +346,43 @@ hr.sep{border:none; height:1px; background:var(--line); margin:14px 0}
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+:root{
+  --bg: #0d1117;       /* GitHub 다크 테마 비슷한 톤 */
+  --surface: #161b22;
+  --surface-2:#1e2530;
+  --line: #30363d;
+  --ink: #e6edf3;
+  --muted:#8b949e;
+  --primary:#58a6ff;   /* 더 밝은 파랑 */
+  --ok:#3fb950;
+  --warn:#d29922;
+  --bad:#f85149;
+}
+
+.card{
+  background:rgba(22,27,34,0.9);
+  backdrop-filter: blur(6px);
+  border:1px solid var(--line);
+  border-radius:20px;
+  padding:20px;
+  box-shadow:0 4px 20px rgba(0,0,0,.3);
+  transition: transform .15s ease;
+}
+.card:hover{
+  transform: translateY(-2px);
+}
+
+.btn{
+  border:1px solid var(--primary);
+  background:rgba(88,166,255,.1);
+  color:var(--primary);
+  padding:10px 14px;
+  border-radius:12px;
+  font-weight:600;
+  transition: all .2s ease;
+}
+.btn:hover{
+  background:rgba(88,166,255,.2);
+  transform: scale(1.02);
+}
