@@ -115,8 +115,7 @@ export default function WrongAnswerPanel({ roundLabel, data, sid }) {
               className={cls}
               title={label}
               aria-label={label}
-              // ⬇️ 해설 있을 때만 카드 플립 가로채도록 data-click-role 추가
-              data-click-role={hasExp ? "exp" : undefined}
+              data-click-role={hasExp ? "exp" : undefined}   // 해설 있을 때만 플립 가로채기
               onClick={
                 hasExp
                   ? (e) => { e.stopPropagation(); openExplanation(session, qNum); }
