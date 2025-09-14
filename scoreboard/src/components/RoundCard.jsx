@@ -27,11 +27,16 @@ function RoundCard({ label, data, sid }) {
   const statusClass = isInvalid ? 'rc-invalid' : (overallPass ? 'rc-pass' : 'rc-fail');
 
   const handleCardClick = (e) => {
-    // 해설 버튼만 플립 가로채기
-    const expBtn = e.target.closest('button[data-click-role="exp"]');
-    if (expBtn) return;
-    setIsFlipped(prev => !prev);
-  };
+  // 특별 해설 버튼 클릭 시: flip 차단
+  const expBtn = e.target.closest('button[data-click-role="exp"]');
+  if (expBtn) return;
+
+  // 교시 탭 버튼 클릭 시: flip 차단
+  if (e.target.closest('.tab-btn')) return;
+
+  // 그 외 클릭은 flip
+  setIsFlipped(prev => !prev);
+};
 
   const getReasonText = () => {
     if (!meets60 && anyGroupFail) return '과락 및 평락으로 인한 불합격';
