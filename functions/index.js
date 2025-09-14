@@ -733,12 +733,14 @@ const CUTOFF_SCORE = 204;
  * }
  */
 async function buildPrebinnedDistributions(roundLabel) {
-  // 1) 4개 교시 읽어서 sid별 completed count와 총점 누적
   const sessions = ['1교시','2교시','3교시','4교시'];
-  const perSid = {}; // sid -> { completed:0..4, sum: number }
-  const schoolTotals = {}; // 학교별 { total(유효 sid 수), completed(4교시 완료 수) }
-  const nationalTotals = { total: 0, completed: 0 };
+  // sid별 상태: { completed:0..4, sum: number, code }
+  const perSid = {};
+  // 최종 집계
+  const nationalTotals = { total: 0, completed: 0, absent: 0, dropout: 0 };
+  const schoolTotals = {}; // code -> { total, completed, absent, dropout }
 
+  // (1) 4개 교시 스캔
   for (const session of sessions) {
     const snap = await db.collection('scores_raw').doc(roundLabel).collection(session).get();
     snap.forEach(doc => {
@@ -755,47 +757,53 @@ async function buildPrebinnedDistributions(roundLabel) {
     });
   }
 
-  // 2) 4교시 완료자만 집계 대상으로 사용
+  // (2) 상태 분류 + 점수 모으기
   const nationalScores = [];
   const bySchoolScores = {};  // code -> number[]
-  Object.values(perSid).forEach(v => {
-    nationalTotals.total += 1;
+  for (const v of Object.values(perSid)) {
     const code = v.code;
-    if (!schoolTotals[code]) schoolTotals[code] = { total: 0, completed: 0 };
+    if (!schoolTotals[code]) {
+      schoolTotals[code] = { total: 0, completed: 0, absent: 0, dropout: 0 };
+    }
+
+    nationalTotals.total += 1;
     schoolTotals[code].total += 1;
 
     if (v.completed === 4) {
       nationalTotals.completed += 1;
       schoolTotals[code].completed += 1;
-
       nationalScores.push(v.sum);
       if (!bySchoolScores[code]) bySchoolScores[code] = [];
       bySchoolScores[code].push(v.sum);
+    } else if (v.completed === 0) {
+      nationalTotals.absent += 1;
+      schoolTotals[code].absent += 1;
+    } else {
+      nationalTotals.dropout += 1;
+      schoolTotals[code].dropout += 1;
     }
-  });
+  }
 
-  // 3) 동적 범위(분포 있는 점수 기준) 계산
+  // (3) 동적 범위 계산
   let minScore = nationalScores.length ? Math.min(...nationalScores) : 0;
   let maxScore = nationalScores.length ? Math.max(...nationalScores) : 0;
   if (minScore === maxScore) {
     minScore = Math.max(0, minScore - BIN_SIZE * 3);
     maxScore = Math.min(340, maxScore + BIN_SIZE * 3);
   }
-  // 커트라인을 범위에 포함
   if (CUTOFF_SCORE < minScore) minScore = Math.floor(CUTOFF_SCORE / BIN_SIZE) * BIN_SIZE - BIN_SIZE * 2;
   if (CUTOFF_SCORE > maxScore) maxScore = Math.ceil(CUTOFF_SCORE / BIN_SIZE) * BIN_SIZE + BIN_SIZE * 2;
   minScore = Math.max(0, Math.floor(minScore / BIN_SIZE) * BIN_SIZE);
   maxScore = Math.min(340, Math.ceil(maxScore / BIN_SIZE) * BIN_SIZE);
 
-  // 4) 5점 bin 생성 도우미
+  // (4) bin 생성
   const makeBins = (scores) => {
     if (!scores || !scores.length) {
-      // 빈 분포라도 min/max는 유지
       const out = [];
       for (let x = minScore; x < maxScore; x += BIN_SIZE) {
         out.push({ min: x, max: x + BIN_SIZE, count: 0 });
       }
-      out.push({ min: maxScore, max: maxScore, count: 0 }); // 끝점 포함
+      out.push({ min: maxScore, max: maxScore, count: 0 });
       return out;
     }
     const counts = [];
@@ -803,7 +811,6 @@ async function buildPrebinnedDistributions(roundLabel) {
       const c = scores.filter(s => s >= x && s < x + BIN_SIZE).length;
       counts.push({ min: x, max: x + BIN_SIZE, count: c });
     }
-    // 끝 값(==maxScore)
     const lastCount = scores.filter(s => s === maxScore).length;
     counts.push({ min: maxScore, max: maxScore, count: lastCount });
     return counts;
@@ -815,7 +822,7 @@ async function buildPrebinnedDistributions(roundLabel) {
     bySchool[code] = makeBins(arr);
   });
 
-  // 5) 평균(반올림) 계산
+  // (5) 평균
   const avg = (arr) => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0) / arr.length) : null;
   const averages = {
     nationalAvg: avg(nationalScores),
@@ -825,7 +832,7 @@ async function buildPrebinnedDistributions(roundLabel) {
     averages.bySchool[code] = avg(arr);
   });
 
-  // 6) 저장
+  // (6) 저장
   await db.collection('distributions').doc(roundLabel).set({
     roundLabel,
     range: { min: minScore, max: maxScore },
@@ -834,7 +841,12 @@ async function buildPrebinnedDistributions(roundLabel) {
     bySchool,
     averages,
     stats: {
-      national: { total: nationalTotals.total, completed: nationalTotals.completed },
+      national: {
+        total: nationalTotals.total,
+        completed: nationalTotals.completed,
+        absent: nationalTotals.absent,
+        dropout: nationalTotals.dropout
+      },
       bySchool: schoolTotals
     },
     updatedAt: admin.firestore.FieldValue.serverTimestamp()
