@@ -1,11 +1,11 @@
 // src/components/PdfModalPdfjs.jsx
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import * as pdfjsLib from "pdfjs-dist";
-import "pdfjs-dist/web/pdf_viewer.css";
+// ⚠️ 뷰어 UI/이미지 의존성 제거: build/pdf 만 사용 (pdf_viewer.css 불러오지 않음)
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/build/pdf";
 
-// CRA에서 안전하게 동작하는 워커 경로(CDN 고정 버전 권장)
-pdfjsLib.GlobalWorkerOptions.workerSrc =
+// 워커 버전 = 라이브러리 버전 일치 (API/Worker mismatch 방지)
+GlobalWorkerOptions.workerSrc =
   "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
 
 export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
@@ -16,29 +16,36 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   const [pageNum, setPageNum] = useState(1);
   const [numPages, setNumPages] = useState(0);
 
+  // 페이지 렌더 (캔버스)
   const renderPage = useCallback(async (doc, num, fitWidth = true) => {
     if (!doc || !canvasRef.current) return;
+
     const page = await doc.getPage(num);
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
 
-    const containerWidth = canvas.parentElement?.clientWidth || 800;
-    const viewport = page.getViewport({ scale: 1 });
-    const scale = fitWidth ? Math.min(1.75, containerWidth / viewport.width) : 1.2;
-    const scaledViewport = page.getViewport({ scale });
+    // 컨테이너 폭 기준 스케일
+    const container = canvas.parentElement;
+    const containerWidth = container?.clientWidth || 800;
+    const baseViewport = page.getViewport({ scale: 1 });
+    const scale = fitWidth ? Math.min(1.75, containerWidth / baseViewport.width) : 1.2;
+    const viewport = page.getViewport({ scale });
 
+    // 레티나 스케일
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.floor(scaledViewport.width * dpr);
-    canvas.height = Math.floor(scaledViewport.height * dpr);
-    canvas.style.width = `${Math.floor(scaledViewport.width)}px`;
-    canvas.style.height = `${Math.floor(scaledViewport.height)}px`;
+    canvas.width = Math.floor(viewport.width * dpr);
+    canvas.height = Math.floor(viewport.height * dpr);
+    canvas.style.width = `${Math.floor(viewport.width)}px`;
+    canvas.style.height = `${Math.floor(viewport.height)}px`;
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise;
+    await page.render({ canvasContext: ctx, viewport }).promise;
   }, []);
 
+  // 문서 로드
   useEffect(() => {
     let cancelled = false;
+
     (async () => {
       if (!open || !filePath || !sid) return;
       setLoading(true);
@@ -48,19 +55,21 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       setNumPages(0);
 
       try {
+        // us-central1 고정 (함수 지역 일치)
         const functions = getFunctions(undefined, "us-central1");
         const serve = httpsCallable(functions, "serveWatermarkedPdf");
         const res = await serve({ filePath, sid });
         const base64 = res?.data;
         if (!base64) throw new Error("빈 응답");
 
-        // base64 → Uint8Array
+        // base64 -> Uint8Array
         const bin = atob(base64);
         const bytes = new Uint8Array(bin.length);
         for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
 
-        const loadingTask = pdfjsLib.getDocument({ data: bytes });
-        const doc = await loadingTask.promise;
+        // pdf.js 로드
+        const task = getDocument({ data: bytes });
+        const doc = await task.promise;
         if (cancelled) return;
 
         setPdfDoc(doc);
@@ -68,7 +77,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         setPageNum(1);
         await renderPage(doc, 1, true);
 
-        const onResize = () => renderPage(doc, 1, true);
+        const onResize = () => renderPage(doc, pageNum, true);
         window.addEventListener("resize", onResize);
         return () => window.removeEventListener("resize", onResize);
       } catch (e) {
@@ -77,31 +86,49 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
-  }, [open, filePath, sid, renderPage]);
 
+    return () => { cancelled = true; };
+  }, [open, filePath, sid, renderPage, pageNum]);
+
+  // 키보드 내비게이션 & 인쇄 단축키 최소화
   useEffect(() => {
-    if (!open || !pdfDoc) return;
+    if (!open) return;
+
     const handler = async (e) => {
-      if (e.key === "ArrowRight" && pageNum < numPages) {
+      // ← / →
+      if (pdfDoc && e.key === "ArrowRight" && pageNum < numPages) {
         const next = pageNum + 1;
         setPageNum(next);
         await renderPage(pdfDoc, next, true);
-      } else if (e.key === "ArrowLeft" && pageNum > 1) {
+      } else if (pdfDoc && e.key === "ArrowLeft" && pageNum > 1) {
         const prev = pageNum - 1;
         setPageNum(prev);
         await renderPage(pdfDoc, prev, true);
       }
+      // Ctrl/Cmd + P 차단 시도 (완전 차단은 불가)
+      if ((e.ctrlKey || e.metaKey) && (e.key === "p" || e.key === "P")) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+
+    window.addEventListener("keydown", handler, { capture: true });
+    return () => window.removeEventListener("keydown", handler, { capture: true });
   }, [open, pdfDoc, pageNum, numPages, renderPage]);
 
   if (!open) return null;
 
   return (
     <div style={backdrop} onClick={onClose}>
-      <div style={modal} onClick={(e) => e.stopPropagation()}>
+      {/* 인쇄 시 숨김 */}
+      <style>{`@media print { .pdf-modal-root { display:none !important; } }`}</style>
+
+      <div
+        className="pdf-modal-root"
+        style={modal}
+        onClick={(e) => e.stopPropagation()}
+        onContextMenu={(e) => e.preventDefault()} // 우클릭 저장 최소화
+      >
         <div style={modalHeader}>
           <div style={{ fontWeight: 700 }}>{title || "특별해설"}</div>
           <button onClick={onClose} style={closeBtn} aria-label="닫기">✕</button>
@@ -110,7 +137,12 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         <div style={{ flex: 1, background: "#111", position: "relative", overflow: "auto" }}>
           {loading && <div style={center}>불러오는 중…</div>}
           {err && <div style={{ ...center, color: "#ef4444" }}>{String(err)}</div>}
-          {!loading && !err && <canvas ref={canvasRef} style={{ display: "block", margin: "0 auto" }} />}
+          {!loading && !err && (
+            <canvas
+              ref={canvasRef}
+              style={{ display: "block", margin: "0 auto", userSelect: "none" }}
+            />
+          )}
         </div>
 
         {numPages > 1 && (
