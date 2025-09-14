@@ -1,6 +1,8 @@
 // src/services/dataService.js
 import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
-import { db } from '../firebase'; // ← 경로 수정 중요!
+import { db } from '../firebase'; // 경로 확인!
+
+/* ======================== 도메인 상수 ======================== */
 
 // 과목별 최대 점수
 export const SUBJECT_MAX = {
@@ -64,12 +66,13 @@ export function getSchoolFromSid(sid) {
   return SCHOOL_MAP[p2] || "미상";
 }
 
-// === 내부에서 사용할 교시 상수 ===
+// 내부 상수
 const SESSIONS = ['1교시', '2교시', '3교시', '4교시'];
 
+/* ===================== Firestore 탐색/조회 ===================== */
+
 /**
- * Firestore에서 현재 존재하는 회차 라벨을 나열합니다.
- * 기준: distributions 컬렉션의 문서 ID (예: "1차", "2차", ...)
+ * Firestore distributions 컬렉션에서 실제 존재하는 회차 라벨 나열
  */
 export async function listAvailableRounds() {
   const colRef = collection(db, 'distributions');
@@ -89,14 +92,13 @@ export async function listAvailableRounds() {
 }
 
 /**
- * (보조) scores / scores_raw를 읽어 과목점수를 계산
- * - 기존 원문 로직 유지 (필요 시 다른 곳에서 재활용 가능)
+ * scores / scores_raw를 읽어 과목점수를 계산 (캐시 우선, 없으면 오답에서 계산)
  */
 export async function fetchRoundData(sid, roundLabel) {
   try {
     const sidStr = String(sid);
 
-    // 1) scores/{sid}에 round별 캐시가 있다면 사용
+    // 1) scores/{sid} 캐시 존재 시 사용
     const scoresRef = doc(db, "scores", sidStr);
     const scoresSnap = await getDoc(scoresRef);
     if (scoresSnap.exists()) {
@@ -106,7 +108,7 @@ export async function fetchRoundData(sid, roundLabel) {
       }
     }
 
-    // 2) scores_raw에서 오답을 모아 과목점수로 변환
+    // 2) scores_raw에서 오답 모아서 계산
     const wrongBySession = {};
     for (const session of SESSIONS) {
       const docRef = doc(db, "scores_raw", roundLabel, session, sidStr);
@@ -133,66 +135,10 @@ export async function fetchRoundData(sid, roundLabel) {
   }
 }
 
-// 오답을 과목별 점수로 변환
-function convertWrongToScores(wrongBySession) {
-  const subjectScores = {};
-  // 모든 과목 만점으로 초기화
-  ALL_SUBJECTS.forEach(subject => {
-    subjectScores[subject] = SUBJECT_MAX[subject];
-  });
-
-  // 교시별 오답 → 과목 차감
-  Object.entries(wrongBySession).forEach(([session, wrongList]) => {
-    const ranges = SESSION_SUBJECT_RANGES[session] || [];
-    wrongList.forEach(questionNum => {
-      const range = ranges.find(r => questionNum >= r.from && questionNum <= r.to);
-      if (range && range.s in subjectScores) {
-        subjectScores[range.s] = Math.max(0, subjectScores[range.s] - 1);
-      }
-    });
-  });
-
-  const groupResults = GROUPS.map(group => {
-    const groupScore = group.subjects.reduce((sum, s) => sum + (subjectScores[s] || 0), 0);
-    const groupMax = group.subjects.reduce((sum, s) => sum + (SUBJECT_MAX[s] || 0), 0);
-    const cutoff = Math.ceil(groupMax * 0.4);
-    const pass = groupScore >= cutoff;
-
-    return {
-      name: group.id,
-      label: group.label,
-      subjects: group.subjects,
-      layoutChunks: group.layoutChunks,
-      score: groupScore,
-      max: groupMax,
-      rate: Math.round((groupScore / groupMax) * 100),
-      pass,
-      cutoff
-    };
-  });
-
-  const totalScore = ALL_SUBJECTS.reduce((sum, s) => sum + (subjectScores[s] || 0), 0);
-  const overallCutoff = Math.ceil(TOTAL_MAX * 0.6);
-  const meets60 = totalScore >= overallCutoff;
-  const anyGroupFail = groupResults.some(g => !g.pass);
-  const overallPass = meets60 && !anyGroupFail;
-
-  return {
-    totalScore,
-    totalMax: TOTAL_MAX,
-    overallPass,
-    meets60,
-    anyGroupFail,
-    groupResults,
-    subjectScores,
-    wrongBySession
-  };
-}
-
 /**
- * ✅ 회차 자동 탐색 (제안 로직 반영)
- * - distributions에서 실제 존재하는 회차만 가져온 뒤
- * - 각 회차의 4개 교시 중 **하나라도** scores_raw/{round}/{session}/{sid} 문서가 있으면 채택
+ * ✅ 회차 자동 탐색
+ * - distributions에서 존재하는 회차만 순회
+ * - 각 회차의 4개 교시 중 하나라도 scores_raw/{round}/{session}/{sid}가 있으면 채택
  * - 반환: [{ label: "1차", data: { status: 'unknown' } }, ...]
  */
 export async function discoverRoundsFor(sid) {
@@ -213,7 +159,7 @@ export async function discoverRoundsFor(sid) {
       }
     }
     if (existsInAnySession) {
-      // App.jsx가 뒤에서 교시별 total을 다시 수집하므로, 여기서는 최소 정보만 반환
+      // App.jsx에서 하이드레이션으로 세부값 채울 예정
       found.push({ label: round, data: { status: 'unknown' } });
     }
   }
@@ -221,7 +167,64 @@ export async function discoverRoundsFor(sid) {
   return found;
 }
 
-/* ================= 추가 유틸 ================= */
+/* ======================= 변환/보조 유틸 ======================= */
+
+/** 오답을 과목별/그룹별/총점으로 변환 */
+export function convertWrongToScores(wrongBySession) {
+  const subjectScores = {};
+  // 모든 과목 만점으로 초기화
+  ALL_SUBJECTS.forEach(subject => {
+    subjectScores[subject] = SUBJECT_MAX[subject];
+  });
+
+  // 교시별 오답 → 과목 차감
+  Object.entries(wrongBySession).forEach(([session, wrongList]) => {
+    const ranges = SESSION_SUBJECT_RANGES[session] || [];
+    wrongList.forEach(questionNum => {
+      const range = ranges.find(r => questionNum >= r.from && questionNum <= r.to);
+      if (range && range.s in subjectScores) {
+        subjectScores[range.s] = Math.max(0, subjectScores[range.s] - 1);
+      }
+    });
+  });
+
+  // 그룹별 합산
+  const groupResults = GROUPS.map(group => {
+    const groupScore = group.subjects.reduce((sum, s) => sum + (subjectScores[s] || 0), 0);
+    const groupMax   = group.subjects.reduce((sum, s) => sum + (SUBJECT_MAX[s] || 0), 0);
+    const cutoff     = Math.ceil(groupMax * 0.4);
+    const pass       = groupScore >= cutoff;
+
+    return {
+      name: group.id,
+      label: group.label,
+      subjects: group.subjects,
+      score: groupScore,
+      max: groupMax,
+      rate: Math.round((groupScore / groupMax) * 100),
+      pass,
+      cutoff
+    };
+  });
+
+  // 총점/합불
+  const totalScore = ALL_SUBJECTS.reduce((sum, s) => sum + (subjectScores[s] || 0), 0);
+  const overallCutoff = Math.ceil(TOTAL_MAX * 0.6);
+  const meets60 = totalScore >= overallCutoff;
+  const anyGroupFail = groupResults.some(g => !g.pass);
+  const overallPass = meets60 && !anyGroupFail;
+
+  return {
+    totalScore,
+    totalMax: TOTAL_MAX,
+    overallPass,
+    meets60,
+    anyGroupFail,
+    groupResults,
+    subjectScores,
+    wrongBySession
+  };
+}
 
 /** 문항 번호와 교시로 과목 찾기 */
 export function getSubjectByQuestion(questionNum, session) {
