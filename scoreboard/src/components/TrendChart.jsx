@@ -2,32 +2,27 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   getAverages,
-  getPrebinnedDistribution,   // ✅ 사전집계 분포만 사용
-  calcPercentileFromBins,      // ✅ bin 기반 백분위
+  getPrebinnedDistribution,
+  calcPercentileFromBins,
 } from '../utils/helpers';
 
 const nameToCode = (name) => ({
-  '가천대': '01', '경희대': '02', '대구한': '03', '대전대': '04',
-  '동국대': '05', '동신대': '06', '동의대': '07', '부산대': '08',
-  '상지대': '09', '세명대': '10', '우석대': '11', '원광대': '12',
+  '가천대': '01','경희대': '02','대구한': '03','대전대': '04',
+  '동국대': '05','동신대': '06','동의대': '07','부산대': '08',
+  '상지대': '09','세명대': '10','우석대': '11','원광대': '12',
 }[name] || '01');
 
 const X_MIN_DEFAULT = 0;
 const X_MAX_DEFAULT = 340;
 const CUTOFF_DEFAULT = 204;
 
-/**
- * props:
- * - rounds, school, sid
- * - onReady?: (bundle) => void
- */
 function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
   const canvasRef = useRef(null);
 
   const [selectedRoundIdx, setSelectedRoundIdx] = useState(0);
-  const [isSchoolMode, setIsSchoolMode] = useState(false); // false=전국, true=학교
-  const [bundle, setBundle] = useState([]);                 // 회차별 계산 결과
-  const [isLoading, setIsLoading] = useState(true);         // 내부 로딩(스피너/스켈레톤)
+  const [isSchoolMode, setIsSchoolMode] = useState(false);
+  const [bundle, setBundle] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const onResize = () => drawCurrent(bundle, selectedRoundIdx, isSchoolMode);
@@ -37,11 +32,7 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
 
   useEffect(() => {
     (async () => {
-      if (!rounds.length) {
-        setBundle([]);
-        setIsLoading(false);
-        return;
-      }
+      if (!rounds.length) { setBundle([]); setIsLoading(false); return; }
 
       setIsLoading(true);
       const schCode = nameToCode(school);
@@ -49,15 +40,10 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
 
       for (const round of rounds) {
         const { label, data: roundData } = round;
-
         const studentScore = Number.isFinite(roundData?.totalScore)
-          ? Number(roundData.totalScore)
-          : null;
+          ? Number(roundData.totalScore) : null;
 
-        // ✅ 평균 (Cloud Functions 사전집계 사용)
         const averages = await getAverages(school, label);
-
-        // ✅ 사전집계 분포
         const prebinned = await getPrebinnedDistribution(label);
         const d = prebinned?.data || {};
 
@@ -65,12 +51,15 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
         const maxX  = Number.isFinite(d?.range?.max) ? d.range.max : X_MAX_DEFAULT;
         const cutoff = Number.isFinite(d?.cutoff) ? d.cutoff : CUTOFF_DEFAULT;
 
+        // 🔧 bins
         const natBinsRaw = Array.isArray(d?.national) ? d.national : [];
         const schBinsRaw = Array.isArray(d?.bySchool?.[schCode]) ? d.bySchool[schCode] : [];
 
-        const totalNational = natBinsRaw.reduce((s,b)=>s+(b?.count||0),0);
-        const totalSchool   = schBinsRaw.reduce((s,b)=>s+(b?.count||0),0);
+        // 🔧 stats(정답) — functions에서 저장한 값 그대로 사용
+        const natStatsRaw = d?.stats?.national || { total: 0, completed: 0, absent: 0, dropout: 0 };
+        const schStatsRaw = d?.stats?.bySchool?.[schCode] || { total: 0, completed: 0, absent: 0, dropout: 0 };
 
+        // 학생 위치 태깅
         const tagStudent = (bins) => {
           if (!Number.isFinite(studentScore)) return bins || [];
           return (bins || []).map(b => {
@@ -82,11 +71,9 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
         };
 
         const myNatPct = Number.isFinite(studentScore)
-          ? calcPercentileFromBins(natBinsRaw, studentScore)
-          : null;
+          ? calcPercentileFromBins(natBinsRaw, studentScore) : null;
         const mySchPct = Number.isFinite(studentScore)
-          ? calcPercentileFromBins(schBinsRaw, studentScore)
-          : null;
+          ? calcPercentileFromBins(schBinsRaw, studentScore) : null;
 
         out.push({
           label,
@@ -98,12 +85,13 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
           nationalBins: { bins: tagStudent(natBinsRaw), min: minX, max: maxX },
           schoolBins:   { bins: tagStudent(schBinsRaw), min: minX, max: maxX },
 
-          // 분포 합계 = 유효 응시자수 (무효/미응시는 0으로 표현)
-          natStats: { total: totalNational, completed: totalNational, absent: 0, dropout: 0, completedScores: [] },
-          schStats: { total: totalSchool,   completed: totalSchool,   absent: 0, dropout: 0, completedScores: [] },
+          // ✅ functions가 저장한 실제 통계 그대로 표시
+          natStats: natStatsRaw,   // { total, completed, absent, dropout }
+          schStats: schStatsRaw,   // { total, completed, absent, dropout }
 
-          totalNational,
-          totalSchool,
+          // 편의용(타이틀 등에서 사용)
+          totalNational: natStatsRaw.total,
+          totalSchool:   schStatsRaw.total,
 
           cutoff,
           myNatPct,
@@ -112,7 +100,6 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
       }
 
       setBundle(out);
-
       requestAnimationFrame(() => {
         drawCurrent(out, 0, false);
         setIsLoading(false);
@@ -150,8 +137,8 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
     const chartH = H - padding.top - padding.bottom;
 
     const title = schoolMode
-      ? `학교 분포 (무효응시자 제외 총 ${cur.totalSchool}명)`
-      : `전국 분포 (무효응시자 제외 총 ${cur.totalNational}명)`;
+      ? `학교 분포 (무효응시자 제외 총 ${cur.schStats.completed}명 / 전체 ${cur.schStats.total}명)`
+      : `전국 분포 (무효응시자 제외 총 ${cur.natStats.completed}명 / 전체 ${cur.natStats.total}명)`;
     const avg = schoolMode ? cur.schoolAvg : cur.nationalAvg;
 
     ctx.fillStyle = '#e8eeff';
@@ -177,19 +164,16 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
     ctx.strokeStyle = '#213056';
     ctx.lineWidth = 1;
 
-    // Y
     ctx.beginPath();
     ctx.moveTo(padding.left, padding.top);
     ctx.lineTo(padding.left, padding.top + chartH);
     ctx.stroke();
 
-    // X
     ctx.beginPath();
     ctx.moveTo(padding.left, padding.top + chartH);
     ctx.lineTo(padding.left + chartW, padding.top + chartH);
     ctx.stroke();
 
-    // X ticks
     ctx.fillStyle = '#9db0d6';
     ctx.font = '10px system-ui';
     ctx.textAlign = 'center';
@@ -209,7 +193,6 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
       }
     }
 
-    // Y ticks
     const maxCount = Math.max(1, ...bins.map((b) => b?.count || 0));
     const steps = 4;
     const niceStep = makeNiceStep(maxCount / steps);
@@ -231,7 +214,6 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
         ctx.stroke();
       }
     }
-
     return yMax;
   }
 
@@ -345,49 +327,21 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
     </div>
   );
 
-  const LegendRow = () => (
-    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, alignItems: 'center', margin: '0 0 8px 0', fontSize: 12 }}>
-      <LegendItem color="#7ea2ff" label="전국 분포" />
-      <LegendItem color="#22c55e" label="학교 분포" />
-      <LegendItem color="#ef4444" label="본인 위치" />
-      <LegendLine color="#f59e0b" label={`합격선(${bundle?.[selectedRoundIdx]?.cutoff ?? CUTOFF_DEFAULT})`} />
-    </div>
-  );
-
-  const LegendItem = ({ color, label }) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 2, background: color }} />
-      <span style={{ color: 'var(--muted)' }}>{label}</span>
-    </div>
-  );
-
-  const LegendLine = ({ color, label }) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <span style={{ display: 'inline-block', width: 18, height: 0, borderTop: `2px dashed ${color}` }} />
-      <span style={{ color: 'var(--muted)' }}>{label}</span>
-    </div>
-  );
-
   const current = bundle[selectedRoundIdx];
 
   const SummaryLine = () => {
     if (!current) return null;
     const isNat = !isSchoolMode;
     const pct = isNat ? current.myNatPct : current.mySchPct;
-    const stats = isNat ? current.natStats : current.schStats;
+    const stats = isNat ? current.natStats : current.schStats; // ✅ 여기서 stats 사용
 
     return (
       <div
         style={{
-          marginBottom: 8,
-          padding: 10,
-          background: 'rgba(21,29,54,0.5)',
-          borderRadius: 8,
-          fontSize: 14,
-          color: 'var(--muted)',
-          display: 'flex',
-          justifyContent: 'center',
-          gap: 60,
+          marginBottom: 8, padding: 10,
+          background: 'rgba(21,29,54,0.5)', borderRadius: 8,
+          fontSize: 14, color: 'var(--muted)',
+          display: 'flex', justifyContent: 'center', gap: 60,
         }}
       >
         <div style={{ textAlign: 'center' }}>
@@ -421,6 +375,29 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
     );
   };
 
+  const LegendRow = () => (
+    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, alignItems: 'center', margin: '0 0 8px 0', fontSize: 12 }}>
+      <LegendItem color="#7ea2ff" label="전국 분포" />
+      <LegendItem color="#22c55e" label="학교 분포" />
+      <LegendItem color="#ef4444" label="본인 위치" />
+      <LegendLine color="#f59e0b" label={`합격선(${bundle?.[selectedRoundIdx]?.cutoff ?? CUTOFF_DEFAULT})`} />
+    </div>
+  );
+
+  const LegendItem = ({ color, label }) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 2, background: color }} />
+      <span style={{ color: 'var(--muted)' }}>{label}</span>
+    </div>
+  );
+
+  const LegendLine = ({ color, label }) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ display: 'inline-block', width: 18, height: 0, borderTop: `2px dashed ${color}` }} />
+      <span style={{ color: 'var(--muted)' }}>{label}</span>
+    </div>
+  );
+
   return (
     <div>
       <TopControls />
@@ -441,7 +418,6 @@ function TrendChart({ rounds = [], school = '', sid = '', onReady }) {
           ref={canvasRef}
           style={{ width: '100%', height: 380, display: 'block', opacity: isLoading ? 0 : 1, transition: 'opacity .25s ease' }}
         />
-
         {isLoading && (
           <div
             style={{
