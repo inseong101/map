@@ -1,46 +1,105 @@
 // src/components/PdfModalPdfjs.jsx
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, {
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+  useLayoutEffect,
+} from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
-// ⚠️ 뷰어 UI/이미지 의존성 제거: build/pdf 만 사용 (pdf_viewer.css 불러오지 않음)
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/build/pdf";
 
-// 워커 버전 = 라이브러리 버전 일치 (API/Worker mismatch 방지)
+// 워커 버전 = 라이브러리 버전 일치
 GlobalWorkerOptions.workerSrc =
   "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
 
+/**
+ * 변경점 요약
+ * - 모달 크기 축소: 680px × 70vh (카드 안에서 덜 압도적)
+ * - X 버튼 항상 보임: 헤더 고정, z-index 강화
+ * - "터치해야 그려짐" 해결: 레이아웃 확정 후(ResizeObserver + 2×rAF) 첫 렌더
+ * - 속도 개선: 먼저 저해상도(퀵) 렌더 → 즉시 고해상도 업그레이드
+ * - 리사이즈 부드럽게: ResizeObserver로 폭 변화 시 디바운스 재렌더
+ * - DPR 상한: 과도한 캔버스 픽셀 방지(최대 1.75)
+ */
 export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
+  const holderRef = useRef(null);     // 캔버스 컨테이너
   const canvasRef = useRef(null);
+  const roRef = useRef(null);         // ResizeObserver
+  const reflowTimer = useRef(null);   // 리사이즈 디바운스
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
   const [pdfDoc, setPdfDoc] = useState(null);
   const [pageNum, setPageNum] = useState(1);
   const [numPages, setNumPages] = useState(0);
+  const lastKeyRef = useRef(null);    // 동일 파일 재오픈 캐시 키
 
-  // 페이지 렌더 (캔버스)
-  const renderPage = useCallback(async (doc, num, fitWidth = true) => {
-    if (!doc || !canvasRef.current) return;
+  // 현재 컨테이너 폭 읽기
+  const getContainerWidth = () => {
+    const el = holderRef.current;
+    if (!el) return 800;
+    const rect = el.getBoundingClientRect();
+    return Math.max(320, Math.floor(rect.width));
+  };
 
-    const page = await doc.getPage(num);
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
+  // 빠른 렌더 후 고해상도 업그레이드
+  const renderPage = useCallback(
+    async (doc, num) => {
+      if (!doc || !canvasRef.current || !holderRef.current) return;
+      const page = await doc.getPage(num);
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d", { alpha: false });
 
-    // 컨테이너 폭 기준 스케일
-    const container = canvas.parentElement;
-    const containerWidth = container?.clientWidth || 800;
-    const baseViewport = page.getViewport({ scale: 1 });
-    const scale = fitWidth ? Math.min(1.75, containerWidth / baseViewport.width) : 1.2;
-    const viewport = page.getViewport({ scale });
+      const cw = getContainerWidth();
+      const baseViewport = page.getViewport({ scale: 1 });
+      // fit-width 스케일
+      const targetScale = Math.min(1.75, cw / baseViewport.width);
 
-    // 레티나 스케일
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.floor(viewport.width * dpr);
-    canvas.height = Math.floor(viewport.height * dpr);
-    canvas.style.width = `${Math.floor(viewport.width)}px`;
-    canvas.style.height = `${Math.floor(viewport.height)}px`;
+      // 1) 저해상도 퀵 렌더 (빠르게 화면에 보여주기)
+      {
+        const quickScale = Math.max(0.9, targetScale * 0.6);
+        const quickVp = page.getViewport({ scale: quickScale });
+        const dpr = Math.min(1.5, window.devicePixelRatio || 1); // 과한 픽셀 억제
+        canvas.width = Math.floor(quickVp.width * dpr);
+        canvas.height = Math.floor(quickVp.height * dpr);
+        canvas.style.width = `${Math.floor(quickVp.width)}px`;
+        canvas.style.height = `${Math.floor(quickVp.height)}px`;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        await page.render({ canvasContext: ctx, viewport: quickVp }).promise;
+      }
 
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    await page.render({ canvasContext: ctx, viewport }).promise;
-  }, []);
+      // 2) 바로 고해상도 업그레이드 (유휴 타이밍)
+      const upgrade = async () => {
+        const vp = page.getViewport({ scale: targetScale });
+        const dpr = Math.min(1.75, window.devicePixelRatio || 1);
+        canvas.width = Math.floor(vp.width * dpr);
+        canvas.height = Math.floor(vp.height * dpr);
+        canvas.style.width = `${Math.floor(vp.width)}px`;
+        canvas.style.height = `${Math.floor(vp.height)}px`;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        await page.render({ canvasContext: ctx, viewport: vp }).promise;
+      };
+
+      if ("requestIdleCallback" in window) {
+        window.requestIdleCallback(upgrade, { timeout: 120 });
+      } else {
+        setTimeout(upgrade, 0);
+      }
+    },
+    []
+  );
+
+  // 레이아웃 확정 후 첫 렌더 (2× rAF + ResizeObserver로 폭 0 문제 회피)
+  const renderFirstPageAfterLayout = useCallback(
+    async (doc) => {
+      if (!doc) return;
+      await new Promise((r) => requestAnimationFrame(r));
+      await new Promise((r) => requestAnimationFrame(r));
+      // 이제 holder가 레이아웃을 가짐
+      await renderPage(doc, 1);
+    },
+    [renderPage]
+  );
 
   // 문서 로드
   useEffect(() => {
@@ -50,24 +109,26 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       if (!open || !filePath || !sid) return;
       setLoading(true);
       setErr(null);
-      setPdfDoc(null);
-      setPageNum(1);
-      setNumPages(0);
 
       try {
-        // us-central1 고정 (함수 지역 일치)
+        const key = `${filePath}::${sid}`;
+        // 동일 파일 재오픈이면 pdfDoc 재활용 (빠르게)
+        if (pdfDoc && lastKeyRef.current === key) {
+          await renderFirstPageAfterLayout(pdfDoc);
+          return;
+        }
+
         const functions = getFunctions(undefined, "us-central1");
         const serve = httpsCallable(functions, "serveWatermarkedPdf");
         const res = await serve({ filePath, sid });
         const base64 = res?.data;
         if (!base64) throw new Error("빈 응답");
 
-        // base64 -> Uint8Array
+        // base64 → Uint8Array
         const bin = atob(base64);
         const bytes = new Uint8Array(bin.length);
         for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
 
-        // pdf.js 로드
         const task = getDocument({ data: bytes });
         const doc = await task.promise;
         if (cancelled) return;
@@ -75,11 +136,9 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         setPdfDoc(doc);
         setNumPages(doc.numPages);
         setPageNum(1);
-        await renderPage(doc, 1, true);
+        lastKeyRef.current = key;
 
-        const onResize = () => renderPage(doc, pageNum, true);
-        window.addEventListener("resize", onResize);
-        return () => window.removeEventListener("resize", onResize);
+        await renderFirstPageAfterLayout(doc);
       } catch (e) {
         if (!cancelled) setErr(e?.message || "PDF 로드 실패");
       } finally {
@@ -87,31 +146,48 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       }
     })();
 
-    return () => { cancelled = true; };
-  }, [open, filePath, sid, renderPage, pageNum]);
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, filePath, sid]); // pdfDoc 렌더링은 내부에서 캐시로 처리
 
-  // 키보드 내비게이션 & 인쇄 단축키 최소화
+  // 리사이즈: 컨테이너 폭 변화 관찰해서 디바운스 재렌더
+  useLayoutEffect(() => {
+    if (!open) return;
+    const el = holderRef.current;
+    if (!el) return;
+
+    roRef.current?.disconnect();
+    roRef.current = new ResizeObserver(() => {
+      clearTimeout(reflowTimer.current);
+      reflowTimer.current = setTimeout(() => {
+        if (pdfDoc) renderPage(pdfDoc, pageNum);
+      }, 120);
+    });
+    roRef.current.observe(el);
+    return () => roRef.current?.disconnect();
+  }, [open, pdfDoc, pageNum, renderPage]);
+
+  // 키보드 내비
   useEffect(() => {
     if (!open) return;
-
     const handler = async (e) => {
-      // ← / →
-      if (pdfDoc && e.key === "ArrowRight" && pageNum < numPages) {
+      if (e.key === "ArrowRight" && pdfDoc && pageNum < numPages) {
         const next = pageNum + 1;
         setPageNum(next);
-        await renderPage(pdfDoc, next, true);
-      } else if (pdfDoc && e.key === "ArrowLeft" && pageNum > 1) {
+        await renderPage(pdfDoc, next);
+      } else if (e.key === "ArrowLeft" && pdfDoc && pageNum > 1) {
         const prev = pageNum - 1;
         setPageNum(prev);
-        await renderPage(pdfDoc, prev, true);
+        await renderPage(pdfDoc, prev);
       }
-      // Ctrl/Cmd + P 차단 시도 (완전 차단은 불가)
+      // 프린트 단축키 최소화 (완전 차단은 불가)
       if ((e.ctrlKey || e.metaKey) && (e.key === "p" || e.key === "P")) {
         e.preventDefault();
         e.stopPropagation();
       }
     };
-
     window.addEventListener("keydown", handler, { capture: true });
     return () => window.removeEventListener("keydown", handler, { capture: true });
   }, [open, pdfDoc, pageNum, numPages, renderPage]);
@@ -127,14 +203,16 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         className="pdf-modal-root"
         style={modal}
         onClick={(e) => e.stopPropagation()}
-        onContextMenu={(e) => e.preventDefault()} // 우클릭 저장 최소화
+        onContextMenu={(e) => e.preventDefault()}
       >
         <div style={modalHeader}>
-          <div style={{ fontWeight: 700 }}>{title || "특별해설"}</div>
+          <div style={{ fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {title || "특별해설"}
+          </div>
           <button onClick={onClose} style={closeBtn} aria-label="닫기">✕</button>
         </div>
 
-        <div style={{ flex: 1, background: "#111", position: "relative", overflow: "auto" }}>
+        <div ref={holderRef} style={viewer}>
           {loading && <div style={center}>불러오는 중…</div>}
           {err && <div style={{ ...center, color: "#ef4444" }}>{String(err)}</div>}
           {!loading && !err && (
@@ -153,7 +231,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
                 if (!pdfDoc || pageNum <= 1) return;
                 const prev = pageNum - 1;
                 setPageNum(prev);
-                await renderPage(pdfDoc, prev, true);
+                await renderPage(pdfDoc, prev);
               }}
             >
               ← 이전
@@ -165,7 +243,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
                 if (!pdfDoc || pageNum >= numPages) return;
                 const next = pageNum + 1;
                 setPageNum(next);
-                await renderPage(pdfDoc, next, true);
+                await renderPage(pdfDoc, next);
               }}
             >
               다음 →
@@ -177,34 +255,84 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   );
 }
 
+/* ===== 스타일: 더 작고, X 항상 보이도록 헤더 고정 ===== */
 const backdrop = {
-  position: "fixed", inset: 0, background: "rgba(0,0,0,.6)",
-  display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999
+  position: "fixed",
+  inset: 0,
+  background: "rgba(0,0,0,.55)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 9999,
 };
+
 const modal = {
-  width: "min(900px, 96vw)", height: "min(90vh, 800px)",
-  background: "#1c1f24", color: "#e5e7eb",
-  border: "1px solid #2d333b", borderRadius: 12,
-  display: "flex", flexDirection: "column", overflow: "hidden"
+  width: "min(680px, 92vw)",     // ⬅ 작게
+  height: "min(70vh, 700px)",    // ⬅ 작게
+  background: "#1c1f24",
+  color: "#e5e7eb",
+  border: "1px solid #2d333b",
+  borderRadius: 12,
+  display: "flex",
+  flexDirection: "column",
+  overflow: "hidden",
+  boxShadow: "0 10px 40px rgba(0,0,0,.35)",
 };
+
 const modalHeader = {
-  height: 48, display: "flex", alignItems: "center", justifyContent: "space-between",
-  padding: "0 12px", borderBottom: "1px solid #2d333b"
+  position: "sticky",            // ⬅ 헤더 고정 (X 항상 보임)
+  top: 0,
+  zIndex: 2,
+  height: 44,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "0 10px",
+  borderBottom: "1px solid #2d333b",
+  background: "linear-gradient(#1c1f24, #1a1d22)",
 };
+
 const closeBtn = {
-  border: "1px solid #2d333b", borderRadius: 6, background: "transparent",
-  padding: "4px 8px", cursor: "pointer", color: "#e5e7eb"
+  border: "1px solid #2d333b",
+  borderRadius: 6,
+  background: "transparent",
+  padding: "2px 8px",
+  cursor: "pointer",
+  color: "#e5e7eb",
+  fontSize: 18,
+  lineHeight: 1,
 };
-const center = { position: "absolute", inset: 0, display: "grid", placeItems: "center" };
+
+const viewer = {
+  flex: 1,
+  background: "#111",
+  position: "relative",
+  overflow: "auto",
+  padding: "8px 6px",
+};
+
+const center = {
+  position: "absolute",
+  inset: 0,
+  display: "grid",
+  placeItems: "center",
+};
+
 const footer = {
   borderTop: "1px solid #2d333b",
-  padding: "8px 12px",
+  padding: "6px 10px",
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  background: "#15181c"
+  background: "#15181c",
+  fontSize: 13,
 };
+
 const navBtn = {
-  border: "1px solid #2d333b", background: "transparent", color: "#e5e7eb",
-  borderRadius: 8, padding: "6px 10px", cursor: "pointer"
+  border: "1px solid #2d333b",
+  background: "transparent",
+  color: "#e5e7eb",
+  borderRadius: 8,
+  padding: "6px 10px",
+  cursor: "pointer",
 };
