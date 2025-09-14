@@ -706,16 +706,15 @@ exports.getOverallStatus = functions.https.onRequest(async (req, res) => {
 });
 
 
-// functions/src/distributions.ts (또는 js)
-// 필요 상수
+// ---- Prebinned distributions (plain JS for CommonJS runtime) ----
 const BIN_SIZE = 5;
 const CUTOFF_SCORE = 204;
 
-export async function buildPrebinnedDistributions(roundLabel: string) {
-  // 1) 4개 교시에서 수집
+/** 회차별 분포/평균/통계 사전집계 */
+async function buildPrebinnedDistributions(roundLabel) {
   const sessions = ['1교시','2교시','3교시','4교시'];
-  const perSid: Record<string, { completed: number; sum: number; code: string }> = {};
-  const seenSid: Set<string> = new Set();
+  const perSid = {}; // sid -> { completed: 0..4, sum: number, code: string }
+  const seenSid = new Set();
 
   for (const session of sessions) {
     const snap = await db.collection('scores_raw').doc(roundLabel).collection(session).get();
@@ -734,14 +733,12 @@ export async function buildPrebinnedDistributions(roundLabel: string) {
     });
   }
 
-  // 2) 상태 분류 & 점수 배열 구축
-  const nationalScores: number[] = [];
-  const bySchoolScores: Record<string, number[]> = {};
+  // 상태/점수 집계
+  const nationalScores = [];
+  const bySchoolScores = {}; // code -> number[]
   const nationalStats = { total: 0, completed: 0, absent: 0, dropout: 0 };
-  const bySchoolStats: Record<string, { total: number; completed: number; absent: number; dropout: number }> = {};
+  const bySchoolStats = {};  // code -> { total, completed, absent, dropout }
 
-  // “해당 회차에 한 번도 문서가 없었던 완전 결석자”는 별도 로스터 없이는 알 수 없음.
-  // 여기서는 4개 교시 중 하나라도 문서가 있던 SID만 분모에 포함.
   for (const sid of seenSid) {
     const rec = perSid[sid] || { completed: 0, sum: 0, code: String(sid).slice(0,2) };
     const code = rec.code;
@@ -767,7 +764,7 @@ export async function buildPrebinnedDistributions(roundLabel: string) {
     }
   }
 
-  // 3) 점수 범위 산출
+  // 점수 범위
   let minScore = nationalScores.length ? Math.min(...nationalScores) : 0;
   let maxScore = nationalScores.length ? Math.max(...nationalScores) : 0;
   if (minScore === maxScore) {
@@ -779,9 +776,9 @@ export async function buildPrebinnedDistributions(roundLabel: string) {
   minScore = Math.max(0, Math.floor(minScore / BIN_SIZE) * BIN_SIZE);
   maxScore = Math.min(340, Math.ceil(maxScore / BIN_SIZE) * BIN_SIZE);
 
-  // 4) bins 생성
-  const makeBins = (scores: number[]) => {
-    const out: { min: number; max: number; count: number }[] = [];
+  // bins 생성
+  const makeBins = (scores) => {
+    const out = [];
     if (!scores || !scores.length) {
       for (let x = minScore; x < maxScore; x += BIN_SIZE) out.push({ min: x, max: x + BIN_SIZE, count: 0 });
       out.push({ min: maxScore, max: maxScore, count: 0 });
@@ -797,18 +794,15 @@ export async function buildPrebinnedDistributions(roundLabel: string) {
   };
 
   const national = makeBins(nationalScores);
-  const bySchool: Record<string, any[]> = {};
+  const bySchool = {};
   Object.entries(bySchoolScores).forEach(([code, arr]) => { bySchool[code] = makeBins(arr); });
 
-  // 5) 평균
-  const avg = (arr: number[]) => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0) / arr.length) : null;
-  const averages: { nationalAvg: number | null; bySchool: Record<string, number | null> } = {
-    nationalAvg: avg(nationalScores),
-    bySchool: {},
-  };
+  // 평균
+  const avg = (arr) => (arr && arr.length ? Math.round(arr.reduce((a,b)=>a+b,0) / arr.length) : null);
+  const averages = { nationalAvg: avg(nationalScores), bySchool: {} };
   Object.entries(bySchoolScores).forEach(([code, arr]) => { averages.bySchool[code] = avg(arr); });
 
-  // 6) 저장 (stats에 absent/dropout 포함)
+  // 저장
   await db.collection('distributions').doc(roundLabel).set({
     roundLabel,
     range: { min: minScore, max: maxScore },
@@ -816,20 +810,14 @@ export async function buildPrebinnedDistributions(roundLabel: string) {
     national,
     bySchool,
     averages,
-    stats: {
-      national: nationalStats,
-      bySchool: bySchoolStats,
-    },
+    stats: { national: nationalStats, bySchool: bySchoolStats },
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, { merge: true });
 
   console.log(`[dist] saved distributions/${roundLabel}  (N=${nationalStats.completed}, total=${nationalStats.total}, absent=${nationalStats.absent}, dropout=${nationalStats.dropout})`);
 }
 
-/**
- * [NEW] 사전집계 조회 API
- * GET /getPrebinnedDistribution?roundLabel=1차
- */
+// HTTP: 사전집계 조회 (없으면 생성)
 exports.getPrebinnedDistribution = functions.https.onRequest(async (req, res) => {
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -844,7 +832,6 @@ exports.getPrebinnedDistribution = functions.https.onRequest(async (req, res) =>
     const snap = await ref.get();
 
     if (!snap.exists) {
-      // 없으면 즉석 생성 후 반환
       await buildPrebinnedDistributions(roundLabel);
       const snap2 = await ref.get();
       if (!snap2.exists) return res.json({ success: true, data: null, message: '데이터 없음' });
@@ -857,7 +844,6 @@ exports.getPrebinnedDistribution = functions.https.onRequest(async (req, res) =>
     res.status(500).json({ success: false, error: '서버 오류', details: e.message });
   }
 });
-
 // 공통: 로그 저장
 async function writeAudit({ uid, sid, filePath, action, meta = {}, req }) {
   const col = admin.firestore().collection("pdf_audit");
