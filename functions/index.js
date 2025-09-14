@@ -2,7 +2,7 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const XLSX = require("xlsx");
-const { PDFDocument, rgb, degrees } = require("pdf-lib");
+const { PDFDocument, rgb, degrees, StandardFonts } = require("pdf-lib");
 
 try { admin.app(); } catch { admin.initializeApp(); }
 const db = admin.firestore();
@@ -891,38 +891,73 @@ async function writeAudit({ uid, sid, filePath, action, meta = {}, req }) {
   await col.add(doc);
 }
 
-// ① 워터마크 PDF 제공 (Callable)
+// functions/index.js 내 기존 serveWatermarkedPdf 대치
 exports.serveWatermarkedPdf = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
   }
+
   const { filePath, sid } = data || {};
   if (!filePath || !sid) {
     throw new functions.https.HttpsError("invalid-argument", "filePath, sid가 필요합니다.");
   }
 
-  // Storage에서 원본 PDF 읽기
+  // Storage 원본
   const bucket = admin.storage().bucket(); // 기본 버킷
   const [bytes] = await bucket.file(filePath).download();
 
-  // PDF-lib로 워터마크 삽입
+  // PDF 로드 + 폰트 임베드
   const pdfDoc = await PDFDocument.load(bytes);
-  const pages = pdfDoc.getPages();
+  const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  const text = `SID: ${sid}`;
-  pages.forEach((page) => {
+  // 워터마크 텍스트(학수번호만)
+  const text = String(sid);
+
+  // 각 페이지에 격자형 반복 워터마크
+  const fontSize = 42;                // 기본 크기
+  const angle = degrees(36);          // 기울기 (30~40도 권장)
+  const color = rgb(0.6, 0.6, 0.6);   // 옅은 회색 (#999 정도)
+  const opacity = 0.12;               // 투명도 (0.1~0.15 권장)
+
+  const pages = pdfDoc.getPages();
+  for (const page of pages) {
     const { width, height } = page.getSize();
+
+    // 텍스트 폭/높이 추정
+    const textWidth = font.widthOfTextAtSize(text, fontSize);
+    const textHeight = fontSize;
+
+    // 반복 간격 (여백 포함)
+    const stepX = textWidth * 2.2;   // 가로 간격
+    const stepY = textHeight * 2.6;  // 세로 간격
+
+    // 시작점을 음수부터 잡아 여백없이 빽빽하게
+    for (let y = -stepY; y < height + stepY; y += stepY) {
+      // 줄마다 조금씩 엇갈리게(바둑판 느낌)
+      const xOffset = (y / stepY) % 2 === 0 ? 0 : stepX / 2;
+      for (let x = -stepX; x < width + stepX; x += stepX) {
+        page.drawText(text, {
+          x: x + xOffset,
+          y,
+          size: fontSize,
+          font,
+          color,
+          opacity,
+          rotate: angle,
+        });
+      }
+    }
+
+    // 모서리 식별자(조금 더 진하게)
     page.drawText(text, {
-      x: width / 4,
-      y: height / 2,
-      size: 18,
-      color: rgb(0.95, 0.1, 0.1),
-      opacity: 0.25,
-      rotate: degrees(45),
+      x: 24,
+      y: 24,
+      size: 12,
+      font,
+      color: rgb(0.5, 0.5, 0.5),
+      opacity: 0.6,
     });
-    // 모서리에도 작게
-    page.drawText(text, { x: 24, y: 24, size: 10, color: rgb(0.9, 0.2, 0.2), opacity: 0.6 });
-  });
+  }
 
   const out = await pdfDoc.save();
 
@@ -932,10 +967,10 @@ exports.serveWatermarkedPdf = functions.https.onCall(async (data, context) => {
     sid,
     filePath,
     action: "view",
-    req: context.rawRequest
+    req: context.rawRequest,
   });
 
-  // base64로 반환 (프론트에서 Blob 변환)
+  // base64 반환
   return Buffer.from(out).toString("base64");
 });
 
