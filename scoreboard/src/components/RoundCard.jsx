@@ -4,7 +4,7 @@ import { fmt, pct, pill, chunk } from '../utils/helpers';
 import { SUBJECT_MAX } from '../services/dataService';
 import WrongAnswerPanel from './WrongAnswerPanel';
 
-const INVALID_CARD_HEIGHT = 600; // ✅ 무효 카드 고정 높이(px) — 필요시 조절
+const INVALID_CARD_HEIGHT = 600;
 
 function RoundCard({ label, data, sid }) {
   const [isFlipped, setIsFlipped] = useState(false);
@@ -23,14 +23,13 @@ function RoundCard({ label, data, sid }) {
   } = data || {};
 
   const overallRate = totalMax > 0 ? pct(totalScore, totalMax) : 0;
-
-  // invalid = 미응시/중도포기/기타 무효 판정
   const isInvalid = status === 'absent' || status === 'dropout' || status === 'dropped';
   const statusClass = isInvalid ? 'rc-invalid' : (overallPass ? 'rc-pass' : 'rc-fail');
 
   const handleCardClick = (e) => {
-    // 내부 버튼 클릭 시 플립 방지
-    if (e.target.closest('button')) return;
+    // ⬇️ 해설 버튼만 클릭 가로채기 (data-click-role="exp" 인 경우에만)
+    const expBtn = e.target.closest('button[data-click-role="exp"]');
+    if (expBtn) return;
     setIsFlipped(prev => !prev);
   };
 
@@ -96,7 +95,6 @@ function RoundCard({ label, data, sid }) {
     });
   };
 
-  // 무효 카드일 때만 고정 높이 적용 (앞/뒤 동일)
   const fixedHeightStyle = isInvalid ? { height: INVALID_CARD_HEIGHT } : undefined;
 
   return (
@@ -104,7 +102,7 @@ function RoundCard({ label, data, sid }) {
       ref={flipCardRef}
       className="flip-card"
       onClick={handleCardClick}
-      style={fixedHeightStyle} // ✅ 무효 카드 고정 높이
+      style={fixedHeightStyle}
     >
       <div className={`flip-inner ${isFlipped ? 'is-flipped' : ''}`}>
 
@@ -112,7 +110,7 @@ function RoundCard({ label, data, sid }) {
         <div
           ref={frontRef}
           className={`flip-face flip-front card ${statusClass}`}
-          style={fixedHeightStyle} // ✅ 앞면도 동일 고정
+          style={fixedHeightStyle}
         >
           <div className="flex" style={{ justifyContent: 'space-between' }}>
             <h2 style={{ margin: 0 }}>{label} 총점</h2>
@@ -125,10 +123,9 @@ function RoundCard({ label, data, sid }) {
           </div>
 
           {isInvalid ? (
-            // ✅ 무효 카드: 중앙 정렬 큰 텍스트
             <div
               style={{
-                height: `calc(${INVALID_CARD_HEIGHT}px - 56px)`, // 카드 패딩·헤더 여백 감안
+                height: `calc(${INVALID_CARD_HEIGHT}px - 56px)`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -167,7 +164,7 @@ function RoundCard({ label, data, sid }) {
           )}
         </div>
 
-        {/* 뒷면 — 무효 차수여도 오답 패널은 그대로 표시 */}
+        {/* 뒷면 */}
         <div className={`flip-face flip-back card ${statusClass}`} style={fixedHeightStyle}>
           <WrongAnswerPanel roundLabel={label} data={data} sid={sid} />
         </div>
