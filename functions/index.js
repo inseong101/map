@@ -7,7 +7,10 @@ const { PDFDocument, rgb, degrees, StandardFonts } = require("pdf-lib");
 try { admin.app(); } catch { admin.initializeApp(); }
 const db = admin.firestore();
 
-/* ========================= 공통 유틸 ========================= */
+
+
+
+
 function toKRE164(raw) {
   if (!raw) return null;
   const digits = String(raw).replace(/[^\d+]/g, "");
