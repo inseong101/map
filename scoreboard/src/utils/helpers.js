@@ -61,7 +61,7 @@ export function buildSubjectScores(wrongBySession = {}) {
 export function buildGroupResults(subjectScores) {
   const groupsDef = {
     "1교시": ["간", "심", "비", "폐", "신"],
-    "2교시": ["상한", "사상", "침구", "보건"],
+    "2교시": ["상한", "사상", "침구", "법규"],
     "3교시": ["외과", "신경", "안이비", "부인과"],
     "4교시": ["소아", "예방", "생리", "본초"],
   };
