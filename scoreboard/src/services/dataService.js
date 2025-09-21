@@ -2,6 +2,8 @@
 import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 
+
+
 // 과목별 최대 점수
 export const SUBJECT_MAX = {
   "간":16, "심":16, "비":16, "폐":16, "신":16,
@@ -9,6 +11,8 @@ export const SUBJECT_MAX = {
   "외과":16, "신경":16, "안이비":16, "부인과":32, 
   "소아":24, "예방":24, "생리":16, "본초":16
 };
+
+
 
 // 그룹 정의
 export const GROUPS = [
