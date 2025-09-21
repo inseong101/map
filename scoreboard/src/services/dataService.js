@@ -7,7 +7,7 @@ import { db } from '../firebase';
 // 과목별 최대 점수
 export const SUBJECT_MAX = {
   "간":16, "심":16, "비":16, "폐":16, "신":16,
-  "상한":16, "사상":16, "침구":48, "보건":20,
+  "상한":16, "사상":16, "침구":48, "법규":20,
   "외과":16, "신경":16, "안이비":16, "부인과":32, 
   "소아":24, "예방":24, "생리":16, "본초":16
 };
@@ -18,7 +18,7 @@ export const SUBJECT_MAX = {
 export const GROUPS = [
   { id: "그룹1", label: "그룹 1", subjects: ["간","심","비","폐","신","상한","사상"]},
   { id: "그룹3", label: "그룹 3", subjects: ["침구"] },
-  { id: "그룹2", label: "그룹 2", subjects: ["보건"] },
+  { id: "그룹2", label: "그룹 2", subjects: ["법규"] },
   { id: "그룹4", label: "그룹 4", subjects: ["외과","신경","안이비"] },
   { id: "그룹5", label: "그룹 5", subjects: ["부인과","소아"] },
   { id: "그룹6", label: "그룹 6", subjects: ["예방","생리","본초"] }
@@ -40,7 +40,7 @@ export const SESSION_SUBJECT_RANGES = {
     { from: 1,  to: 16, s: "상한" },
     { from: 17, to: 32, s: "사상" },
     { from: 33, to: 80, s: "침구" },
-    { from: 81, to: 100, s: "보건" }
+    { from: 81, to: 100, s: "법규" }
   ],
   "3교시": [
     { from: 1,  to: 16, s: "외과" },
