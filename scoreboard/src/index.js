@@ -1,4 +1,6 @@
 // src/index.js  (서비스워커 캐시 간섭 방지용 추가)
+// index.js 재밌다
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
