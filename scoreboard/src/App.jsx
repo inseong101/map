@@ -45,6 +45,7 @@ function App() {
   const [resendLeft, setResendLeft] = useState(0);
   const cooldownTimerRef = useRef(null);
   const [selectedRoundLabel, setSelectedRoundLabel] = useState(ALL_ROUND_LABELS[0]);
+  const [availableRounds, setAvailableRounds] = useState(ALL_ROUND_LABELS); // ✅ 회차 목록을 앱에서 직접 정의
 
   useEffect(() => {
     if (!window.recaptchaVerifier) {
@@ -162,7 +163,7 @@ function App() {
     return (
       <div className="container">
         <ControversialPanel
-          allRoundLabels={ALL_ROUND_LABELS}
+          allRoundLabels={availableRounds}
           roundLabel={selectedRoundLabel}
           onRoundChange={setSelectedRoundLabel}
           sid={studentId}
