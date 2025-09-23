@@ -1,3 +1,4 @@
+// src/App.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import ControversialPanel from './components/ControversialPanel';
 import './App.css';
@@ -44,7 +45,7 @@ function App() {
   const [resendLeft, setResendLeft] = useState(0);
   const cooldownTimerRef = useRef(null);
   const [selectedRoundLabel, setSelectedRoundLabel] = useState(ALL_ROUND_LABELS[0]);
-  const [availableRounds, setAvailableRounds] = useState(ALL_ROUND_LABELS); // ✅ 회차 목록을 앱에서 직접 정의
+  const [availableRounds, setAvailableRounds] = useState(ALL_ROUND_LABELS);
 
   useEffect(() => {
     if (!window.recaptchaVerifier) {
