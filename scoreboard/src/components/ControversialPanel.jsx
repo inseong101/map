@@ -6,20 +6,35 @@ import "./WrongPanel.css";
 
 const SESSIONS = ["1교시", "2교시", "3교시", "4교시"];
 
-const ROUND_1_SESSION_1_SUBJECT_MAPPING = [
-  "신", "신", "폐", "심", "심", "간", "폐", "폐", "폐", "간",
-  "비", "폐", "신", "신", "신", "간", "비", "비", "비", "비",
-  "심", "심", "심", "심", "간", "비", "비", "심", "심", "심",
-  "신", "신", "심", "폐", "심", "비", "비", "비", "비", "비",
-  "비", "폐", "폐", "폐", "폐", "간", "신", "간", "신", "간",
-  "간", "간", "폐", "신", "간", "심", "심", "심", "심", "심",
-  "폐", "폐", "폐", "폐", "비", "비", "비", "비", "간", "간",
-  "간", "간", "간", "신", "신", "신", "신", "신", "신", "간"
-];
+// 🔧 모든 회차의 1교시 과목 맵핑을 직접 정의
+const SUBJECT_MAPPINGS = {
+  "1차": {
+    "1교시": [
+      "신", "신", "폐", "심", "심", "간", "폐", "폐", "폐", "간",
+      "비", "폐", "신", "신", "신", "간", "비", "비", "비", "비",
+      "심", "심", "심", "심", "간", "비", "비", "심", "심", "심",
+      "신", "신", "심", "폐", "심", "비", "비", "비", "비", "비",
+      "비", "폐", "폐", "폐", "폐", "간", "신", "간", "신", "간",
+      "간", "간", "폐", "신", "간", "심", "심", "심", "심", "심",
+      "폐", "폐", "폐", "폐", "비", "비", "비", "비", "간", "간",
+      "간", "간", "간", "신", "신", "신", "신", "신", "신", "간"
+    ],
+    // TODO: 1차 2교시, 3교시, 4교시 맵핑도 여기에 추가
+  },
+  // TODO: 2차, 3차, ... 8차 회차 맵핑도 여기에 추가
+  "2차": {},
+  "3차": {},
+  "4차": {},
+  "5차": {},
+  "6차": {},
+  "7차": {},
+  "8차": {}
+};
 
 function getSubjectByQuestion(qNum, roundLabel, session) {
-  if (roundLabel === '1차' && session === '1교시') {
-    return ROUND_1_SESSION_1_SUBJECT_MAPPING[qNum - 1] || null;
+  const mapping = SUBJECT_MAPPINGS[roundLabel]?.[session];
+  if (mapping && qNum > 0 && qNum <= mapping.length) {
+    return mapping[qNum - 1] || null;
   }
   return null;
 }
@@ -48,12 +63,10 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
   const [gridStyle, setGridStyle] = useState({ cols: 1, cellW: 24, cellH: 24 });
   const [pdfOpen, setPdfOpen] = useState(false);
   const [pdfPath, setPdfPath] = useState(null);
-
   const [highErrorQuestions, setHighErrorQuestions] = useState({});
   const [fireBySession, setFireBySession] = useState({
     "1교시": new Set(), "2교시": new Set(), "3교시": new Set(), "4교시": new Set(),
   });
-  const [hasErrorData, setHasErrorData] = useState(false);
 
   const getHighErrorRateQuestions = useCallback(async (rLabel) => {
     try {
@@ -94,10 +107,10 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
           "3교시": new Set(explanationIndex["3교시"] || []),
           "4교시": new Set(explanationIndex["4교시"] || []),
         });
-        const hasData = Object.keys(highErrors).some(s => Object.keys(highErrors[s]).length > 0);
-        setHasErrorData(hasData);
-        if(hasData && !activeSubject) {
-          setActiveSubject(Object.keys(highErrors)[0] || null);
+        if (Object.keys(highErrors).length > 0) {
+          setActiveSubject(Object.keys(highErrors)[0]);
+        } else {
+          setActiveSubject(null);
         }
       }
     })();
@@ -175,11 +188,13 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
 
   const getSubjectsBySession = (session) => {
     const subjects = [];
-    Object.entries(highErrorQuestions).forEach(([subj, questions]) => {
-      if (questions.some(q => findSessionByQuestionNum(q.questionNum) === session)) {
-        subjects.push(subj);
-      }
-    });
+    if (highErrorQuestions) {
+      Object.entries(highErrorQuestions).forEach(([subj, questions]) => {
+        if (questions.some(q => findSessionByQuestionNum(q.questionNum) === session)) {
+          subjects.push(subj);
+        }
+      });
+    }
     return subjects;
   };
 
