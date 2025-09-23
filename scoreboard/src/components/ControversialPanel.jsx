@@ -5,7 +5,24 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 import "./WrongPanel.css";
 
 const SESSIONS = ["1교시", "2교시", "3교시", "4교시"];
-const SESSION_LENGTH = { "1교시": 80, "2교시": 100, "3교시": 80, "4교시": 80 };
+
+const ROUND_1_SESSION_1_SUBJECT_MAPPING = [
+  "신", "신", "폐", "심", "심", "간", "폐", "폐", "폐", "간",
+  "비", "폐", "신", "신", "신", "간", "비", "비", "비", "비",
+  "심", "심", "심", "심", "간", "비", "비", "심", "심", "심",
+  "신", "신", "심", "폐", "심", "비", "비", "비", "비", "비",
+  "비", "폐", "폐", "폐", "폐", "간", "신", "간", "신", "간",
+  "간", "간", "폐", "신", "간", "심", "심", "심", "심", "심",
+  "폐", "폐", "폐", "폐", "비", "비", "비", "비", "간", "간",
+  "간", "간", "간", "신", "신", "신", "신", "신", "신", "간"
+];
+
+function getSubjectByQuestion(qNum, roundLabel, session) {
+  if (roundLabel === '1차' && session === '1교시') {
+    return ROUND_1_SESSION_1_SUBJECT_MAPPING[qNum - 1] || null;
+  }
+  return null;
+}
 
 function bestGrid(n, W, H, gap = 3, aspect = 1) {
   if (!n || !W || !H) return { cols: 1, rows: 1, cellW: 0, cellH: 0 };
@@ -176,79 +193,3 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     if (qNum >= 1 && qNum <= 80) return "1교시";
     if (qNum >= 81 && qNum <= 100) return "2교시";
     return null;
-  };
-
-  return (
-    <div className="wrong-panel-root">
-      <h2 style={{ marginTop: 0 }}>많이 틀린 문항 해설</h2>
-
-      <div className="round-tabs" role="tablist" aria-label="회차 선택">
-        {allRoundLabels.map((r) => (
-          <button
-            key={r}
-            role="tab"
-            aria-selected={roundLabel === r}
-            className={`tab-btn ${roundLabel === r ? "active" : ""}`}
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onRoundChange(r);
-            }}
-          >
-            {r}
-          </button>
-        ))}
-      </div>
-
-      <div className="session-tabs" role="tablist" aria-label="교시 선택">
-        {SESSIONS.map((s) => (
-          <button
-            key={s}
-            role="tab"
-            aria-selected={activeSession === s}
-            className={`tab-btn ${activeSession === s ? "active" : ""}`}
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setActiveSession(s);
-              const subjects = getSubjectsBySession(s);
-              setActiveSubject(subjects[0] || null);
-            }}
-          >
-            {s}
-          </button>
-        ))}
-      </div>
-
-      {activeSession && getSubjectsBySession(activeSession).length > 0 && (
-        <div className="subject-tabs" role="tablist" aria-label="과목 선택">
-          {getSubjectsBySession(activeSession).map((s) => (
-            <button
-              key={s}
-              role="tab"
-              aria-selected={activeSubject === s}
-              className={`tab-btn ${activeSubject === s ? "active" : ""}`}
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setActiveSubject(s);
-              }}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {renderButtons()}
-
-      <PdfModalPdfjs
-        open={pdfOpen}
-        onClose={() => setPdfOpen(false)}
-        filePath={pdfPath}
-        sid={sid}
-        title={`${roundLabel} ${activeSession} 특별해설`}
-      />
-    </div>
-  );
-}
