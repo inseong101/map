@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ControversialPanel from './components/ControversialPanel';
 import './App.css';
 
@@ -162,7 +162,7 @@ function App() {
     return (
       <div className="container">
         <ControversialPanel
-          allRoundLabels={ALL_ROUND_LABELS} // ✅ 모든 회차 라벨을 직접 전달
+          allRoundLabels={ALL_ROUND_LABELS}
           roundLabel={selectedRoundLabel}
           onRoundChange={setSelectedRoundLabel}
           sid={studentId}
