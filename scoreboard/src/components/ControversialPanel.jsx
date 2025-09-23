@@ -7,7 +7,7 @@ import "./WrongPanel.css";
 const SESSIONS = ["1교시", "2교시", "3교시", "4교시"];
 const SESSION_LENGTH = { "1교시": 80, "2교시": 100, "3교시": 80, "4교시": 80 };
 
-function bestGrid(n, W, H, gap = 5, aspect = 1) {
+function bestGrid(n, W, H, gap = 3, aspect = 1) { // 🔧 gap을 3으로 줄여 더 촘촘하게
   if (!n || !W || !H) return { cols: 1, rows: 1, cellW: 0, cellH: 0 };
   let best = { cols: 1, rows: n, cellW: 0, cellH: 0, score: -1 };
   for (let cols = 1; cols <= n; cols++) {
@@ -24,10 +24,10 @@ function bestGrid(n, W, H, gap = 5, aspect = 1) {
   return best;
 }
 
-export default function ControversialPanel({ roundLabel, sid, onBack }) {
+export default function ControversialPanel({ allRoundLabels, roundLabel, onRoundChange, sid, onBack }) {
   const [activeSession, setActiveSession] = useState("1교시");
   const gridWrapRef = useRef(null);
-  const [gridStyle, setGridStyle] = useState({ cols: 1, cellW: 30, cellH: 30 });
+  const [gridStyle, setGridStyle] = useState({ cols: 1, cellW: 24, cellH: 24 }); // 🔧 cellW/H 기본값 24로 작게 설정
   const [pdfOpen, setPdfOpen] = useState(false);
   const [pdfPath, setPdfPath] = useState(null);
 
@@ -86,7 +86,7 @@ export default function ControversialPanel({ roundLabel, sid, onBack }) {
     const compute = () => {
       const { width, height } = el.getBoundingClientRect();
       const total = SESSION_LENGTH[activeSession] || 80;
-      const { cols, cellW, cellH } = bestGrid(total, Math.max(0, width), Math.max(0, height), 5, 1);
+      const { cols, cellW, cellH } = bestGrid(total, Math.max(0, width), Math.max(0, height), 3, 1);
       setGridStyle({ cols: Math.max(1, cols), cellW: Math.max(22, cellW), cellH: Math.max(22, cellH) });
     };
     const ro = new ResizeObserver(compute);
@@ -154,7 +154,7 @@ export default function ControversialPanel({ roundLabel, sid, onBack }) {
   return (
     <div className="wrong-panel-root">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <h2 style={{ marginTop: 0 }}>{roundLabel} 논란 문제 해설</h2>
+        <h2 style={{ marginTop: 0 }}>논란 문제 해설</h2>
         <button onClick={onBack} className="btn secondary" style={{ fontSize: 13 }}>뒤로가기</button>
       </div>
 
@@ -174,6 +174,25 @@ export default function ControversialPanel({ roundLabel, sid, onBack }) {
         </span>
       </div>
 
+      {/* ✅ 회차 선택 탭 추가 */}
+      <div className="round-tabs" role="tablist" aria-label="회차 선택">
+        {allRoundLabels.map((r) => (
+          <button
+            key={r}
+            role="tab"
+            aria-selected={roundLabel === r}
+            className={`tab-btn ${roundLabel === r ? "active" : ""}`}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRoundChange(r);
+            }}
+          >
+            {r}
+          </button>
+        ))}
+      </div>
+      
       <div className="session-tabs" role="tablist" aria-label="교시 선택">
         {SESSIONS.map((s) => (
           <button
