@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ControversialPanel from './components/ControversialPanel';
 import './App.css';
 
@@ -7,7 +7,6 @@ import { auth, functions } from './firebase';
 import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 
-// 🔧 논란 문제 해설을 제공할 회차 목록 (1차부터 8차까지)
 const ALL_ROUND_LABELS = ['1차', '2차', '3차', '4차', '5차', '6차', '7차', '8차'];
 const RESEND_COOLDOWN = 60;
 
@@ -46,6 +45,23 @@ function App() {
   const [resendLeft, setResendLeft] = useState(0);
   const cooldownTimerRef = useRef(null);
   const [selectedRoundLabel, setSelectedRoundLabel] = useState(ALL_ROUND_LABELS[0]);
+  const [availableRounds, setAvailableRounds] = useState([]);
+
+  const getAvailableRounds = useCallback(async () => {
+    try {
+      const functions = getFunctions(undefined, "us-central1");
+      const listRounds = httpsCallable(functions, "listAvailableRounds");
+      const res = await listRounds();
+      return res.data?.rounds || [];
+    } catch (e) {
+      console.error("사용 가능한 회차 조회 실패:", e);
+      return [];
+    }
+  }, []);
+
+  useEffect(() => {
+    getAvailableRounds().then(setAvailableRounds);
+  }, [getAvailableRounds]);
 
   useEffect(() => {
     if (!window.recaptchaVerifier) {
@@ -163,9 +179,9 @@ function App() {
     return (
       <div className="container">
         <ControversialPanel
-          allRoundLabels={ALL_ROUND_LABELS} // ✅ 모든 회차 라벨을 전달
+          allRoundLabels={availableRounds}
           roundLabel={selectedRoundLabel}
-          onRoundChange={setSelectedRoundLabel} // ✅ 회차 변경 핸들러 전달
+          onRoundChange={setSelectedRoundLabel}
           sid={studentId}
           onBack={handleLogout}
         />
@@ -179,7 +195,7 @@ function App() {
   return (
     <div className="container">
       <div id="recaptcha-container" />
-      <h1>논란 문제 해설</h1>
+      <h1>많이 틀린 문항 해설</h1>
       <div className="card narrow">
         <form onSubmit={handleSubmit} className="flex-column">
           <label style={{ fontWeight: 800 }}>학수번호</label>
