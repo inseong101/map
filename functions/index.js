@@ -8,19 +8,16 @@ try { admin.app(); } catch { admin.initializeApp(); }
 const db = admin.firestore();
 
 
-// 🔧 전화번호 형식 보정: 010... -> +8210...
+// 전화번호 형식 보정: 010... -> +8210...
 function toKRE164(raw) {
   if (!raw) return null;
   const digits = String(raw).replace(/[^\d+]/g, "");
   if (digits.startsWith("+82")) return digits;
-  // "010...." / "10...." 등 0으로 시작하면 국내국번 +82
   const onlyDigits = digits.replace(/\D/g, "");
   if (onlyDigits.startsWith("0")) return "+82" + onlyDigits.slice(1);
-  // 이미 국제형이 아니고 0도 없으면 가정 불가 → 그대로(+없음)면 실패 처리
   return null;
 }
 function groupByPhone(rows) {
-  // rows: [{ phone, sid, school? }, ...]
   const map = new Map();
   for (const r of rows) {
     const e164 = toKRE164(r.phone);
@@ -32,10 +29,8 @@ function groupByPhone(rows) {
     if (!map.has(e164)) map.set(e164, { sids: new Set(), school });
     const cur = map.get(e164);
     cur.sids.add(sid);
-    // school은 최초값 유지(파일마다 다르면 최신값으로 덮고싶으면 아래 한 줄 교체)
     if (school && !cur.school) cur.school = school;
   }
-  // Set→Array
   const out = [];
   for (const [phone, v] of map) {
     out.push({ phone, sids: Array.from(v.sids).sort(), school: v.school || null });
@@ -43,9 +38,6 @@ function groupByPhone(rows) {
   return out;
 }
 
-/* ========================= 시험 도메인 상수 ========================= */
-
-// 과목별 최대 점수
 const SUBJECT_MAX = {
   "간":16, "심":16, "비":16, "폐":16, "신":16,
   "상한":16, "사상":16, "침구":48, "법규":20,
@@ -53,7 +45,6 @@ const SUBJECT_MAX = {
   "소아":24, "예방":24, "생리":16, "본초":16
 };
 
-// 교시별 문항번호 → 과목 매핑
 const SESSION_SUBJECT_RANGES = {
   "1교시": [
     { from: 1,  to: 16, s: "간" },
@@ -82,8 +73,6 @@ const SESSION_SUBJECT_RANGES = {
   ]
 };
 
-/* ========================= 점수 파이프라인 ========================= */
-
 function calculatePercentile(scores, myScore) {
   if (!scores || scores.length === 0) return null;
   const sorted = [...scores].sort((a, b) => b - a);
@@ -93,13 +82,10 @@ function calculatePercentile(scores, myScore) {
   return +((rank / (sorted.length - 1)) * 100).toFixed(1);
 }
 
-// Storage에 .xlsx 업로드 → 자동 처리 (파일명 예: scores/1-2.xlsx → 1차 2교시)
 exports.processStorageExcel = functions.storage.object().onFinalize(async (object) => {
   try {
     const { name: filePath, bucket } = object;
     if (!filePath || !filePath.endsWith('.xlsx')) return null;
-
-    // 점수 엑셀은 scores/ 아래만 처리 (실수 방지용)
     if (!/^scores\//.test(filePath)) return null;
 
     const fileInfo = extractFileInfo(filePath);
@@ -172,12 +158,10 @@ async function processExcelData(jsonData, roundLabel, session) {
       }
     }
 
-    // 정답지 저장
     const answerKeyObj = {};
     validQuestions.forEach(q => { answerKeyObj[q.questionNum] = q.correctAnswer; });
     await db.collection('answer_keys').doc(`${roundLabel}_${session}`).set(answerKeyObj);
 
-    // 학생 데이터
     for (let i = 4; i < jsonData.length; i++) {
       const row = jsonData[i];
       try {
@@ -216,7 +200,6 @@ async function processExcelData(jsonData, roundLabel, session) {
       }
     }
 
-    // Percentile 계산
     const scoresOnly = processedData.filter(s => s.status === 'completed').map(s => s.totalScore);
     processedData.forEach(stu => {
       if (stu.status === 'completed') {
@@ -226,7 +209,6 @@ async function processExcelData(jsonData, roundLabel, session) {
       }
     });
 
-    // Firestore 저장 (batch)
     const batchSize = 500;
     for (let i = 0; i < processedData.length; i += batchSize) {
       const batch = db.batch();
@@ -261,8 +243,6 @@ async function processExcelData(jsonData, roundLabel, session) {
     throw err;
   }
 }
-
-/* ========================= 통계/분석 ========================= */
 
 function findSubjectByQuestionNum(questionNum, session = null) {
   const sessionsToCheck = session ? [session] : Object.keys(SESSION_SUBJECT_RANGES);
@@ -498,56 +478,6 @@ async function updateRoundAnalytics(roundLabel) {
   console.log(`회차 요약 통계 업데이트 완료: ${roundLabel}`);
 }
 
-async function analyzeOverallStatus(roundLabel) {
-  console.log(`전체 응시 상태 분석 시작: ${roundLabel}`);
-
-  const sessions = ["1교시", "2교시", "3교시", "4교시"];
-  const allStudents = {};
-
-  for (const session of sessions) {
-    const sessionRef = db.collection('scores_raw').doc(roundLabel).collection(session);
-    const snap = await sessionRef.get();
-    snap.forEach(doc => {
-      const sid = doc.id;
-      if (!allStudents[sid]) allStudents[sid] = { sid, sessions: {} };
-      allStudents[sid].sessions[session] = doc.data();
-    });
-  }
-
-  const analysis = {
-    roundLabel,
-    totalStudents: 0,
-    byStatus: { completed: 0, dropout: 0, absent: 0 },
-    bySession: {},
-    lastUpdated: admin.firestore.FieldValue.serverTimestamp()
-  };
-  sessions.forEach(s => analysis.bySession[s] = { attended: 0, absent: 0 });
-
-  Object.entries(allStudents).forEach(([sid, st]) => {
-    analysis.totalStudents++;
-    let completedCnt = 0;
-
-    sessions.forEach(s => {
-      const d = st.sessions[s];
-      const isAttended = d && d.status === 'completed';
-      if (isAttended) {
-        completedCnt++;
-        analysis.bySession[s].attended++;
-      } else {
-        analysis.bySession[s].absent++;
-      }
-    });
-
-    if (completedCnt === 4) analysis.byStatus.completed++;
-    else if (completedCnt === 0) analysis.byStatus.absent++;
-    else analysis.byStatus.dropout++;
-  });
-
-  await db.collection('analytics').doc(`${roundLabel}_overall_status`).set(analysis);
-  console.log(`전체 응시 상태 분석 완료: ${roundLabel}`);
-}
-
-// 점수/응답 저장 시 자동 집계
 exports.updateAnalyticsOnSubmission = functions.firestore
   .document('scores_raw/{roundLabel}/{session}/{sid}')
   .onWrite(async (change, context) => {
@@ -562,9 +492,6 @@ exports.updateAnalyticsOnSubmission = functions.firestore
     }
   });
 
-/* ========================= 회차 통계: 수동 재계산 & 조회 API ========================= */
-
-// 수동으로 특정 회차(또는 교시) 통계 재계산
 exports.manualUpdateAnalytics = functions.https.onRequest(async (req, res) => {
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -591,7 +518,6 @@ exports.manualUpdateAnalytics = functions.https.onRequest(async (req, res) => {
   }
 });
 
-// 고오답률 문항 조회
 exports.getHighErrorRateQuestions = functions.https.onRequest(async (req, res) => {
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -618,7 +544,6 @@ exports.getHighErrorRateQuestions = functions.https.onRequest(async (req, res) =
   }
 });
 
-// 문항별 선택률/정답률 조회
 exports.getQuestionChoiceStats = functions.https.onRequest(async (req, res) => {
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -643,7 +568,6 @@ exports.getQuestionChoiceStats = functions.https.onRequest(async (req, res) => {
     const choiceStats = data.choiceStats?.[qNum];
     const choicePerc = data.choicePercents?.[qNum];
 
-    // 정답 조회
     const ansSnap = await db.collection('answer_keys').doc(`${roundLabel}_${session}`).get();
     const correctAnswer = ansSnap.exists ? ansSnap.data()?.[qNum] : null;
 
@@ -673,7 +597,6 @@ exports.getQuestionChoiceStats = functions.https.onRequest(async (req, res) => {
   }
 });
 
-// 전체 응시 상태 조회
 exports.getOverallStatus = functions.https.onRequest(async (req, res) => {
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -700,8 +623,6 @@ exports.getOverallStatus = functions.https.onRequest(async (req, res) => {
   }
 });
 
-
-/* ========================= 분포 사전집계 ========================= */
 const BIN_SIZE = 5;
 const CUTOFF_SCORE = 204;
 
@@ -806,7 +727,6 @@ async function buildPrebinnedDistributions(roundLabel) {
   console.log(`[dist] saved distributions/${roundLabel} (N=${nationalStats.completed}, total=${nationalStats.total}, absent=${nationalStats.absent}, dropout=${nationalStats.dropout})`);
 }
 
-// HTTP: 사전집계 조회 (없으면 생성)
 exports.getPrebinnedDistribution = functions.https.onRequest(async (req, res) => {
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -834,8 +754,6 @@ exports.getPrebinnedDistribution = functions.https.onRequest(async (req, res) =>
   }
 });
 
-
-/* ========================= PDF 워터마크 & 로깅 ========================= */
 
 async function writeAudit({ uid, sid, filePath, action, meta = {}, req }) {
   const col = admin.firestore().collection("pdf_audit");
@@ -939,7 +857,6 @@ exports.logPdfAction = functions.https.onCall(async (data, context) => {
   return { ok: true };
 });
 
-// 해설 인덱스 제공 (explanation/ 폴더 스캔)
 exports.getExplanationIndex = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -951,7 +868,6 @@ exports.getExplanationIndex = functions.https.onCall(async (data, context) => {
   const bySession = { "1교시": [], "2교시": [], "3교시": [], "4교시": [] };
 
   files.forEach(f => {
-    // explanation/1-2-44.pdf  => 회차-교시-문항
     const m = f.name.match(/^explanation\/(\d+)-(\d+)-(\d+)\.pdf$/);
     if (!m) return;
     const [_, r, s, q] = m;
@@ -971,8 +887,6 @@ exports.getExplanationIndex = functions.https.onCall(async (data, context) => {
 });
 
 
-/* ========================= 전화번호 매핑: Storage 업로드 → Firestore ========================= */
-
 // phones/ 밑에 업로드되는 .xlsx 또는 .json 파일을 처리해 phones/{phone} 문서를 구성한다.
 // - phones/{phone} = { sids: [ "015001", ... ], school?: "가천대", updatedAt }
 // - 파일 포맷 예시(.xlsx 첫 시트):
@@ -983,8 +897,8 @@ exports.processPhoneMappingUpload = functions.storage.object().onFinalize(async 
   try {
     const { name: filePath, bucket } = object;
     if (!filePath) return null;
-    if (!/^phones\//.test(filePath)) return null;            // phones/ 하위만
-    if (!(/\.(xlsx|json)$/i.test(filePath))) return null;    // xlsx 또는 json만
+    if (!/^phones\//.test(filePath)) return null;
+    if (!(/\.(xlsx|json)$/i.test(filePath))) return null;
 
     const storage = admin.storage();
     const file = storage.bucket(bucket).file(filePath);
@@ -1004,8 +918,6 @@ exports.processPhoneMappingUpload = functions.storage.object().onFinalize(async 
       const wb = XLSX.read(buffer, { type: 'buffer' });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
-      // 헤더 추론: phone / sid / school
-      // 1행에 헤더가 있다면 그에 맞추고, 없다면 A/B/C 컬럼을 순서대로 사용
       const header = (data[0] || []).map(h => String(h).trim().toLowerCase());
       const guessHasHeader = header.includes('phone') || header.includes('sid');
 
@@ -1024,10 +936,9 @@ exports.processPhoneMappingUpload = functions.storage.object().onFinalize(async 
       }
     }
 
-    const grouped = groupByPhone(rows); // [{ phone: +8210..., sids:[...], school }]
+    const grouped = groupByPhone(rows);
     const col = db.collection('phones');
 
-    // 대용량 방지를 위해 batch 나눠 처리
     const batchSize = 400;
     for (let i = 0; i < grouped.length; i += batchSize) {
       const batch = db.batch();
@@ -1043,7 +954,6 @@ exports.processPhoneMappingUpload = functions.storage.object().onFinalize(async 
       await batch.commit();
     }
 
-    // ✅ 여기부터가 고친 부분: 업로드 로그 기록 (한 번만, .length 포함)
     await db.collection('upload_logs').add({
       filePath,
       processedCount: grouped.length,
@@ -1067,9 +977,6 @@ exports.processPhoneMappingUpload = functions.storage.object().onFinalize(async 
   }
 });
 
-// 클라이언트에서 직접 phones/{phone} 읽지 않도록, 서버에서 검증 + 바인딩까지 수행
-// 입력: { phone, sid }  (phone은 "+8210..." 형태/국내형 모두 허용)
-// 동작: phones/{phone}.sids에 sid가 있으면 bindings/{uid} 문서에 sid를 추가(union)하고 OK
 exports.verifyAndBindPhoneSid = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -1093,7 +1000,6 @@ exports.verifyAndBindPhoneSid = functions.https.onCall(async (data, context) => 
     return { ok: false, code: 'SID_MISMATCH', message: '전화번호와 학수번호가 일치하지 않습니다.' };
   }
 
-  // 바인딩 저장: bindings/{uid} 에 sids 배열로 합치기
   const uid = context.auth.uid;
   const bindRef = db.collection('bindings').doc(uid);
   await bindRef.set({
@@ -1105,7 +1011,6 @@ exports.verifyAndBindPhoneSid = functions.https.onCall(async (data, context) => 
   return { ok: true, message: '검증 및 바인딩 완료', phone: e164, sid: cleanSid };
 });
 
-// 내 바인딩 보기(프론트에서 바인딩 확인용)
 exports.getMyBindings = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -1116,5 +1021,3 @@ exports.getMyBindings = functions.https.onCall(async (data, context) => {
   const { sids = [], phone = null } = snap.data() || {};
   return { ok: true, sids, phone };
 });
-
-}
