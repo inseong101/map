@@ -8,7 +8,7 @@ try { admin.app(); } catch { admin.initializeApp(); }
 const db = admin.firestore();
 
 
-// 전화번호 형식 보정: 010... -> +8210...
+// ✅ 전화번호 형식 보정: 010... -> +8210...
 function toKRE164(raw) {
   if (!raw) return null;
   const digits = String(raw).replace(/[^\d+]/g, "");
