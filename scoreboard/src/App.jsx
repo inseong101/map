@@ -1,4 +1,3 @@
-// src/App.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import ControversialPanel from './components/ControversialPanel';
 import './App.css';
