@@ -193,3 +193,83 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     if (qNum >= 1 && qNum <= 80) return "1교시";
     if (qNum >= 81 && qNum <= 100) return "2교시";
     return null;
+  };
+
+  return (
+    <div className="wrong-panel-root">
+      <h2 style={{ marginTop: 0 }}>많이 틀린 문항 해설</h2>
+
+      <div className="round-tabs" role="tablist" aria-label="회차 선택">
+        {allRoundLabels.map((r) => {
+          const hasDataForRound = Object.values(highErrorQuestions).some(qList => qList.length > 0);
+          return (
+            <button
+              key={r}
+              role="tab"
+              aria-selected={roundLabel === r}
+              className={`tab-btn ${roundLabel === r ? "active" : ""}`}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRoundChange(r);
+              }}
+              disabled={!hasDataForRound}
+            >
+              {r}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="session-tabs" role="tablist" aria-label="교시 선택">
+        {SESSIONS.map((s) => (
+          <button
+            key={s}
+            role="tab"
+            aria-selected={activeSession === s}
+            className={`tab-btn ${activeSession === s ? "active" : ""}`}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveSession(s);
+              const subjects = getSubjectsBySession(s);
+              setActiveSubject(subjects[0] || null);
+            }}
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+
+      {activeSession && getSubjectsBySession(activeSession).length > 0 && (
+        <div className="subject-tabs" role="tablist" aria-label="과목 선택">
+          {getSubjectsBySession(activeSession).map((s) => (
+            <button
+              key={s}
+              role="tab"
+              aria-selected={activeSubject === s}
+              className={`tab-btn ${activeSubject === s ? "active" : ""}`}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveSubject(s);
+              }}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {renderButtons()}
+
+      <PdfModalPdfjs
+        open={pdfOpen}
+        onClose={() => setPdfOpen(false)}
+        filePath={pdfPath}
+        sid={sid}
+        title={`${roundLabel} ${activeSession} 많이 틀린 문항 해설`}
+      />
+    </div>
+  );
+}
