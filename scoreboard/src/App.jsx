@@ -7,7 +7,8 @@ import { auth, functions } from './firebase';
 import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 
-const ALL_ROUND_LABELS = ['1차', '2차'];
+// 🔧 논란 문제 해설을 제공할 회차 목록 (1차부터 8차까지)
+const ALL_ROUND_LABELS = ['1차', '2차', '3차', '4차', '5차', '6차', '7차', '8차'];
 const RESEND_COOLDOWN = 60;
 
 function mapAuthError(err) {
@@ -44,6 +45,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [resendLeft, setResendLeft] = useState(0);
   const cooldownTimerRef = useRef(null);
+  const [selectedRoundLabel, setSelectedRoundLabel] = useState(ALL_ROUND_LABELS[0]);
 
   useEffect(() => {
     if (!window.recaptchaVerifier) {
@@ -161,7 +163,9 @@ function App() {
     return (
       <div className="container">
         <ControversialPanel
-          roundLabel={ALL_ROUND_LABELS[0]}
+          allRoundLabels={ALL_ROUND_LABELS} // ✅ 모든 회차 라벨을 전달
+          roundLabel={selectedRoundLabel}
+          onRoundChange={setSelectedRoundLabel} // ✅ 회차 변경 핸들러 전달
           sid={studentId}
           onBack={handleLogout}
         />
