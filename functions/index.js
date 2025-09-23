@@ -239,15 +239,13 @@ async function processExcelData(jsonData, roundLabel, session) {
   }
 }
 
-async function findSubjectByQuestionNum(questionNum, session, roundLabel) {
-  const mappingDocRef = db.collection('subject_mappings').doc(`${roundLabel}_${session}`);
-  const doc = await mappingDocRef.get();
-  if (doc.exists) {
-    return doc.data().mapping[questionNum - 1] || null;
-  }
-  const ranges = SESSION_SUBJECT_RANGES[session] || [];
-  for (const range of ranges) {
-    if (questionNum >= range.from && questionNum <= range.to) return range.s;
+function findSubjectByQuestionNum(questionNum, session) {
+  const sessionsToCheck = session ? [session] : Object.keys(SESSION_SUBJECT_RANGES);
+  for (const sess of sessionsToCheck) {
+    const ranges = SESSION_SUBJECT_RANGES[sess] || [];
+    for (const range of ranges) {
+      if (questionNum >= range.from && questionNum <= range.to) return range.s;
+    }
   }
   return null;
 }
@@ -352,7 +350,7 @@ async function updateSessionAnalytics(roundLabel, session) {
         analytics.questionStats[qNum].correctCount++;
       }
 
-      const subject = findSubjectByQuestionNum(qNum, session, roundLabel);
+      const subject = findSubjectByQuestionNum(qNum, session);
       if (subject) {
         if (!analytics.subjectStats[subject]) {
           analytics.subjectStats[subject] = {
@@ -460,7 +458,7 @@ async function updateRoundAnalytics(roundLabel) {
     .slice(0, 50);
 
     round.overall.topWrongQuestions.forEach(q => {
-    const subject = findSubjectByQuestionNum(q.questionNum);
+    const subject = findSubjectByQuestionNum(q.questionNum, '1교시'); // ✅ 이 부분 수정 필요
     if (!subject) return;
     if (!round.overall.highErrorRateQuestions[subject]) {
       round.overall.highErrorRateQuestions[subject] = [];
@@ -473,6 +471,55 @@ async function updateRoundAnalytics(roundLabel) {
   await db.collection('analytics').doc(`${roundLabel}_summary`).set(round);
   await analyzeOverallStatus(roundLabel);
   console.log(`회차 요약 통계 업데이트 완료: ${roundLabel}`);
+}
+
+async function analyzeOverallStatus(roundLabel) {
+  console.log(`전체 응시 상태 분석 시작: ${roundLabel}`);
+
+  const sessions = ["1교시", "2교시", "3교시", "4교시"];
+  const allStudents = {};
+
+  for (const session of sessions) {
+    const sessionRef = db.collection('scores_raw').doc(roundLabel).collection(session);
+    const snap = await sessionRef.get();
+    snap.forEach(doc => {
+      const sid = doc.id;
+      if (!allStudents[sid]) allStudents[sid] = { sid, sessions: {} };
+      allStudents[sid].sessions[session] = doc.data();
+    });
+  }
+
+  const analysis = {
+    roundLabel,
+    totalStudents: 0,
+    byStatus: { completed: 0, dropout: 0, absent: 0 },
+    bySession: {},
+    lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+  };
+  sessions.forEach(s => analysis.bySession[s] = { attended: 0, absent: 0 });
+
+  Object.entries(allStudents).forEach(([sid, st]) => {
+    analysis.totalStudents++;
+    let completedCnt = 0;
+
+    sessions.forEach(s => {
+      const d = st.sessions[s];
+      const isAttended = d && d.status === 'completed';
+      if (isAttended) {
+        completedCnt++;
+        analysis.bySession[s].attended++;
+      } else {
+        analysis.bySession[s].absent++;
+      }
+    });
+
+    if (completedCnt === 4) analysis.byStatus.completed++;
+    else if (completedCnt === 0) analysis.byStatus.absent++;
+    else analysis.byStatus.dropout++;
+  });
+
+  await db.collection('analytics').doc(`${roundLabel}_overall_status`).set(analysis);
+  console.log(`전체 응시 상태 분석 완료: ${roundLabel}`);
 }
 
 exports.updateAnalyticsOnSubmission = functions.firestore
@@ -719,6 +766,7 @@ async function buildPrebinnedDistributions(roundLabel) {
   console.log(`[dist] saved distributions/${roundLabel} (N=${nationalStats.completed}, total=${nationalStats.total}, absent=${nationalStats.absent}, dropout=${nationalStats.dropout})`);
 }
 
+// HTTP: 사전집계 조회 (없으면 생성)
 exports.getPrebinnedDistribution = functions.https.onRequest(async (req, res) => {
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -746,6 +794,8 @@ exports.getPrebinnedDistribution = functions.https.onRequest(async (req, res) =>
   }
 });
 
+
+/* ========================= PDF 워터마크 & 로깅 ========================= */
 
 async function writeAudit({ uid, sid, filePath, action, meta = {}, req }) {
   const col = admin.firestore().collection("pdf_audit");
@@ -849,6 +899,7 @@ exports.logPdfAction = functions.https.onCall(async (data, context) => {
   return { ok: true };
 });
 
+// 해설 인덱스 제공 (explanation/ 폴더 스캔)
 exports.getExplanationIndex = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -860,6 +911,7 @@ exports.getExplanationIndex = functions.https.onCall(async (data, context) => {
   const bySession = { "1교시": [], "2교시": [], "3교시": [], "4교시": [] };
 
   files.forEach(f => {
+    // explanation/1-2-44.pdf  => 회차-교시-문항
     const m = f.name.match(/^explanation\/(\d+)-(\d+)-(\d+)\.pdf$/);
     if (!m) return;
     const [_, r, s, q] = m;
@@ -879,6 +931,105 @@ exports.getExplanationIndex = functions.https.onCall(async (data, context) => {
 });
 
 
+/* ========================= 전화번호 매핑: Storage 업로드 → Firestore ========================= */
+
+// phones/ 밑에 업로드되는 .xlsx 또는 .json 파일을 처리해 phones/{phone} 문서를 구성한다.
+// - phones/{phone} = { sids: [ "015001", ... ], school?: "가천대", updatedAt }
+// - 파일 포맷 예시(.xlsx 첫 시트):
+//    A열: phone, B열: sid, C열(optional): school
+// - 파일 포맷 예시(.json):
+//    [{ "phone": "010-1234-5678", "sid": "015001", "school": "가천대" }, ...]
+exports.processPhoneMappingUpload = functions.storage.object().onFinalize(async (object) => {
+  try {
+    const { name: filePath, bucket } = object;
+    if (!filePath) return null;
+    if (!/^phones\//.test(filePath)) return null;            // phones/ 하위만
+    if (!(/\.(xlsx|json)$/i.test(filePath))) return null;    // xlsx 또는 json만
+
+    const storage = admin.storage();
+    const file = storage.bucket(bucket).file(filePath);
+    const [buffer] = await file.download();
+
+    let rows = [];
+    if (/\.json$/i.test(filePath)) {
+      const arr = JSON.parse(buffer.toString("utf8"));
+      if (Array.isArray(arr)) {
+        rows = arr.map(x => ({
+          phone: x.phone,
+          sid: x.sid,
+          school: x.school
+        }));
+      }
+    } else {
+      const wb = XLSX.read(buffer, { type: 'buffer' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+      // 헤더 추론: phone / sid / school
+      // 1행에 헤더가 있다면 그에 맞추고, 없다면 A/B/C 컬럼을 순서대로 사용
+      const header = (data[0] || []).map(h => String(h).trim().toLowerCase());
+      const guessHasHeader = header.includes('phone') || header.includes('sid');
+
+      const startRow = guessHasHeader ? 1 : 0;
+      for (let r = startRow; r < data.length; r++) {
+        const row = data[r];
+        if (!row || row.length === 0) continue;
+        const rec = {
+          phone: guessHasHeader ? row[header.indexOf('phone')] : row[0],
+          sid:   guessHasHeader ? row[header.indexOf('sid')]   : row[1],
+          school: guessHasHeader
+            ? (header.includes('school') ? row[header.indexOf('school')] : "")
+            : row[2]
+        };
+        rows.push(rec);
+      }
+    }
+
+    const grouped = groupByPhone(rows); // [{ phone: +8210..., sids:[...], school }]
+    const col = db.collection('phones');
+
+    // 대용량 방지를 위해 batch 나눠 처리
+    const batchSize = 400;
+    for (let i = 0; i < grouped.length; i += batchSize) {
+      const batch = db.batch();
+      const chunk = grouped.slice(i, i + batchSize);
+      chunk.forEach(({ phone, sids, school }) => {
+        const ref = col.doc(phone);
+        batch.set(ref, {
+          sids,
+          school: school || null,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      });
+      await batch.commit();
+    }
+
+    // ✅ 여기부터가 고친 부분: 업로드 로그 기록 (한 번만, .length 포함)
+    await db.collection('upload_logs').add({
+      filePath,
+      processedCount: grouped.length,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      status: 'completed',
+      type: 'phones'
+    });
+
+    console.log(`[phones] ${filePath} 처리 완료 — ${grouped.length}개 번호`);
+    return null;
+  } catch (err) {
+    console.error('전화번호 매핑 업로드 처리 실패:', err);
+    await db.collection('upload_logs').add({
+      filePath: object.name,
+      error: err.message,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      status: 'failed',
+      type: 'phones'
+    });
+    return null;
+  }
+});
+
+// 클라이언트에서 직접 phones/{phone} 읽지 않도록, 서버에서 검증 + 바인딩까지 수행
+// 입력: { phone, sid }  (phone은 "+8210..." 형태/국내형 모두 허용)
+// 동작: phones/{phone}.sids에 sid가 있으면 bindings/{uid} 문서에 sid를 추가(union)하고 OK
 exports.verifyAndBindPhoneSid = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -902,6 +1053,7 @@ exports.verifyAndBindPhoneSid = functions.https.onCall(async (data, context) => 
     return { ok: false, code: 'SID_MISMATCH', message: '전화번호와 학수번호가 일치하지 않습니다.' };
   }
 
+  // 바인딩 저장: bindings/{uid} 에 sids 배열로 합치기
   const uid = context.auth.uid;
   const bindRef = db.collection('bindings').doc(uid);
   await bindRef.set({
@@ -913,6 +1065,7 @@ exports.verifyAndBindPhoneSid = functions.https.onCall(async (data, context) => 
   return { ok: true, message: '검증 및 바인딩 완료', phone: e164, sid: cleanSid };
 });
 
+// 내 바인딩 보기(프론트에서 바인딩 확인용)
 exports.getMyBindings = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -922,26 +1075,4 @@ exports.getMyBindings = functions.https.onCall(async (data, context) => {
   if (!snap.exists) return { ok: true, sids: [], phone: null };
   const { sids = [], phone = null } = snap.data() || {};
   return { ok: true, sids, phone };
-});
-
-exports.listAvailableRounds = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
-  }
-  try {
-    const analyticsRef = db.collection('analytics');
-    const summaries = await analyticsRef.get();
-    const rounds = [];
-    summaries.forEach(doc => {
-      const id = doc.id;
-      if (id.endsWith('_summary')) {
-        const roundLabel = id.replace('_summary', '');
-        rounds.push(roundLabel);
-      }
-    });
-    return { rounds: rounds.sort() };
-  } catch (e) {
-    console.error("Available rounds list failed:", e);
-    return { rounds: [] };
-  }
 });
