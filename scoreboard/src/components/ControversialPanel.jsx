@@ -7,7 +7,7 @@ import "./WrongPanel.css";
 const SESSIONS = ["1교시", "2교시", "3교시", "4교시"];
 const SESSION_LENGTH = { "1교시": 80, "2교시": 100, "3교시": 80, "4교시": 80 };
 
-function bestGrid(n, W, H, gap = 3, aspect = 1) { // 🔧 gap을 3으로 줄여 더 촘촘하게
+function bestGrid(n, W, H, gap = 3, aspect = 1) {
   if (!n || !W || !H) return { cols: 1, rows: 1, cellW: 0, cellH: 0 };
   let best = { cols: 1, rows: n, cellW: 0, cellH: 0, score: -1 };
   for (let cols = 1; cols <= n; cols++) {
@@ -24,10 +24,11 @@ function bestGrid(n, W, H, gap = 3, aspect = 1) { // 🔧 gap을 3으로 줄여 
   return best;
 }
 
-export default function ControversialPanel({ allRoundLabels, roundLabel, onRoundChange, sid, onBack }) {
+export default function ControversialPanel({ allRoundLabels, roundLabel, onRoundChange, sid }) {
   const [activeSession, setActiveSession] = useState("1교시");
+  const [activeSubject, setActiveSubject] = useState(null);
   const gridWrapRef = useRef(null);
-  const [gridStyle, setGridStyle] = useState({ cols: 1, cellW: 24, cellH: 24 }); // 🔧 cellW/H 기본값 24로 작게 설정
+  const [gridStyle, setGridStyle] = useState({ cols: 1, cellW: 24, cellH: 24 });
   const [pdfOpen, setPdfOpen] = useState(false);
   const [pdfPath, setPdfPath] = useState(null);
 
@@ -35,6 +36,7 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
   const [fireBySession, setFireBySession] = useState({
     "1교시": new Set(), "2교시": new Set(), "3교시": new Set(), "4교시": new Set(),
   });
+  const [hasErrorData, setHasErrorData] = useState(false);
 
   const getHighErrorRateQuestions = useCallback(async (rLabel) => {
     try {
@@ -43,7 +45,7 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
       const res = await getHighError({ roundLabel: rLabel });
       return res.data?.data || {};
     } catch (e) {
-      console.error("고오답률 문항 조회 실패:", e);
+      console.error("많이 틀린 문항 조회 실패:", e);
       return {};
     }
   }, []);
@@ -75,6 +77,11 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
           "3교시": new Set(explanationIndex["3교시"] || []),
           "4교시": new Set(explanationIndex["4교시"] || []),
         });
+        const hasData = Object.keys(highErrors).some(s => Object.keys(highErrors[s]).length > 0);
+        setHasErrorData(hasData);
+        if(hasData && !activeSubject) {
+          setActiveSubject(Object.keys(highErrors)[0] || null);
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -84,8 +91,8 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     const el = gridWrapRef.current;
     if (!el) return;
     const compute = () => {
+      const total = activeSubject ? highErrorQuestions[activeSubject].length : 0;
       const { width, height } = el.getBoundingClientRect();
-      const total = SESSION_LENGTH[activeSession] || 80;
       const { cols, cellW, cellH } = bestGrid(total, Math.max(0, width), Math.max(0, height), 3, 1);
       setGridStyle({ cols: Math.max(1, cols), cellW: Math.max(22, cellW), cellH: Math.max(22, cellH) });
     };
@@ -93,7 +100,7 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     ro.observe(el);
     compute();
     return () => ro.disconnect();
-  }, [activeSession]);
+  }, [activeSubject, highErrorQuestions]);
 
   const openExplanation = (session, qNum) => {
     const rNum = parseInt(String(roundLabel).replace(/\D/g, ""), 10) || 1;
@@ -103,25 +110,24 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     setPdfOpen(true);
   };
 
-  const renderButtons = (session) => {
-    const total = SESSION_LENGTH[session] || 80;
+  const renderButtons = () => {
+    if (!activeSubject || !highErrorQuestions[activeSubject]) return null;
+    const questions = highErrorQuestions[activeSubject];
     const { cols, cellW, cellH } = gridStyle;
-    const questionsWithHighError = new Set(Object.values(highErrorQuestions).flat().map(q => q.questionNum));
-
     return (
       <div
         className="btn-grid"
         style={{
           gridTemplateColumns: `repeat(${cols}, ${cellW}px)`,
-          gridTemplateRows: `repeat(${Math.ceil(total / cols)}, ${cellH}px)`,
+          gridTemplateRows: `repeat(${Math.ceil(questions.length / cols)}, ${cellH}px)`,
         }}
       >
-        {Array.from({ length: total }, (_, i) => {
-          const qNum = i + 1;
-          const isHighError = questionsWithHighError.has(qNum);
+        {questions.map((q) => {
+          const qNum = q.questionNum;
+          const session = findSessionByQuestionNum(qNum);
           const hasExp = fireBySession[session]?.has(qNum);
-          const cls = `qbtn${isHighError ? " red" : ""}${hasExp ? " fire" : ""}`;
-          const label = `문항 ${qNum}${isHighError ? " (논란 문제)" : ""}${hasExp ? " · 특별 해설" : ""}`;
+          const cls = `qbtn red${hasExp ? " fire" : ""}`;
+          const label = `문항 ${qNum}${hasExp ? " · 특별 해설" : ""}`;
 
           return (
             <button
@@ -130,7 +136,6 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
               className={cls}
               title={label}
               aria-label={label}
-              data-click-role={hasExp ? "exp" : undefined}
               onClick={
                 hasExp
                   ? (e) => { e.stopPropagation(); openExplanation(session, qNum); }
@@ -151,30 +156,32 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     );
   };
 
+  const getSubjectsBySession = (session) => {
+    const subjects = [];
+    Object.entries(highErrorQuestions).forEach(([subj, questions]) => {
+      if (questions.some(q => findSessionByQuestionNum(q.questionNum) === session)) {
+        subjects.push(subj);
+      }
+    });
+    return subjects;
+  };
+
+  const findSessionByQuestionNum = (qNum) => {
+    const ranges = {
+      "1교시": { min: 1, max: 80 },
+      "2교시": { min: 1, max: 100 },
+      "3교시": { min: 1, max: 80 },
+      "4교시": { min: 1, max: 80 }
+    };
+    if (qNum >= 1 && qNum <= 80) return "1교시";
+    if (qNum >= 81 && qNum <= 100) return "2교시";
+    return null;
+  };
+
   return (
     <div className="wrong-panel-root">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <h2 style={{ marginTop: 0 }}>논란 문제 해설</h2>
-        <button onClick={onBack} className="btn secondary" style={{ fontSize: 13 }}>뒤로가기</button>
-      </div>
+      <h2 style={{ marginTop: 0 }}>많이 틀린 문항 해설</h2>
 
-      <div className="legend-line">
-        <span>색상: <b className="legend-red">빨강</b>=논란 문제, 회색=일반 문제</span>
-        <span className="legend-example">
-          <button
-            type="button"
-            className="qbtn fire sample"
-            aria-label="특별 해설 제공 예시"
-            style={{ width: `${gridStyle.cellW}px`, height: `${gridStyle.cellH}px` }}
-            tabIndex={-1}
-          >
-            해설<br />제공<br /><span className="flame-emoji" aria-hidden>🔥</span>
-          </button>
-          <span className="legend-label">특별 해설 제공</span>
-        </span>
-      </div>
-
-      {/* ✅ 회차 선택 탭 추가 */}
       <div className="round-tabs" role="tablist" aria-label="회차 선택">
         {allRoundLabels.map((r) => (
           <button
@@ -192,7 +199,7 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
           </button>
         ))}
       </div>
-      
+
       <div className="session-tabs" role="tablist" aria-label="교시 선택">
         {SESSIONS.map((s) => (
           <button
@@ -201,10 +208,11 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
             aria-selected={activeSession === s}
             className={`tab-btn ${activeSession === s ? "active" : ""}`}
             type="button"
-            data-click-role="tab"
             onClick={(e) => {
               e.stopPropagation();
               setActiveSession(s);
+              const subjects = getSubjectsBySession(s);
+              setActiveSubject(subjects[0] || null);
             }}
           >
             {s}
@@ -212,9 +220,27 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
         ))}
       </div>
 
-      <div className="tab-content" role="tabpanel" aria-label={`${activeSession} 문항`} ref={gridWrapRef}>
-        {renderButtons(activeSession)}
-      </div>
+      {activeSession && getSubjectsBySession(activeSession).length > 0 && (
+        <div className="subject-tabs" role="tablist" aria-label="과목 선택">
+          {getSubjectsBySession(activeSession).map((s) => (
+            <button
+              key={s}
+              role="tab"
+              aria-selected={activeSubject === s}
+              className={`tab-btn ${activeSubject === s ? "active" : ""}`}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveSubject(s);
+              }}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {renderButtons()}
 
       <PdfModalPdfjs
         open={pdfOpen}
