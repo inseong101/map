@@ -45,23 +45,6 @@ function App() {
   const [resendLeft, setResendLeft] = useState(0);
   const cooldownTimerRef = useRef(null);
   const [selectedRoundLabel, setSelectedRoundLabel] = useState(ALL_ROUND_LABELS[0]);
-  const [availableRounds, setAvailableRounds] = useState([]);
-
-  const getAvailableRounds = useCallback(async () => {
-    try {
-      const functions = getFunctions(undefined, "us-central1");
-      const listRounds = httpsCallable(functions, "listAvailableRounds");
-      const res = await listRounds();
-      return res.data?.rounds || [];
-    } catch (e) {
-      console.error("사용 가능한 회차 조회 실패:", e);
-      return [];
-    }
-  }, []);
-
-  useEffect(() => {
-    getAvailableRounds().then(setAvailableRounds);
-  }, [getAvailableRounds]);
 
   useEffect(() => {
     if (!window.recaptchaVerifier) {
@@ -179,7 +162,7 @@ function App() {
     return (
       <div className="container">
         <ControversialPanel
-          allRoundLabels={availableRounds}
+          allRoundLabels={ALL_ROUND_LABELS} // ✅ 모든 회차 라벨을 직접 전달
           roundLabel={selectedRoundLabel}
           onRoundChange={setSelectedRoundLabel}
           sid={studentId}
