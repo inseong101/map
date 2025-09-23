@@ -7,7 +7,7 @@ import { auth, functions } from './firebase';
 import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 
-const ALL_ROUND_LABELS = ['1차', '2차']; // 논란 문제 해설을 제공할 회차
+const ALL_ROUND_LABELS = ['1차', '2차'];
 const RESEND_COOLDOWN = 60;
 
 function mapAuthError(err) {
@@ -23,6 +23,9 @@ function mapAuthError(err) {
       return '인증번호가 올바르지 않습니다.';
     case 'auth/code-expired':
       return '인증번호가 만료되었습니다. 다시 요청해주세요.';
+    case 'functions/internal':
+    case 'functions/invalid-argument':
+      return '서버 검증 중 오류가 발생했습니다. 정보를 확인하고 다시 시도해주세요.';
     default:
       return err?.message || '요청 처리 중 오류가 발생했습니다.';
   }
@@ -30,6 +33,7 @@ function mapAuthError(err) {
 
 function App() {
   const [currentView, setCurrentView] = useState('home');
+  const [studentId, setStudentId] = useState('');
   const [phone, setPhone] = useState('');
   const [smsCode, setSmsCode] = useState('');
   const [confirmation, setConfirmation] = useState(null);
@@ -37,6 +41,7 @@ function App() {
 
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [resendLeft, setResendLeft] = useState(0);
   const cooldownTimerRef = useRef(null);
 
@@ -71,7 +76,7 @@ function App() {
   };
 
   const handleSendCode = async () => {
-    if (sending || verifying || resendLeft > 0) return;
+    if (sending || verifying || loading || resendLeft > 0) return;
     setError('');
 
     const cleanPhone = String(phone).trim();
@@ -95,6 +100,20 @@ function App() {
     }
   };
 
+  const serverVerifyAndBind = async (phoneInput, sidInput) => {
+    const verifyFn = httpsCallable(functions, 'verifyAndBindPhoneSid');
+    const res = await verifyFn({ phone: phoneInput, sid: sidInput });
+    const { ok, code, message } = res.data || {};
+    if (!ok) {
+      const msg =
+        code === 'PHONE_NOT_FOUND' ? '등록되지 않은 전화번호입니다.' :
+        code === 'SID_MISMATCH'    ? '전화번호와 학수번호가 일치하지 않습니다.' :
+        message || '검증에 실패했습니다.';
+      throw new Error(msg);
+    }
+    return true;
+  };
+
   const handleVerifyCode = async () => {
     if (verifying) return false;
     setError('');
@@ -106,9 +125,10 @@ function App() {
     try {
       setVerifying(true);
       await confirmation.confirm(smsCode);
+      await serverVerifyAndBind(phone, studentId);
       return true;
     } catch (err) {
-      console.error('코드 검증 오류:', err);
+      console.error('코드/바인딩 검증 오류:', err);
       setError(mapAuthError(err));
       return false;
     } finally {
@@ -118,6 +138,10 @@ function App() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!/^\d{6}$/.test(studentId)) {
+        setError('학수번호는 숫자 6자리여야 합니다.');
+        return;
+    }
     const ok = await handleVerifyCode();
     if (ok) {
       setCurrentView('controversial');
@@ -127,6 +151,7 @@ function App() {
   const handleLogout = () => {
     auth.signOut();
     setCurrentView('home');
+    setStudentId('');
     setPhone('');
     setSmsCode('');
     setConfirmation(null);
@@ -137,23 +162,32 @@ function App() {
       <div className="container">
         <ControversialPanel
           roundLabel={ALL_ROUND_LABELS[0]}
-          sid={auth.currentUser?.uid || 'guest'}
+          sid={studentId}
           onBack={handleLogout}
         />
       </div>
     );
   }
 
-  const sendDisabled = sending || verifying || resendLeft > 0 || !phone.trim();
-  const submitDisabled = sending || verifying || !smsCode;
+  const sendDisabled = sending || verifying || loading || resendLeft > 0 || !phone.trim();
+  const submitDisabled = sending || verifying || loading || !studentId || !smsCode;
 
   return (
     <div className="container">
       <div id="recaptcha-container" />
       <h1>논란 문제 해설</h1>
       <div className="card narrow">
-        <form onSubmit={e => { e.preventDefault(); handleSubmit(); }} className="flex-column">
-          <label style={{ fontWeight: 800 }}>전화번호</label>
+        <form onSubmit={handleSubmit} className="flex-column">
+          <label style={{ fontWeight: 800 }}>학수번호</label>
+          <input
+            className="input"
+            type="text"
+            value={studentId}
+            onChange={(e) => setStudentId(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            placeholder="예) 015001"
+            disabled={sending || verifying || loading}
+          />
+          <label style={{ fontWeight: 800, marginTop: 6 }}>전화번호</label>
           <div className="flex" style={{ gap: 8 }}>
             <input
               className="input"
@@ -161,7 +195,7 @@ function App() {
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="+821012345678 또는 010-1234-5678"
+              placeholder="010-1234-5678"
               disabled={sending || verifying}
             />
             <button
@@ -178,7 +212,6 @@ function App() {
                   : '인증번호 받기'}
             </button>
           </div>
-
           <label style={{ fontWeight: 800, marginTop: 6 }}>인증번호</label>
           <input
             className="input"
@@ -188,17 +221,15 @@ function App() {
             placeholder="예) 123456"
             disabled={sending || verifying}
           />
-
           <button
             type="submit"
             className="btn"
             disabled={submitDisabled}
             style={{ marginTop: 6 }}
           >
-            {verifying ? '인증 확인 중...' : '인증 확인'}
+            {verifying ? '인증 확인 중...' : '인증 확인 후 해설 보기'}
           </button>
         </form>
-
         {error && <div className="alert" style={{ whiteSpace: 'pre-line' }}>{error}</div>}
       </div>
     </div>
