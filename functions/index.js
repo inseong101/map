@@ -8,7 +8,6 @@ try { admin.app(); } catch { admin.initializeApp(); }
 const db = admin.firestore();
 
 
-// ✅ 전화번호 형식 보정: 010... -> +8210...
 function toKRE164(raw) {
   if (!raw) return null;
   const digits = String(raw).replace(/[^\d+]/g, "");
@@ -41,17 +40,13 @@ function groupByPhone(rows) {
 const SUBJECT_MAX = {
   "간":16, "심":16, "비":16, "폐":16, "신":16,
   "상한":16, "사상":16, "침구":48, "법규":20,
-  "외과":16, "신경":16, "안이비":16, "부인과":32, 
+  "외과":16, "신정":16, "안이비":16, "부인":32, 
   "소아":24, "예방":24, "생리":16, "본초":16
 };
 
 const SESSION_SUBJECT_RANGES = {
   "1교시": [
-    { from: 1,  to: 16, s: "간" },
-    { from: 17, to: 32, s: "심" },
-    { from: 33, to: 48, s: "비" },
-    { from: 49, to: 64, s: "폐" },
-    { from: 65, to: 80, s: "신" }
+    { from: 1, to: 80, s: "내과학" },
   ],
   "2교시": [
     { from: 1,  to: 16, s: "상한" },
@@ -60,13 +55,13 @@ const SESSION_SUBJECT_RANGES = {
     { from: 81, to: 100, s: "법규" }
   ],
   "3교시": [
-    { from: 1,  to: 16, s: "외과" },
-    { from: 17, to: 32, s: "신경" },
+    { from: 1, to: 16, s: "외과" },
+    { from: 17, to: 32, s: "신정" },
     { from: 33, to: 48, s: "안이비" },
-    { from: 49, to: 80, s: "부인과" }
+    { from: 49, to: 80, s: "부인" }
   ],
   "4교시": [
-    { from: 1,  to: 24, s: "소아" },
+    { from: 1, to: 24, s: "소아" },
     { from: 25, to: 48, s: "예방" },
     { from: 49, to: 64, s: "생리" },
     { from: 65, to: 80, s: "본초" }
@@ -244,13 +239,15 @@ async function processExcelData(jsonData, roundLabel, session) {
   }
 }
 
-function findSubjectByQuestionNum(questionNum, session = null) {
-  const sessionsToCheck = session ? [session] : Object.keys(SESSION_SUBJECT_RANGES);
-  for (const sess of sessionsToCheck) {
-    const ranges = SESSION_SUBJECT_RANGES[sess] || [];
-    for (const range of ranges) {
-      if (questionNum >= range.from && questionNum <= range.to) return range.s;
-    }
+async function findSubjectByQuestionNum(questionNum, session, roundLabel) {
+  const mappingDocRef = db.collection('subject_mappings').doc(`${roundLabel}_${session}`);
+  const doc = await mappingDocRef.get();
+  if (doc.exists) {
+    return doc.data().mapping[questionNum - 1] || null;
+  }
+  const ranges = SESSION_SUBJECT_RANGES[session] || [];
+  for (const range of ranges) {
+    if (questionNum >= range.from && questionNum <= range.to) return range.s;
   }
   return null;
 }
@@ -355,7 +352,7 @@ async function updateSessionAnalytics(roundLabel, session) {
         analytics.questionStats[qNum].correctCount++;
       }
 
-      const subject = findSubjectByQuestionNum(qNum, session);
+      const subject = findSubjectByQuestionNum(qNum, session, roundLabel);
       if (subject) {
         if (!analytics.subjectStats[subject]) {
           analytics.subjectStats[subject] = {
@@ -518,30 +515,25 @@ exports.manualUpdateAnalytics = functions.https.onRequest(async (req, res) => {
   }
 });
 
-exports.getHighErrorRateQuestions = functions.https.onRequest(async (req, res) => {
-  res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') return res.status(204).send('');
-
-  try {
-    const { roundLabel } = req.query;
-    if (!roundLabel) return res.status(400).json({ error: 'roundLabel은 필수입니다.' });
-
-    const snap = await db.collection('analytics').doc(`${roundLabel}_summary`).get();
-    if (!snap.exists) {
-      return res.json({ success: true, data: {}, topQuestions: [], message: '데이터 없음' });
-    }
-    const data = snap.data() || {};
-    res.json({
-      success: true,
-      data: data.overall?.highErrorRateQuestions || {},
-      topQuestions: data.overall?.topWrongQuestions || []
-    });
-  } catch (e) {
-    console.error('getHighErrorRateQuestions 실패:', e);
-    res.status(500).json({ error: '서버 오류', details: e.message });
+exports.getHighErrorRateQuestions = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
   }
+  const { roundLabel } = data || {};
+  if (!roundLabel) {
+    throw new functions.https.HttpsError("invalid-argument", "roundLabel은 필수입니다.");
+  }
+  
+  const snap = await db.collection('analytics').doc(`${roundLabel}_summary`).get();
+  if (!snap.exists) {
+    return { success: true, data: {}, topQuestions: [], message: '데이터 없음' };
+  }
+  const summary = snap.data() || {};
+  return {
+    success: true,
+    data: summary.overall?.highErrorRateQuestions || {},
+    topQuestions: summary.overall?.topWrongQuestions || []
+  };
 });
 
 exports.getQuestionChoiceStats = functions.https.onRequest(async (req, res) => {
@@ -887,96 +879,6 @@ exports.getExplanationIndex = functions.https.onCall(async (data, context) => {
 });
 
 
-// phones/ 밑에 업로드되는 .xlsx 또는 .json 파일을 처리해 phones/{phone} 문서를 구성한다.
-// - phones/{phone} = { sids: [ "015001", ... ], school?: "가천대", updatedAt }
-// - 파일 포맷 예시(.xlsx 첫 시트):
-//    A열: phone, B열: sid, C열(optional): school
-// - 파일 포맷 예시(.json):
-//    [{ "phone": "010-1234-5678", "sid": "015001", "school": "가천대" }, ...]
-exports.processPhoneMappingUpload = functions.storage.object().onFinalize(async (object) => {
-  try {
-    const { name: filePath, bucket } = object;
-    if (!filePath) return null;
-    if (!/^phones\//.test(filePath)) return null;
-    if (!(/\.(xlsx|json)$/i.test(filePath))) return null;
-
-    const storage = admin.storage();
-    const file = storage.bucket(bucket).file(filePath);
-    const [buffer] = await file.download();
-
-    let rows = [];
-    if (/\.json$/i.test(filePath)) {
-      const arr = JSON.parse(buffer.toString("utf8"));
-      if (Array.isArray(arr)) {
-        rows = arr.map(x => ({
-          phone: x.phone,
-          sid: x.sid,
-          school: x.school
-        }));
-      }
-    } else {
-      const wb = XLSX.read(buffer, { type: 'buffer' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
-      const header = (data[0] || []).map(h => String(h).trim().toLowerCase());
-      const guessHasHeader = header.includes('phone') || header.includes('sid');
-
-      const startRow = guessHasHeader ? 1 : 0;
-      for (let r = startRow; r < data.length; r++) {
-        const row = data[r];
-        if (!row || row.length === 0) continue;
-        const rec = {
-          phone: guessHasHeader ? row[header.indexOf('phone')] : row[0],
-          sid:   guessHasHeader ? row[header.indexOf('sid')]   : row[1],
-          school: guessHasHeader
-            ? (header.includes('school') ? row[header.indexOf('school')] : "")
-            : row[2]
-        };
-        rows.push(rec);
-      }
-    }
-
-    const grouped = groupByPhone(rows);
-    const col = db.collection('phones');
-
-    const batchSize = 400;
-    for (let i = 0; i < grouped.length; i += batchSize) {
-      const batch = db.batch();
-      const chunk = grouped.slice(i, i + batchSize);
-      chunk.forEach(({ phone, sids, school }) => {
-        const ref = col.doc(phone);
-        batch.set(ref, {
-          sids,
-          school: school || null,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
-      });
-      await batch.commit();
-    }
-
-    await db.collection('upload_logs').add({
-      filePath,
-      processedCount: grouped.length,
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      status: 'completed',
-      type: 'phones'
-    });
-
-    console.log(`[phones] ${filePath} 처리 완료 — ${grouped.length}개 번호`);
-    return null;
-  } catch (err) {
-    console.error('전화번호 매핑 업로드 처리 실패:', err);
-    await db.collection('upload_logs').add({
-      filePath: object.name,
-      error: err.message,
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      status: 'failed',
-      type: 'phones'
-    });
-    return null;
-  }
-});
-
 exports.verifyAndBindPhoneSid = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -1020,4 +922,26 @@ exports.getMyBindings = functions.https.onCall(async (data, context) => {
   if (!snap.exists) return { ok: true, sids: [], phone: null };
   const { sids = [], phone = null } = snap.data() || {};
   return { ok: true, sids, phone };
+});
+
+exports.listAvailableRounds = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
+  }
+  try {
+    const analyticsRef = db.collection('analytics');
+    const summaries = await analyticsRef.get();
+    const rounds = [];
+    summaries.forEach(doc => {
+      const id = doc.id;
+      if (id.endsWith('_summary')) {
+        const roundLabel = id.replace('_summary', '');
+        rounds.push(roundLabel);
+      }
+    });
+    return { rounds: rounds.sort() };
+  } catch (e) {
+    console.error("Available rounds list failed:", e);
+    return { rounds: [] };
+  }
 });
