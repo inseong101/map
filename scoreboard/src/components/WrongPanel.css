@@ -27,7 +27,7 @@
 }
 
 /* 상단 탭 */
-.session-tabs {
+.session-tabs, .round-tabs {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
@@ -60,10 +60,9 @@
 /* 번호 버튼 그리드: 행/열은 JSX에서 픽셀로 지정 */
 .btn-grid {
   display: grid;
-  gap: 5px;
+  gap: 3px;          /* 🔧 간격 줄임 */
   width: 100%;
   height: 100%;      /* 탭 콘텐츠 영역을 꽉 채움 */
-  /* grid-template-columns / rows 는 인라인 스타일로 주입됨 */
 }
 
 /* 기본 번호 버튼 */
@@ -75,16 +74,14 @@
   color: var(--ink);
   border-radius: 6px;
   font-weight: 800;
-  font-size: 11px;
+  font-size: 10px;   /* 🔧 폰트 크기 줄임 */
   line-height: 1;
   cursor: default;
 
-  /* 셀 크기를 100%로 채우고 중앙 정렬 */
   width: 100%;
   height: 100%;
   display: flex; align-items: center; justify-content: center;
 
-  /* 여백으로 셀 계산을 흐리지 않기 위해 padding 제거 */
   padding: 0;
 }
 
@@ -137,7 +134,7 @@
 
 /* 아주 작은 화면 보정 */
 @media (max-width: 380px) {
-  .qbtn { font-size: 10.5px; }
+  .qbtn { font-size: 10px; }
 }
 
 /* 예시 버튼을 번호 박스와 완전 동일 크기/정렬로 */
@@ -207,4 +204,11 @@
 /* 혹시 qbtn에 pointer-events: none 이 들어갔던 경우 복구 */
 .qbtn {
   pointer-events: auto;
+}
+
+/* 🔧 PDF 모달이 뒤집히는 버그를 막기 위해 transform을 초기화 */
+.pdf-modal-root, .pdf-modal-root * {
+  transform: none !important;
+  transform-style: flat !important;
+  backface-visibility: visible !important;
 }
