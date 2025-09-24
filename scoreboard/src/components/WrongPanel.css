@@ -26,12 +26,13 @@
   gap: 6px;
 }
 
-/* 상단 탭 */
-.session-tabs, .round-tabs {
+/* 상단 탭 - 가운데 정렬 */
+.session-tabs, .round-tabs, .subject-tabs {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
   margin: 8px 0 10px;
+  justify-content: center; /* 가운데 정렬 */
 }
 .tab-btn {
   appearance: none;
@@ -65,7 +66,7 @@
   height: 100%;      /* 탭 콘텐츠 영역을 꽉 채움 */
 }
 
-/* 기본 번호 버튼 */
+/* 기본 번호 버튼 - 해설 없는 문제는 평범한 색상 */
 .qbtn {
   position: relative; /* 🔥 이모지 배치용 */
   appearance: none;
@@ -85,11 +86,18 @@
   padding: 0;
 }
 
-/* 내 오답 = 빨강 */
+/* 내 오답 = 빨강 (해설 있는 문제만) */
 .qbtn.red {
   background: rgba(239,68,68,.16);
   border-color: rgba(239,68,68,.45);
   color: #ffd8d8;
+}
+
+/* 해설 없는 문제는 회색 톤 유지 */
+.qbtn.no-explanation {
+  background: rgba(255,255,255,0.03);
+  border-color: var(--line);
+  color: var(--muted);
 }
 
 /* 🔥 불타는 버튼 효과 */
