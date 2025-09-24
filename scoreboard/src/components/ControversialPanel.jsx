@@ -97,13 +97,14 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
   const [activeSession, setActiveSession] = useState("1교시");
   const [activeSubject, setActiveSubject] = useState(null);
   const gridWrapRef = useRef(null);
-  const [gridStyle, setGridStyle] = useState({ cols: 10, cellW: 60, cellH: 60 }); // 10열로 시작
+  const [gridStyle, setGridStyle] = useState({ cols: 10, cellW: 60, cellH: 60 });
   const [pdfOpen, setPdfOpen] = useState(false);
   const [pdfPath, setPdfPath] = useState(null);
   const [highErrorQuestions, setHighErrorQuestions] = useState({});
   const [fireBySession, setFireBySession] = useState({
     "1교시": new Set(), "2교시": new Set(), "3교시": new Set(), "4교시": new Set(),
   });
+  const [loading, setLoading] = useState(false); // 로딩 상태 추가
 
   const getHighErrorRateQuestions = useCallback(async (rLabel) => {
     try {
@@ -133,6 +134,7 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     let cancelled = false;
     (async () => {
       console.log("데이터 로딩 시작:", roundLabel);
+      setLoading(true); // 로딩 시작
       
       // 해당 회차가 매핑되어 있지 않으면 데이터 로딩 중단
       if (!isRoundAvailable(roundLabel)) {
@@ -143,39 +145,48 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
             "1교시": new Set(), "2교시": new Set(), "3교시": new Set(), "4교시": new Set(),
           });
           setActiveSubject(null);
+          setLoading(false);
         }
         return;
       }
       
-      const [highErrors, explanationIndex] = await Promise.all([
-        getHighErrorRateQuestions(roundLabel),
-        getExplanationIndex(roundLabel)
-      ]);
-      
-      if (!cancelled) {
-        console.log("받은 데이터:", { highErrors, explanationIndex });
-        setHighErrorQuestions(highErrors);
-        setFireBySession({
-          "1교시": new Set(explanationIndex["1교시"] || []),
-          "2교시": new Set(explanationIndex["2교시"] || []),
-          "3교시": new Set(explanationIndex["3교시"] || []),
-          "4교시": new Set(explanationIndex["4교시"] || []),
-        });
+      try {
+        const [highErrors, explanationIndex] = await Promise.all([
+          getHighErrorRateQuestions(roundLabel),
+          getExplanationIndex(roundLabel)
+        ]);
         
-        // 첫 번째 과목을 활성화 (순서대로)
-        const subjectKeys = Object.keys(highErrors);
-        if (subjectKeys.length > 0) {
-          // SUBJECT_ORDER에 따라 정렬된 첫 번째 과목 선택
-          const sortedSubjects = subjectKeys.sort((a, b) => {
-            const aIndex = SUBJECT_ORDER.indexOf(a);
-            const bIndex = SUBJECT_ORDER.indexOf(b);
-            return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+        if (!cancelled) {
+          console.log("받은 데이터:", { highErrors, explanationIndex });
+          setHighErrorQuestions(highErrors);
+          setFireBySession({
+            "1교시": new Set(explanationIndex["1교시"] || []),
+            "2교시": new Set(explanationIndex["2교시"] || []),
+            "3교시": new Set(explanationIndex["3교시"] || []),
+            "4교시": new Set(explanationIndex["4교시"] || []),
           });
-          setActiveSubject(sortedSubjects[0]);
-          console.log("활성 과목 설정:", sortedSubjects[0]);
-        } else {
-          setActiveSubject(null);
-          console.log("과목 데이터 없음");
+          
+          // 첫 번째 과목을 활성화 (순서대로)
+          const subjectKeys = Object.keys(highErrors);
+          if (subjectKeys.length > 0) {
+            // SUBJECT_ORDER에 따라 정렬된 첫 번째 과목 선택
+            const sortedSubjects = subjectKeys.sort((a, b) => {
+              const aIndex = SUBJECT_ORDER.indexOf(a);
+              const bIndex = SUBJECT_ORDER.indexOf(b);
+              return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+            });
+            setActiveSubject(sortedSubjects[0]);
+            console.log("활성 과목 설정:", sortedSubjects[0]);
+          } else {
+            setActiveSubject(null);
+            console.log("과목 데이터 없음");
+          }
+        }
+      } catch (error) {
+        console.error("데이터 로딩 실패:", error);
+      } finally {
+        if (!cancelled) {
+          setLoading(false); // 로딩 완료
         }
       }
     })();
@@ -205,11 +216,11 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
           const { cols, cellW, cellH } = bestGrid(total, width, height, 2, 1);
           setGridStyle({ 
             cols: Math.max(1, cols), 
-            cellW: Math.max(40, Math.min(80, cellW)), // 40-80px 범위
+            cellW: Math.max(40, Math.min(80, cellW)),
             cellH: Math.max(40, Math.min(80, cellH)) 
           });
         }
-      }, 100); // 100ms 디바운스
+      }, 100);
     };
     
     const ro = new ResizeObserver(compute);
@@ -254,11 +265,9 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
       >
         {sortedQuestions.map((q) => {
           const qNum = q.questionNum;
-          // ✅ 문제 데이터에서 직접 세션 정보 사용
           const session = q.session;
           const hasExp = fireBySession[session]?.has(qNum);
           
-          // 해설 있으면 빨간색 + fire, 없으면 평범한 회색
           const cls = hasExp 
             ? `qbtn red fire` 
             : `qbtn no-explanation`;
@@ -301,14 +310,12 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     const subjects = [];
     if (highErrorQuestions) {
       Object.entries(highErrorQuestions).forEach(([subj, questions]) => {
-        // 해당 과목의 문제 중 선택된 세션에 속하는 것이 있는지 확인
         if (questions.some(q => q.session === session)) {
           subjects.push(subj);
         }
       });
     }
     
-    // SUBJECT_ORDER에 따라 정렬
     subjects.sort((a, b) => {
       const aIndex = SUBJECT_ORDER.indexOf(a);
       const bIndex = SUBJECT_ORDER.indexOf(b);
@@ -319,7 +326,6 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     return subjects;
   };
 
-  // 세션이 변경될 때 해당 세션의 첫 번째 과목으로 설정
   useEffect(() => {
     const subjects = getSubjectsBySession(activeSession);
     if (subjects.length > 0 && !subjects.includes(activeSubject)) {
@@ -401,7 +407,23 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
       )}
 
       <div className="tab-content" ref={gridWrapRef}>
-        {renderButtons()}
+        {loading ? (
+          <div style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            height: '200px',
+            gap: '12px'
+          }}>
+            <div className="spinner"></div>
+            <div style={{ color: 'var(--muted)', fontSize: '14px' }}>
+              문항 데이터를 불러오고 있습니다...
+            </div>
+          </div>
+        ) : (
+          renderButtons()
+        )}
       </div>
 
       <PdfModalPdfjs
