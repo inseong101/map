@@ -9,6 +9,11 @@
   overflow: hidden;
 }
 
+/* 제목 가운데 정렬 */
+.wrong-panel-root h2 {
+  text-align: center;
+}
+
 /* 설명 줄 */
 .legend-line {
   display: flex;
@@ -51,19 +56,31 @@
   color: #fff;
 }
 
+/* 비활성화된 탭 */
+.tab-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--muted);
+}
+
 /* 탭 콘텐츠 래퍼 — 남은 공간만 차지, 내부 스크롤 끔 */
 .tab-content {
   flex: 1;           /* 위 요소들(제목/설명/탭) 제외한 나머지 높이 채움 */
   overflow: hidden;  /* 내부 스크롤 금지 */
   position: relative;
+  min-height: 200px; /* 최소 높이 보장 */
 }
 
 /* 번호 버튼 그리드: 행/열은 JSX에서 픽셀로 지정 */
 .btn-grid {
   display: grid;
-  gap: 3px;          /* 🔧 간격 줄임 */
+  gap: 2px;          /* 🔧 간격 더 줄임 (기존 3px → 2px) */
   width: 100%;
   height: 100%;      /* 탭 콘텐츠 영역을 꽉 채움 */
+  justify-content: center;
+  align-content: start;
 }
 
 /* 기본 번호 버튼 - 해설 없는 문제는 평범한 색상 */
@@ -81,9 +98,13 @@
 
   width: 100%;
   height: 100%;
-  display: flex; align-items: center; justify-content: center;
+  display: flex; 
+  align-items: center; 
+  justify-content: center;
 
   padding: 0;
+  min-width: 0;
+  min-height: 0;
 }
 
 /* 내 오답 = 빨강 (해설 있는 문제만) */
