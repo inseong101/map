@@ -6,7 +6,7 @@ import "./WrongPanel.css";
 
 const SESSIONS = ["1교시", "2교시", "3교시", "4교시"];
 
-// 🔧 모든 회차의 1교시 과목 맵핑을 직접 정의
+// ✅ 정확한 과목 매핑 정의 (회차별로 다름)
 const SUBJECT_MAPPINGS = {
   "1차": {
     "1교시": [
@@ -19,24 +19,62 @@ const SUBJECT_MAPPINGS = {
       "폐", "폐", "폐", "폐", "비", "비", "비", "비", "간", "간",
       "간", "간", "간", "신", "신", "신", "신", "신", "신", "간"
     ],
-    // TODO: 1차 2교시, 3교시, 4교시 맵핑도 여기에 추가
-  },
-  // TODO: 2차, 3차, ... 8차 회차 맵핑도 여기에 추가
-  "2차": {},
-  "3차": {},
-  "4차": {},
-  "5차": {},
-  "6차": {},
-  "7차": {},
-  "8차": {}
+    "2교시": [
+      // 1-16: 상한
+      "상한", "상한", "상한", "상한", "상한", "상한", "상한", "상한", "상한", "상한", "상한", "상한", "상한", "상한", "상한", "상한",
+      // 17-32: 사상
+      "사상", "사상", "사상", "사상", "사상", "사상", "사상", "사상", "사상", "사상", "사상", "사상", "사상", "사상", "사상", "사상",
+      // 33-80: 침구
+      "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구",
+      "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구",
+      "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구",
+      // 81-100: 법규
+      "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규"
+    ],
+    "3교시": [
+      // 1-16: 외과
+      "외과", "외과", "외과", "외과", "외과", "외과", "외과", "외과", "외과", "외과", "외과", "외과", "외과", "외과", "외과", "외과",
+      // 17-32: 신정
+      "신정", "신정", "신정", "신정", "신정", "신정", "신정", "신정", "신정", "신정", "신정", "신정", "신정", "신정", "신정", "신정",
+      // 33-48: 안이비
+      "안이비", "안이비", "안이비", "안이비", "안이비", "안이비", "안이비", "안이비", "안이비", "안이비", "안이비", "안이비", "안이비", "안이비", "안이비", "안이비",
+      // 49-80: 부인
+      "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인",
+      "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인"
+    ],
+    "4교시": [
+      // 1-24: 소아
+      "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아",
+      // 25-48: 예방
+      "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방",
+      // 49-64: 생리
+      "생리", "생리", "생리", "생리", "생리", "생리", "생리", "생리", "생리", "생리", "생리", "생리", "생리", "생리", "생리", "생리",
+      // 65-80: 본초
+      "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초"
+    ]
+  }
+  // TODO: 2차, 3차, 4차, 5차, 6차, 7차, 8차 매핑 추가 예정
 };
 
-function getSubjectByQuestion(qNum, roundLabel, session) {
+// ✅ 수정된 과목 매핑 함수
+function getSubjectByQuestion(qNum, session, roundLabel) {
   const mapping = SUBJECT_MAPPINGS[roundLabel]?.[session];
-  if (mapping && qNum > 0 && qNum <= mapping.length) {
-    return mapping[qNum - 1] || null;
+  if (mapping && qNum >= 1 && qNum <= mapping.length) {
+    return mapping[qNum - 1];
   }
-  return null;
+  return "기타";
+}
+
+// ✅ 수정된 세션 찾기 함수 (각 교시별로 1번부터 시작)
+function findSessionByQuestionNum(qNum) {
+  // explanation 파일 이름에서 온 문제번호는 각 교시별로 1번부터 시작
+  // 실제 사용시에는 해당 문제가 어느 교시인지 별도 정보가 필요할 수 있음
+  // 현재는 문제번호 범위로만 판단
+  if (qNum >= 1 && qNum <= 80) return "1교시";
+  if (qNum >= 1 && qNum <= 100) return "2교시";
+  if (qNum >= 1 && qNum <= 80) return "3교시";
+  if (qNum >= 1 && qNum <= 80) return "4교시";
+  return "1교시"; // 기본값
 }
 
 function bestGrid(n, W, H, gap = 3, aspect = 1) {
@@ -95,11 +133,14 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      console.log("데이터 로딩 시작:", roundLabel);
       const [highErrors, explanationIndex] = await Promise.all([
         getHighErrorRateQuestions(roundLabel),
         getExplanationIndex(roundLabel)
       ]);
+      
       if (!cancelled) {
+        console.log("받은 데이터:", { highErrors, explanationIndex });
         setHighErrorQuestions(highErrors);
         setFireBySession({
           "1교시": new Set(explanationIndex["1교시"] || []),
@@ -107,10 +148,15 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
           "3교시": new Set(explanationIndex["3교시"] || []),
           "4교시": new Set(explanationIndex["4교시"] || []),
         });
-        if (Object.keys(highErrors).length > 0) {
-          setActiveSubject(Object.keys(highErrors)[0]);
+        
+        // 첫 번째 과목을 활성화
+        const subjectKeys = Object.keys(highErrors);
+        if (subjectKeys.length > 0) {
+          setActiveSubject(subjectKeys[0]);
+          console.log("활성 과목 설정:", subjectKeys[0]);
         } else {
           setActiveSubject(null);
+          console.log("과목 데이터 없음");
         }
       }
     })();
@@ -121,7 +167,7 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     const el = gridWrapRef.current;
     if (!el) return;
     const compute = () => {
-      const total = activeSubject ? highErrorQuestions[activeSubject].length : 0;
+      const total = activeSubject ? (highErrorQuestions[activeSubject]?.length || 0) : 0;
       const { width, height } = el.getBoundingClientRect();
       const { cols, cellW, cellH } = bestGrid(total, Math.max(0, width), Math.max(0, height), 3, 1);
       setGridStyle({ cols: Math.max(1, cols), cellW: Math.max(22, cellW), cellH: Math.max(22, cellH) });
@@ -136,13 +182,20 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     const rNum = parseInt(String(roundLabel).replace(/\D/g, ""), 10) || 1;
     const sNum = parseInt(String(session).replace(/\D/g, ""), 10) || 1;
     const path = `explanation/${rNum}-${sNum}-${qNum}.pdf`;
+    console.log("PDF 열기:", path);
     setPdfPath(path);
     setPdfOpen(true);
   };
 
   const renderButtons = () => {
-    if (!activeSubject || !highErrorQuestions[activeSubject]) return null;
+    if (!activeSubject || !highErrorQuestions[activeSubject]) {
+      console.log("버튼 렌더링 불가:", { activeSubject, hasData: !!highErrorQuestions[activeSubject] });
+      return null;
+    }
+    
     const questions = highErrorQuestions[activeSubject];
+    console.log("버튼 렌더링:", { activeSubject, questions: questions.length });
+    
     const { cols, cellW, cellH } = gridStyle;
     return (
       <div
@@ -154,7 +207,8 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
       >
         {questions.map((q) => {
           const qNum = q.questionNum;
-          const session = findSessionByQuestionNum(qNum);
+          // ✅ 문제가 속한 세션을 데이터에서 가져오거나 추론
+          const session = q.session || findSessionByQuestionNum(qNum);
           const hasExp = fireBySession[session]?.has(qNum);
           const cls = `qbtn red${hasExp ? " fire" : ""}`;
           const label = `문항 ${qNum}${hasExp ? " · 특별 해설" : ""}`;
@@ -168,7 +222,10 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
               aria-label={label}
               onClick={
                 hasExp
-                  ? (e) => { e.stopPropagation(); openExplanation(session, qNum); }
+                  ? (e) => { 
+                      e.stopPropagation(); 
+                      openExplanation(session, qNum); 
+                    }
                   : undefined
               }
               style={{
@@ -190,50 +247,48 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     const subjects = [];
     if (highErrorQuestions) {
       Object.entries(highErrorQuestions).forEach(([subj, questions]) => {
-        if (questions.some(q => findSessionByQuestionNum(q.questionNum) === session)) {
+        // 각 질문이 해당 세션에 속하는지 확인
+        if (questions.some(q => {
+          const qSession = q.session || findSessionByQuestionNum(q.questionNum);
+          return qSession === session;
+        })) {
           subjects.push(subj);
         }
       });
     }
+    console.log(`${session} 과목들:`, subjects);
     return subjects;
   };
 
-  const findSessionByQuestionNum = (qNum) => {
-    const ranges = {
-      "1교시": { min: 1, max: 80 },
-      "2교시": { min: 1, max: 100 },
-      "3교시": { min: 1, max: 80 },
-      "4교시": { min: 1, max: 80 }
-    };
-    if (qNum >= 1 && qNum <= 80) return "1교시";
-    if (qNum >= 81 && qNum <= 100) return "2교시";
-    return null;
-  };
+  // 세션이 변경될 때 해당 세션의 첫 번째 과목으로 설정
+  useEffect(() => {
+    const subjects = getSubjectsBySession(activeSession);
+    if (subjects.length > 0 && !subjects.includes(activeSubject)) {
+      setActiveSubject(subjects[0]);
+      console.log(`${activeSession} 첫 번째 과목으로 변경:`, subjects[0]);
+    }
+  }, [activeSession, highErrorQuestions]);
 
   return (
     <div className="wrong-panel-root">
       <h2 style={{ marginTop: 0 }}>많이 틀린 문항 해설</h2>
 
       <div className="round-tabs" role="tablist" aria-label="회차 선택">
-        {allRoundLabels.map((r) => {
-          const hasDataForRound = Object.values(highErrorQuestions).some(qList => qList.length > 0);
-          return (
-            <button
-              key={r}
-              role="tab"
-              aria-selected={roundLabel === r}
-              className={`tab-btn ${roundLabel === r ? "active" : ""}`}
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onRoundChange(r);
-              }}
-              disabled={!hasDataForRound}
-            >
-              {r}
-            </button>
-          );
-        })}
+        {allRoundLabels.map((r) => (
+          <button
+            key={r}
+            role="tab"
+            aria-selected={roundLabel === r}
+            className={`tab-btn ${roundLabel === r ? "active" : ""}`}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRoundChange(r);
+            }}
+          >
+            {r}
+          </button>
+        ))}
       </div>
 
       <div className="session-tabs" role="tablist" aria-label="교시 선택">
@@ -247,8 +302,6 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
             onClick={(e) => {
               e.stopPropagation();
               setActiveSession(s);
-              const subjects = getSubjectsBySession(s);
-              setActiveSubject(subjects[0] || null);
             }}
           >
             {s}
@@ -256,7 +309,7 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
         ))}
       </div>
 
-      {activeSession && getSubjectsBySession(activeSession).length > 0 && (
+      {getSubjectsBySession(activeSession).length > 0 && (
         <div className="subject-tabs" role="tablist" aria-label="과목 선택">
           {getSubjectsBySession(activeSession).map((s) => (
             <button
@@ -276,7 +329,9 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
         </div>
       )}
 
-      {renderButtons()}
+      <div className="tab-content" ref={gridWrapRef}>
+        {renderButtons()}
+      </div>
 
       <PdfModalPdfjs
         open={pdfOpen}
