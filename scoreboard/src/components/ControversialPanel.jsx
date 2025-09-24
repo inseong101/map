@@ -10,14 +10,14 @@ const SESSIONS = ["1교시", "2교시", "3교시", "4교시"];
 const SUBJECT_MAPPINGS = {
   "1차": {
     "1교시": [
-      "신", "신", "폐", "심", "심", "간", "폐", "폐", "폐", "간",
-      "비", "폐", "신", "신", "신", "간", "비", "비", "비", "비",
+      "간", "간", "심", "심", "심", "간", "심", "심", "심", "간",
+      "비", "심", "간", "간", "간", "간", "비", "비", "비", "비",
       "심", "심", "심", "심", "간", "비", "비", "심", "심", "심",
-      "신", "신", "심", "폐", "심", "비", "비", "비", "비", "비",
-      "비", "폐", "폐", "폐", "폐", "간", "신", "간", "신", "간",
-      "간", "간", "폐", "신", "간", "심", "심", "심", "심", "심",
-      "폐", "폐", "폐", "폐", "비", "비", "비", "비", "간", "간",
-      "간", "간", "간", "신", "신", "신", "신", "신", "신", "간"
+      "간", "간", "심", "심", "심", "비", "비", "비", "비", "비",
+      "비", "심", "심", "심", "심", "간", "간", "간", "간", "간",
+      "간", "간", "심", "간", "간", "심", "심", "심", "심", "심",
+      "심", "심", "심", "심", "비", "비", "비", "비", "간", "간",
+      "간", "간", "간", "간", "간", "간", "간", "간", "간", "간"
     ],
     "2교시": [
       // 1-16: 상한
@@ -53,33 +53,18 @@ const SUBJECT_MAPPINGS = {
       "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초"
     ]
   }
-
-
-  
   // TODO: 2차, 3차, 4차, 5차, 6차, 7차, 8차 매핑 추가 예정
 };
 
-// ✅ 수정된 과목 매핑 함수
-function getSubjectByQuestion(qNum, session, roundLabel) {
-  const mapping = SUBJECT_MAPPINGS[roundLabel]?.[session];
-  if (mapping && qNum >= 1 && qNum <= mapping.length) {
-    return mapping[qNum - 1];
-  }
-  return "기타";
+// ✅ 과목 순서 정의 (간심비폐신 순)
+const SUBJECT_ORDER = ["간", "심", "비", "폐", "신", "상한", "사상", "침구", "법규", "외과", "신정", "안이비", "부인", "소아", "예방", "생리", "본초"];
+
+// ✅ 해당 회차의 교시가 매핑이 있는지 확인
+function isSessionAvailable(roundLabel, session) {
+  return !!(SUBJECT_MAPPINGS[roundLabel]?.[session]);
 }
 
-// ✅ 수정된 세션 찾기 함수 - 데이터에서 session 정보 사용
-function findSessionByQuestionNum(qNum, questionData) {
-  // questionData에 session 정보가 있으면 그것을 사용
-  if (questionData && questionData.session) {
-    return questionData.session;
-  }
-  
-  // 기본값 (실제로는 사용되지 않아야 함)
-  return "1교시";
-}
-
-function bestGrid(n, W, H, gap = 3, aspect = 1) {
+function bestGrid(n, W, H, gap = 2, aspect = 1) { // gap을 2로 줄임
   if (!n || !W || !H) return { cols: 1, rows: 1, cellW: 0, cellH: 0 };
   let best = { cols: 1, rows: n, cellW: 0, cellH: 0, score: -1 };
   for (let cols = 1; cols <= n; cols++) {
@@ -88,10 +73,18 @@ function bestGrid(n, W, H, gap = 3, aspect = 1) {
     const totalGapH = gap * (rows - 1);
     const maxCellW = Math.floor((W - totalGapW) / cols);
     const maxCellH = Math.floor((H - totalGapH) / rows);
-    const fitW = Math.min(maxCellW, Math.floor(maxCellH * aspect));
-    const fitH = Math.min(maxCellH, Math.floor(maxCellW / aspect));
-    const score = fitW * fitH;
-    if (score > best.score) best = { cols, rows, cellW: fitW, cellH: fitH, score };
+    
+    // 버튼 크기를 1/4로 줄임
+    const targetCellSize = Math.min(maxCellW, maxCellH) * 0.25;
+    const fitW = Math.min(maxCellW, Math.floor(targetCellSize * aspect));
+    const fitH = Math.min(maxCellH, Math.floor(targetCellSize / aspect));
+    
+    // 최소/최대 크기 제한
+    const finalW = Math.max(18, Math.min(32, fitW)); // 최소 18px, 최대 32px
+    const finalH = Math.max(18, Math.min(32, fitH));
+    
+    const score = finalW * finalH;
+    if (score > best.score) best = { cols, rows, cellW: finalW, cellH: finalH, score };
   }
   return best;
 }
@@ -100,7 +93,7 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
   const [activeSession, setActiveSession] = useState("1교시");
   const [activeSubject, setActiveSubject] = useState(null);
   const gridWrapRef = useRef(null);
-  const [gridStyle, setGridStyle] = useState({ cols: 1, cellW: 24, cellH: 24 });
+  const [gridStyle, setGridStyle] = useState({ cols: 1, cellW: 20, cellH: 20 });
   const [pdfOpen, setPdfOpen] = useState(false);
   const [pdfPath, setPdfPath] = useState(null);
   const [highErrorQuestions, setHighErrorQuestions] = useState({});
@@ -151,11 +144,17 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
           "4교시": new Set(explanationIndex["4교시"] || []),
         });
         
-        // 첫 번째 과목을 활성화
+        // 첫 번째 과목을 활성화 (순서대로)
         const subjectKeys = Object.keys(highErrors);
         if (subjectKeys.length > 0) {
-          setActiveSubject(subjectKeys[0]);
-          console.log("활성 과목 설정:", subjectKeys[0]);
+          // SUBJECT_ORDER에 따라 정렬된 첫 번째 과목 선택
+          const sortedSubjects = subjectKeys.sort((a, b) => {
+            const aIndex = SUBJECT_ORDER.indexOf(a);
+            const bIndex = SUBJECT_ORDER.indexOf(b);
+            return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+          });
+          setActiveSubject(sortedSubjects[0]);
+          console.log("활성 과목 설정:", sortedSubjects[0]);
         } else {
           setActiveSubject(null);
           console.log("과목 데이터 없음");
@@ -165,19 +164,44 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     return () => { cancelled = true; };
   }, [roundLabel, getHighErrorRateQuestions, getExplanationIndex]);
 
+  // 그리드 크기 재계산 (디바운스 추가로 크기 오류 방지)
   useEffect(() => {
     const el = gridWrapRef.current;
     if (!el) return;
+    
+    let timeoutId = null;
+    
     const compute = () => {
-      const total = activeSubject ? (highErrorQuestions[activeSubject]?.length || 0) : 0;
-      const { width, height } = el.getBoundingClientRect();
-      const { cols, cellW, cellH } = bestGrid(total, Math.max(0, width), Math.max(0, height), 3, 1);
-      setGridStyle({ cols: Math.max(1, cols), cellW: Math.max(22, cellW), cellH: Math.max(22, cellH) });
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        const total = activeSubject ? (highErrorQuestions[activeSubject]?.length || 0) : 0;
+        if (total === 0) {
+          setGridStyle({ cols: 1, cellW: 20, cellH: 20 });
+          return;
+        }
+        
+        const rect = el.getBoundingClientRect();
+        const { width, height } = rect;
+        
+        if (width > 0 && height > 0) {
+          const { cols, cellW, cellH } = bestGrid(total, width, height, 2, 1);
+          setGridStyle({ 
+            cols: Math.max(1, cols), 
+            cellW: Math.max(18, Math.min(32, cellW)), 
+            cellH: Math.max(18, Math.min(32, cellH)) 
+          });
+        }
+      }, 100); // 100ms 디바운스
     };
+    
     const ro = new ResizeObserver(compute);
     ro.observe(el);
     compute();
-    return () => ro.disconnect();
+    
+    return () => {
+      ro.disconnect();
+      clearTimeout(timeoutId);
+    };
   }, [activeSubject, highErrorQuestions]);
 
   const openExplanation = (session, qNum) => {
@@ -265,6 +289,14 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
         }
       });
     }
+    
+    // SUBJECT_ORDER에 따라 정렬
+    subjects.sort((a, b) => {
+      const aIndex = SUBJECT_ORDER.indexOf(a);
+      const bIndex = SUBJECT_ORDER.indexOf(b);
+      return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+    });
+    
     console.log(`${session} 과목들:`, subjects);
     return subjects;
   };
@@ -301,21 +333,27 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
       </div>
 
       <div className="session-tabs" role="tablist" aria-label="교시 선택">
-        {SESSIONS.map((s) => (
-          <button
-            key={s}
-            role="tab"
-            aria-selected={activeSession === s}
-            className={`tab-btn ${activeSession === s ? "active" : ""}`}
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setActiveSession(s);
-            }}
-          >
-            {s}
-          </button>
-        ))}
+        {SESSIONS.map((s) => {
+          const isAvailable = isSessionAvailable(roundLabel, s);
+          return (
+            <button
+              key={s}
+              role="tab"
+              aria-selected={activeSession === s}
+              className={`tab-btn ${activeSession === s ? "active" : ""}`}
+              type="button"
+              disabled={!isAvailable}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isAvailable) {
+                  setActiveSession(s);
+                }
+              }}
+            >
+              {s}
+            </button>
+          );
+        })}
       </div>
 
       {getSubjectsBySession(activeSession).length > 0 && (
