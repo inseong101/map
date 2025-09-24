@@ -53,6 +53,9 @@ const SUBJECT_MAPPINGS = {
       "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초"
     ]
   }
+
+
+  
   // TODO: 2차, 3차, 4차, 5차, 6차, 7차, 8차 매핑 추가 예정
 };
 
@@ -195,22 +198,32 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     const questions = highErrorQuestions[activeSubject];
     console.log("버튼 렌더링:", { activeSubject, questions: questions.length });
     
+    // 문제 번호 순으로 정렬 (작은 번호부터 왼쪽에서 오른쪽으로)
+    const sortedQuestions = [...questions].sort((a, b) => a.questionNum - b.questionNum);
+    
     const { cols, cellW, cellH } = gridStyle;
     return (
       <div
         className="btn-grid"
         style={{
           gridTemplateColumns: `repeat(${cols}, ${cellW}px)`,
-          gridTemplateRows: `repeat(${Math.ceil(questions.length / cols)}, ${cellH}px)`,
+          gridTemplateRows: `repeat(${Math.ceil(sortedQuestions.length / cols)}, ${cellH}px)`,
         }}
       >
-        {questions.map((q) => {
+        {sortedQuestions.map((q) => {
           const qNum = q.questionNum;
           // ✅ 문제 데이터에서 직접 세션 정보 사용
           const session = q.session;
           const hasExp = fireBySession[session]?.has(qNum);
-          const cls = `qbtn red${hasExp ? " fire" : ""}`;
-          const label = `문항 ${qNum}${hasExp ? " · 특별 해설" : ""}`;
+          
+          // 해설 있으면 빨간색 + fire, 없으면 평범한 회색
+          const cls = hasExp 
+            ? `qbtn red fire` 
+            : `qbtn no-explanation`;
+          
+          const label = hasExp 
+            ? `문항 ${qNum} · 특별 해설`
+            : `문항 ${qNum}`;
 
           return (
             <button
