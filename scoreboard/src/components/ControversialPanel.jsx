@@ -70,27 +70,26 @@ function isRoundAvailable(roundLabel) {
 }
 
 function bestGrid(n, W, H, gap = 2, aspect = 1) {
-  if (!n || !W || !H) return { cols: 1, rows: 1, cellW: 0, cellH: 0 };
-  let best = { cols: 1, rows: n, cellW: 0, cellH: 0, score: -1 };
-  for (let cols = 1; cols <= n; cols++) {
-    const rows = Math.ceil(n / cols);
-    const totalGapW = gap * (cols - 1);
-    const totalGapH = gap * (rows - 1);
-    const maxCellW = Math.floor((W - totalGapW) / cols);
-    const maxCellH = Math.floor((H - totalGapH) / rows);
-    
-    // 버튼 크기를 원래 크기로 유지 (4배 더 크게)
-    const targetCellSize = Math.min(maxCellW, maxCellH);
-    const fitW = Math.min(maxCellW, Math.floor(targetCellSize * aspect));
-    const fitH = Math.min(maxCellH, Math.floor(targetCellSize / aspect));
-    
-    // 최소/최대 크기 제한 (4배 더 크게)
-    const finalW = Math.max(72, Math.min(128, fitW)); // 최소 72px, 최대 128px
-    const finalH = Math.max(72, Math.min(128, fitH));
-    
-    const score = finalW * finalH;
-    if (score > best.score) best = { cols, rows, cellW: finalW, cellH: finalH, score };
-  }
+  if (!n || !W || !H) return { cols: 10, rows: 1, cellW: 60, cellH: 60 };
+  
+  // 가로로 10개를 우선시
+  let best = { cols: 10, rows: Math.ceil(n / 10), cellW: 0, cellH: 0, score: -1 };
+  
+  // 10개 열 기준으로 크기 계산
+  const preferredCols = 10;
+  const rows = Math.ceil(n / preferredCols);
+  const totalGapW = gap * (preferredCols - 1);
+  const totalGapH = gap * (rows - 1);
+  const maxCellW = Math.floor((W - totalGapW) / preferredCols);
+  const maxCellH = Math.floor((H - totalGapH) / rows);
+  
+  // 정사각형에 가깝게 만들되 적당한 크기로
+  const targetSize = Math.min(maxCellW, maxCellH, 80); // 최대 80px
+  const finalW = Math.max(40, Math.min(80, targetSize)); // 40-80px 범위
+  const finalH = finalW; // 정사각형
+  
+  best = { cols: preferredCols, rows, cellW: finalW, cellH: finalH, score: finalW * finalH };
+  
   return best;
 }
 
@@ -98,7 +97,7 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
   const [activeSession, setActiveSession] = useState("1교시");
   const [activeSubject, setActiveSubject] = useState(null);
   const gridWrapRef = useRef(null);
-  const [gridStyle, setGridStyle] = useState({ cols: 1, cellW: 80, cellH: 80 }); // 초기값도 크게
+  const [gridStyle, setGridStyle] = useState({ cols: 10, cellW: 60, cellH: 60 }); // 10열로 시작
   const [pdfOpen, setPdfOpen] = useState(false);
   const [pdfPath, setPdfPath] = useState(null);
   const [highErrorQuestions, setHighErrorQuestions] = useState({});
@@ -195,7 +194,7 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
       timeoutId = setTimeout(() => {
         const total = activeSubject ? (highErrorQuestions[activeSubject]?.length || 0) : 0;
         if (total === 0) {
-          setGridStyle({ cols: 1, cellW: 80, cellH: 80 });
+          setGridStyle({ cols: 10, cellW: 60, cellH: 60 });
           return;
         }
         
@@ -206,8 +205,8 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
           const { cols, cellW, cellH } = bestGrid(total, width, height, 2, 1);
           setGridStyle({ 
             cols: Math.max(1, cols), 
-            cellW: Math.max(72, Math.min(128, cellW)), // 더 큰 크기
-            cellH: Math.max(72, Math.min(128, cellH)) 
+            cellW: Math.max(40, Math.min(80, cellW)), // 40-80px 범위
+            cellH: Math.max(40, Math.min(80, cellH)) 
           });
         }
       }, 100); // 100ms 디바운스
