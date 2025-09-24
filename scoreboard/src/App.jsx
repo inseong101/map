@@ -7,6 +7,7 @@ import { auth, functions } from './firebase';
 import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 
+// ✅ 회차 목록을 앱 내에서 직접 정의
 const ALL_ROUND_LABELS = ['1차', '2차', '3차', '4차', '5차', '6차', '7차', '8차'];
 const RESEND_COOLDOWN = 60;
 
