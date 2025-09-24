@@ -59,6 +59,15 @@ const SUBJECT_MAPPINGS = {
 // ✅ 과목 순서 정의 (간심비폐신 순)
 const SUBJECT_ORDER = ["간", "심", "비", "폐", "신", "상한", "사상", "침구", "법규", "외과", "신정", "안이비", "부인", "소아", "예방", "생리", "본초"];
 
+// ✅ 과목 매핑 함수
+function getSubjectByQuestion(qNum, session, roundLabel) {
+  const mapping = SUBJECT_MAPPINGS[roundLabel]?.[session];
+  if (mapping && qNum >= 1 && qNum <= mapping.length) {
+    return mapping[qNum - 1];
+  }
+  return "기타";
+}
+
 // ✅ 해당 회차의 교시가 매핑이 있는지 확인
 function isSessionAvailable(roundLabel, session) {
   return !!(SUBJECT_MAPPINGS[roundLabel]?.[session]);
@@ -104,7 +113,7 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
   const [fireBySession, setFireBySession] = useState({
     "1교시": new Set(), "2교시": new Set(), "3교시": new Set(), "4교시": new Set(),
   });
-  const [loading, setLoading] = useState(false); // 로딩 상태 추가
+  const [loading, setLoading] = useState(false);
 
   const getHighErrorRateQuestions = useCallback(async (rLabel) => {
     try {
@@ -134,9 +143,8 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     let cancelled = false;
     (async () => {
       console.log("데이터 로딩 시작:", roundLabel);
-      setLoading(true); // 로딩 시작
+      setLoading(true);
       
-      // 해당 회차가 매핑되어 있지 않으면 데이터 로딩 중단
       if (!isRoundAvailable(roundLabel)) {
         console.log("매핑되지 않은 회차:", roundLabel);
         if (!cancelled) {
@@ -151,14 +159,31 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
       }
       
       try {
-        const [highErrors, explanationIndex] = await Promise.all([
+        const [dummyData, explanationIndex] = await Promise.all([
           getHighErrorRateQuestions(roundLabel),
           getExplanationIndex(roundLabel)
         ]);
         
         if (!cancelled) {
-          console.log("받은 데이터:", { highErrors, explanationIndex });
-          setHighErrorQuestions(highErrors);
+          console.log("받은 더미 데이터:", dummyData);
+          
+          // 더미 데이터를 실제 과목 매핑으로 필터링
+          const filteredQuestions = {};
+          
+          // 각 과목별로 해당 교시의 문항만 필터링
+          Object.keys(dummyData).forEach(subject => {
+            const questions = dummyData[subject] || [];
+            filteredQuestions[subject] = questions.filter(q => {
+              const session = q.session;
+              const qNum = q.questionNum;
+              // 해당 교시에서 이 문항번호가 실제로 이 과목에 해당하는지 확인
+              const actualSubject = getSubjectByQuestion(qNum, session, roundLabel);
+              return actualSubject === subject;
+            });
+          });
+          
+          console.log("필터링된 데이터:", filteredQuestions);
+          setHighErrorQuestions(filteredQuestions);
           setFireBySession({
             "1교시": new Set(explanationIndex["1교시"] || []),
             "2교시": new Set(explanationIndex["2교시"] || []),
@@ -166,10 +191,11 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
             "4교시": new Set(explanationIndex["4교시"] || []),
           });
           
-          // 첫 번째 과목을 활성화 (순서대로)
-          const subjectKeys = Object.keys(highErrors);
+          // 첫 번째 과목 활성화 (데이터가 있는 과목만)
+          const subjectKeys = Object.keys(filteredQuestions).filter(subject => 
+            filteredQuestions[subject].length > 0
+          );
           if (subjectKeys.length > 0) {
-            // SUBJECT_ORDER에 따라 정렬된 첫 번째 과목 선택
             const sortedSubjects = subjectKeys.sort((a, b) => {
               const aIndex = SUBJECT_ORDER.indexOf(a);
               const bIndex = SUBJECT_ORDER.indexOf(b);
@@ -179,14 +205,14 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
             console.log("활성 과목 설정:", sortedSubjects[0]);
           } else {
             setActiveSubject(null);
-            console.log("과목 데이터 없음");
+            console.log("데이터가 있는 과목 없음");
           }
         }
       } catch (error) {
         console.error("데이터 로딩 실패:", error);
       } finally {
         if (!cancelled) {
-          setLoading(false); // 로딩 완료
+          setLoading(false);
         }
       }
     })();
