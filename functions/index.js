@@ -220,27 +220,37 @@ exports.getHighErrorRateQuestions = functions.https.onCall(async (data, context)
     return "기타";
   };
 
-  files.forEach(f => {
-    const m = f.name.match(/^explanation\/(\d+)-(\d+)-(\d+)\.pdf$/);
-    if (!m) return;
-    const [_, r, s, q] = m;
-    const rLabel = `${parseInt(r,10)}차`;
-    const sLabel = `${parseInt(s,10)}교시`;
-    const qNum = parseInt(q, 10);
-    
-    if (roundLabel && roundLabel !== rLabel) return;
-    
-    const subject = getSubjectByQuestion(qNum, sLabel, rLabel);
-    if (!questionsBySubject[subject]) {
-      questionsBySubject[subject] = [];
-    }
-    
-    questionsBySubject[subject].push({
-      questionNum: qNum,
-      errorRate: Math.random() * 0.7 + 0.3, // 30-100% 오답률로 시뮬레이션
-      session: sLabel
+  // ✅ 모든 문제번호를 생성하고, explanation 파일 존재 여부는 별도로 체크
+  const generateAllQuestions = (rLabel) => {
+    const sessions = {
+      "1교시": { min: 1, max: 80 },
+      "2교시": { min: 1, max: 100 },
+      "3교시": { min: 1, max: 80 },
+      "4교시": { min: 1, max: 80 }
+    };
+
+    Object.entries(sessions).forEach(([session, range]) => {
+      for (let qNum = range.min; qNum <= range.max; qNum++) {
+        const subject = getSubjectByQuestion(qNum, session, rLabel);
+        if (!questionsBySubject[subject]) {
+          questionsBySubject[subject] = [];
+        }
+        
+        questionsBySubject[subject].push({
+          questionNum: qNum,
+          errorRate: Math.random() * 0.7 + 0.3, // 30-100% 오답률로 시뮬레이션
+          session: session
+        });
+      }
     });
-  });
+  };
+
+  // 해당 회차의 모든 문제 생성
+  if (roundLabel) {
+    generateAllQuestions(roundLabel);
+  } else {
+    generateAllQuestions("1차"); // 기본값
+  }
 
   // 각 과목별로 오답률 순으로 정렬
   Object.keys(questionsBySubject).forEach(subject => {
