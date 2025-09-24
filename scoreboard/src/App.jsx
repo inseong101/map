@@ -7,7 +7,6 @@ import { auth, functions } from './firebase';
 import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 
-// ✅ 회차 목록을 앱 내에서 직접 정의
 const ALL_ROUND_LABELS = ['1차', '2차', '3차', '4차', '5차', '6차', '7차', '8차'];
 const RESEND_COOLDOWN = 60;
 
@@ -82,8 +81,10 @@ function App() {
     if (sending || verifying || loading || resendLeft > 0) return;
     setError('');
 
-    const cleanPhone = String(phone).trim();
-    if (!cleanPhone) {
+    const cleanPhone = String(phone).trim().replace(/-/g, '');
+    const formattedPhone = cleanPhone.startsWith('010') ? `+82${cleanPhone.substring(1)}` : cleanPhone;
+
+    if (!formattedPhone) {
       setError('전화번호를 입력해주세요.');
       return;
     }
@@ -91,7 +92,7 @@ function App() {
     try {
       setSending(true);
       const appVerifier = window.recaptchaVerifier;
-      const conf = await signInWithPhoneNumber(auth, cleanPhone, appVerifier);
+      const conf = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
       setConfirmation(conf);
       startCooldown();
       alert('인증번호가 전송되었습니다.');
