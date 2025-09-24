@@ -65,16 +65,15 @@ function getSubjectByQuestion(qNum, session, roundLabel) {
   return "기타";
 }
 
-// ✅ 수정된 세션 찾기 함수 (각 교시별로 1번부터 시작)
-function findSessionByQuestionNum(qNum) {
-  // explanation 파일 이름에서 온 문제번호는 각 교시별로 1번부터 시작
-  // 실제 사용시에는 해당 문제가 어느 교시인지 별도 정보가 필요할 수 있음
-  // 현재는 문제번호 범위로만 판단
-  if (qNum >= 1 && qNum <= 80) return "1교시";
-  if (qNum >= 1 && qNum <= 100) return "2교시";
-  if (qNum >= 1 && qNum <= 80) return "3교시";
-  if (qNum >= 1 && qNum <= 80) return "4교시";
-  return "1교시"; // 기본값
+// ✅ 수정된 세션 찾기 함수 - 데이터에서 session 정보 사용
+function findSessionByQuestionNum(qNum, questionData) {
+  // questionData에 session 정보가 있으면 그것을 사용
+  if (questionData && questionData.session) {
+    return questionData.session;
+  }
+  
+  // 기본값 (실제로는 사용되지 않아야 함)
+  return "1교시";
 }
 
 function bestGrid(n, W, H, gap = 3, aspect = 1) {
@@ -207,8 +206,8 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
       >
         {questions.map((q) => {
           const qNum = q.questionNum;
-          // ✅ 문제가 속한 세션을 데이터에서 가져오거나 추론
-          const session = q.session || findSessionByQuestionNum(qNum);
+          // ✅ 문제 데이터에서 직접 세션 정보 사용
+          const session = q.session;
           const hasExp = fireBySession[session]?.has(qNum);
           const cls = `qbtn red${hasExp ? " fire" : ""}`;
           const label = `문항 ${qNum}${hasExp ? " · 특별 해설" : ""}`;
@@ -247,11 +246,8 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     const subjects = [];
     if (highErrorQuestions) {
       Object.entries(highErrorQuestions).forEach(([subj, questions]) => {
-        // 각 질문이 해당 세션에 속하는지 확인
-        if (questions.some(q => {
-          const qSession = q.session || findSessionByQuestionNum(q.questionNum);
-          return qSession === session;
-        })) {
+        // 해당 과목의 문제 중 선택된 세션에 속하는 것이 있는지 확인
+        if (questions.some(q => q.session === session)) {
           subjects.push(subj);
         }
       });
