@@ -13,20 +13,12 @@ import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/build/pdf";
 GlobalWorkerOptions.workerSrc =
   "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
 
-/**
- * 변경점 요약
- * - 모달 크기 축소: 680px × 70vh (카드 안에서 덜 압도적)
- * - X 버튼 항상 보임: 헤더 고정, z-index 강화
- * - "터치해야 그려짐" 해결: 레이아웃 확정 후(ResizeObserver + 2×rAF) 첫 렌더
- * - 속도 개선: 먼저 저해상도(퀵) 렌더 → 즉시 고해상도 업그레이드
- * - 리사이즈 부드럽게: ResizeObserver로 폭 변화 시 디바운스 재렌더
- * - DPR 상한: 과도한 캔버스 픽셀 방지(최대 1.75)
- */
 export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   const holderRef = useRef(null);     // 캔버스 컨테이너
   const canvasRef = useRef(null);
   const roRef = useRef(null);         // ResizeObserver
   const reflowTimer = useRef(null);   // 리사이즈 디바운스
+  const renderingRef = useRef(false); // 렌더링 중복 방지
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
   const [pdfDoc, setPdfDoc] = useState(null);
@@ -42,60 +34,48 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     return Math.max(320, Math.floor(rect.width));
   };
 
-  // 빠른 렌더 후 고해상도 업그레이드
+  // 깜빡임 방지: 한 번에 최종 해상도로 렌더링
   const renderPage = useCallback(
     async (doc, num) => {
       if (!doc || !canvasRef.current || !holderRef.current) return;
-      const page = await doc.getPage(num);
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext("2d", { alpha: false });
+      
+      // 중복 렌더링 방지
+      if (renderingRef.current) return;
+      renderingRef.current = true;
+      
+      try {
+        const page = await doc.getPage(num);
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext("2d", { alpha: false });
 
-      const cw = getContainerWidth();
-      const baseViewport = page.getViewport({ scale: 1 });
-      // fit-width 스케일
-      const targetScale = Math.min(1.75, cw / baseViewport.width);
+        const cw = getContainerWidth();
+        const baseViewport = page.getViewport({ scale: 1 });
+        const targetScale = Math.min(1.75, cw / baseViewport.width);
 
-      // 1) 저해상도 퀵 렌더 (빠르게 화면에 보여주기)
-      {
-        const quickScale = Math.max(0.9, targetScale * 0.6);
-        const quickVp = page.getViewport({ scale: quickScale });
-        const dpr = Math.min(1.5, window.devicePixelRatio || 1); // 과한 픽셀 억제
-        canvas.width = Math.floor(quickVp.width * dpr);
-        canvas.height = Math.floor(quickVp.height * dpr);
-        canvas.style.width = `${Math.floor(quickVp.width)}px`;
-        canvas.style.height = `${Math.floor(quickVp.height)}px`;
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        await page.render({ canvasContext: ctx, viewport: quickVp }).promise;
-      }
-
-      // 2) 바로 고해상도 업그레이드 (유휴 타이밍)
-      const upgrade = async () => {
+        // 한 번에 최종 해상도로 렌더링 (깜빡임 방지)
         const vp = page.getViewport({ scale: targetScale });
         const dpr = Math.min(1.75, window.devicePixelRatio || 1);
+        
         canvas.width = Math.floor(vp.width * dpr);
         canvas.height = Math.floor(vp.height * dpr);
         canvas.style.width = `${Math.floor(vp.width)}px`;
         canvas.style.height = `${Math.floor(vp.height)}px`;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        
         await page.render({ canvasContext: ctx, viewport: vp }).promise;
-      };
-
-      if ("requestIdleCallback" in window) {
-        window.requestIdleCallback(upgrade, { timeout: 120 });
-      } else {
-        setTimeout(upgrade, 0);
+      } finally {
+        renderingRef.current = false;
       }
     },
     []
   );
 
-  // 레이아웃 확정 후 첫 렌더 (2× rAF + ResizeObserver로 폭 0 문제 회피)
+  // 레이아웃 확정 후 첫 렌더
   const renderFirstPageAfterLayout = useCallback(
     async (doc) => {
       if (!doc) return;
       await new Promise((r) => requestAnimationFrame(r));
       await new Promise((r) => requestAnimationFrame(r));
-      // 이제 holder가 레이아웃을 가짐
       await renderPage(doc, 1);
     },
     [renderPage]
@@ -151,7 +131,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     };
   }, [open, filePath, sid, renderFirstPageAfterLayout, pdfDoc]);
   
-  // 리사이즈: 컨테이너 폭 변화 관찰해서 디바운스 재렌더
+  // 리사이즈: 디바운스 시간 증가로 깜빡임 방지
   useLayoutEffect(() => {
     if (!open) return;
     const el = holderRef.current;
@@ -161,8 +141,10 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     roRef.current = new ResizeObserver(() => {
       clearTimeout(reflowTimer.current);
       reflowTimer.current = setTimeout(() => {
-        if (pdfDoc) renderPage(pdfDoc, pageNum);
-      }, 120);
+        if (pdfDoc && !renderingRef.current) {
+          renderPage(pdfDoc, pageNum);
+        }
+      }, 300); // 120ms → 300ms로 증가하여 깜빡임 방지
     });
     roRef.current.observe(el);
     return () => roRef.current?.disconnect();
@@ -172,11 +154,11 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   useEffect(() => {
     if (!open) return;
     const handler = async (e) => {
-      if (e.key === "ArrowRight" && pdfDoc && pageNum < numPages) {
+      if (e.key === "ArrowRight" && pdfDoc && pageNum < numPages && !renderingRef.current) {
         const next = pageNum + 1;
         setPageNum(next);
         await renderPage(pdfDoc, next);
-      } else if (e.key === "ArrowLeft" && pdfDoc && pageNum > 1) {
+      } else if (e.key === "ArrowLeft" && pdfDoc && pageNum > 1 && !renderingRef.current) {
         const prev = pageNum - 1;
         setPageNum(prev);
         await renderPage(pdfDoc, prev);
@@ -227,7 +209,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
             <button
               style={navBtn}
               onClick={async () => {
-                if (!pdfDoc || pageNum <= 1) return;
+                if (!pdfDoc || pageNum <= 1 || renderingRef.current) return;
                 const prev = pageNum - 1;
                 setPageNum(prev);
                 await renderPage(pdfDoc, prev);
@@ -239,7 +221,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
             <button
               style={navBtn}
               onClick={async () => {
-                if (!pdfDoc || pageNum >= numPages) return;
+                if (!pdfDoc || pageNum >= numPages || renderingRef.current) return;
                 const next = pageNum + 1;
                 setPageNum(next);
                 await renderPage(pdfDoc, next);
@@ -266,8 +248,8 @@ const backdrop = {
 };
 
 const modal = {
-  width: "min(680px, 92vw)",     // ⬅ 작게
-  height: "min(70vh, 700px)",    // ⬅ 작게
+  width: "min(680px, 92vw)",
+  height: "min(70vh, 700px)",
   background: "#1c1f24",
   color: "#e5e7eb",
   border: "1px solid #2d333b",
@@ -279,7 +261,7 @@ const modal = {
 };
 
 const modalHeader = {
-  position: "sticky",            // ⬅ 헤더 고정 (X 항상 보임)
+  position: "sticky",
   top: 0,
   zIndex: 2,
   height: 44,
