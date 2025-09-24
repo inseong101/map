@@ -21,23 +21,23 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   const [pageNum, setPageNum] = useState(1);
   const [numPages, setNumPages] = useState(0);
   const lastKeyRef = useRef(null);
-  const renderedRef = useRef(false); // 렌더링 완료 플래그
+  const renderedRef = useRef(false);
 
   // 현재 컨테이너 폭 읽기
   const getContainerWidth = () => {
     const el = holderRef.current;
     if (!el) return 600;
     const rect = el.getBoundingClientRect();
-    return Math.max(320, Math.floor(rect.width - 20)); // 패딩 고려
+    return Math.max(320, Math.floor(rect.width - 20));
   };
 
-  // 안정적인 한 번 렌더링
+  // 저해상도 → 고해상도 단계적 렌더링 (깜빡임 없이)
   const renderPage = useCallback(
     async (doc, num) => {
       if (!doc || !canvasRef.current || !holderRef.current || renderedRef.current) return;
       
       try {
-        renderedRef.current = true; // 렌더링 시작
+        renderedRef.current = true;
         
         const page = await doc.getPage(num);
         const canvas = canvasRef.current;
@@ -45,47 +45,64 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
 
         const containerWidth = getContainerWidth();
         const baseViewport = page.getViewport({ scale: 1 });
-        
-        // 컨테이너에 맞는 스케일 계산 (여백 고려)
-        const scale = Math.min(1.5, containerWidth / baseViewport.width);
-        const viewport = page.getViewport({ scale });
+        const targetScale = Math.min(1.5, containerWidth / baseViewport.width);
 
-        // 캔버스 크기 설정 (고정값으로 안정화)
-        canvas.width = Math.floor(viewport.width);
-        canvas.height = Math.floor(viewport.height);
-        canvas.style.width = `${Math.floor(viewport.width)}px`;
-        canvas.style.height = `${Math.floor(viewport.height)}px`;
+        // 1단계: 저해상도로 빠른 렌더링
+        const quickScale = targetScale * 0.7;
+        const quickViewport = page.getViewport({ scale: quickScale });
         
-        // 변환 매트릭스 초기화
+        canvas.width = Math.floor(quickViewport.width);
+        canvas.height = Math.floor(quickViewport.height);
+        canvas.style.width = `${Math.floor(quickViewport.width)}px`;
+        canvas.style.height = `${Math.floor(quickViewport.height)}px`;
+        
         ctx.setTransform(1, 0, 0, 1, 0, 0);
-        
-        // 배경 지우기
         ctx.fillStyle = "#fff";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
-        // PDF 렌더링
         await page.render({
           canvasContext: ctx,
-          viewport: viewport
+          viewport: quickViewport
         }).promise;
+
+        // 2단계: 고해상도로 업그레이드 (자연스럽게)
+        setTimeout(async () => {
+          try {
+            const finalViewport = page.getViewport({ scale: targetScale });
+            
+            canvas.width = Math.floor(finalViewport.width);
+            canvas.height = Math.floor(finalViewport.height);
+            canvas.style.width = `${Math.floor(finalViewport.width)}px`;
+            canvas.style.height = `${Math.floor(finalViewport.height)}px`;
+            
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.fillStyle = "#fff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            await page.render({
+              canvasContext: ctx,
+              viewport: finalViewport
+            }).promise;
+          } catch (error) {
+            console.error("고해상도 렌더링 오류:", error);
+          }
+        }, 50); // 50ms 후 고해상도로 업그레이드
         
       } catch (error) {
         console.error("PDF 렌더링 오류:", error);
       } finally {
-        // 렌더링 완료 후 짧은 지연으로 플래그 해제
         setTimeout(() => {
           renderedRef.current = false;
-        }, 100);
+        }, 200);
       }
     },
     []
   );
 
-  // 첫 렌더링 (레이아웃 안정화 대기)
+  // 첫 렌더링
   const renderFirstPage = useCallback(
     async (doc) => {
       if (!doc) return;
-      // 모달이 완전히 열린 후 렌더링
       await new Promise(resolve => setTimeout(resolve, 100));
       await renderPage(doc, 1);
     },
@@ -109,7 +126,6 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       try {
         const key = `${filePath}::${sid}`;
         
-        // 동일 파일 재오픈 체크
         if (pdfDoc && lastKeyRef.current === key) {
           setLoading(false);
           await renderFirstPage(pdfDoc);
@@ -122,7 +138,6 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         const base64 = res?.data;
         if (!base64) throw new Error("빈 응답");
 
-        // base64 → Uint8Array
         const bin = atob(base64);
         const bytes = new Uint8Array(bin.length);
         for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
@@ -155,7 +170,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     if (!open) return;
     
     const handler = async (e) => {
-      if (renderedRef.current) return; // 렌더링 중이면 무시
+      if (renderedRef.current) return;
       
       if (e.key === "ArrowRight" && pdfDoc && pageNum < numPages) {
         const next = pageNum + 1;
@@ -167,7 +182,6 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         await renderPage(pdfDoc, prev);
       }
       
-      // 프린트 차단
       if ((e.ctrlKey || e.metaKey) && (e.key === "p" || e.key === "P")) {
         e.preventDefault();
         e.stopPropagation();
@@ -199,10 +213,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
 
         <div ref={holderRef} style={viewer}>
           {loading && (
-            <div style={center}>
-              <div className="spinner" style={{ width: 24, height: 24, marginBottom: 8 }}></div>
-              불러오는 중…
-            </div>
+            <div style={center}>불러오는 중...</div>
           )}
           {err && <div style={{ ...center, color: "#ef4444" }}>{String(err)}</div>}
           {!loading && !err && (
@@ -314,7 +325,6 @@ const center = {
   inset: 0,
   display: "grid",
   placeItems: "center",
-  flexDirection: "column",
 };
 
 const footer = {
@@ -334,6 +344,4 @@ const navBtn = {
   borderRadius: 8,
   padding: "6px 10px",
   cursor: "pointer",
-  opacity: 1,
-  transition: "opacity 0.2s",
 };
