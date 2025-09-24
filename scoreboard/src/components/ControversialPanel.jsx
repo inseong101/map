@@ -64,7 +64,12 @@ function isSessionAvailable(roundLabel, session) {
   return !!(SUBJECT_MAPPINGS[roundLabel]?.[session]);
 }
 
-function bestGrid(n, W, H, gap = 2, aspect = 1) { // gap을 2로 줄임
+// ✅ 해당 회차가 전체적으로 매핑이 있는지 확인
+function isRoundAvailable(roundLabel) {
+  return !!(SUBJECT_MAPPINGS[roundLabel]);
+}
+
+function bestGrid(n, W, H, gap = 2, aspect = 1) {
   if (!n || !W || !H) return { cols: 1, rows: 1, cellW: 0, cellH: 0 };
   let best = { cols: 1, rows: n, cellW: 0, cellH: 0, score: -1 };
   for (let cols = 1; cols <= n; cols++) {
@@ -74,14 +79,14 @@ function bestGrid(n, W, H, gap = 2, aspect = 1) { // gap을 2로 줄임
     const maxCellW = Math.floor((W - totalGapW) / cols);
     const maxCellH = Math.floor((H - totalGapH) / rows);
     
-    // 버튼 크기를 1/4로 줄임
-    const targetCellSize = Math.min(maxCellW, maxCellH) * 0.25;
+    // 버튼 크기를 원래 크기로 유지 (4배 더 크게)
+    const targetCellSize = Math.min(maxCellW, maxCellH);
     const fitW = Math.min(maxCellW, Math.floor(targetCellSize * aspect));
     const fitH = Math.min(maxCellH, Math.floor(targetCellSize / aspect));
     
-    // 최소/최대 크기 제한
-    const finalW = Math.max(18, Math.min(32, fitW)); // 최소 18px, 최대 32px
-    const finalH = Math.max(18, Math.min(32, fitH));
+    // 최소/최대 크기 제한 (4배 더 크게)
+    const finalW = Math.max(72, Math.min(128, fitW)); // 최소 72px, 최대 128px
+    const finalH = Math.max(72, Math.min(128, fitH));
     
     const score = finalW * finalH;
     if (score > best.score) best = { cols, rows, cellW: finalW, cellH: finalH, score };
@@ -93,7 +98,7 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
   const [activeSession, setActiveSession] = useState("1교시");
   const [activeSubject, setActiveSubject] = useState(null);
   const gridWrapRef = useRef(null);
-  const [gridStyle, setGridStyle] = useState({ cols: 1, cellW: 20, cellH: 20 });
+  const [gridStyle, setGridStyle] = useState({ cols: 1, cellW: 80, cellH: 80 }); // 초기값도 크게
   const [pdfOpen, setPdfOpen] = useState(false);
   const [pdfPath, setPdfPath] = useState(null);
   const [highErrorQuestions, setHighErrorQuestions] = useState({});
@@ -129,6 +134,20 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     let cancelled = false;
     (async () => {
       console.log("데이터 로딩 시작:", roundLabel);
+      
+      // 해당 회차가 매핑되어 있지 않으면 데이터 로딩 중단
+      if (!isRoundAvailable(roundLabel)) {
+        console.log("매핑되지 않은 회차:", roundLabel);
+        if (!cancelled) {
+          setHighErrorQuestions({});
+          setFireBySession({
+            "1교시": new Set(), "2교시": new Set(), "3교시": new Set(), "4교시": new Set(),
+          });
+          setActiveSubject(null);
+        }
+        return;
+      }
+      
       const [highErrors, explanationIndex] = await Promise.all([
         getHighErrorRateQuestions(roundLabel),
         getExplanationIndex(roundLabel)
@@ -176,7 +195,7 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
       timeoutId = setTimeout(() => {
         const total = activeSubject ? (highErrorQuestions[activeSubject]?.length || 0) : 0;
         if (total === 0) {
-          setGridStyle({ cols: 1, cellW: 20, cellH: 20 });
+          setGridStyle({ cols: 1, cellW: 80, cellH: 80 });
           return;
         }
         
@@ -187,8 +206,8 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
           const { cols, cellW, cellH } = bestGrid(total, width, height, 2, 1);
           setGridStyle({ 
             cols: Math.max(1, cols), 
-            cellW: Math.max(18, Math.min(32, cellW)), 
-            cellH: Math.max(18, Math.min(32, cellH)) 
+            cellW: Math.max(72, Math.min(128, cellW)), // 더 큰 크기
+            cellH: Math.max(72, Math.min(128, cellH)) 
           });
         }
       }, 100); // 100ms 디바운스
@@ -315,21 +334,27 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
       <h2 style={{ marginTop: 0 }}>많이 틀린 문항 해설</h2>
 
       <div className="round-tabs" role="tablist" aria-label="회차 선택">
-        {allRoundLabels.map((r) => (
-          <button
-            key={r}
-            role="tab"
-            aria-selected={roundLabel === r}
-            className={`tab-btn ${roundLabel === r ? "active" : ""}`}
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onRoundChange(r);
-            }}
-          >
-            {r}
-          </button>
-        ))}
+        {allRoundLabels.map((r) => {
+          const isAvailable = isRoundAvailable(r);
+          return (
+            <button
+              key={r}
+              role="tab"
+              aria-selected={roundLabel === r}
+              className={`tab-btn ${roundLabel === r ? "active" : ""}`}
+              type="button"
+              disabled={!isAvailable}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isAvailable) {
+                  onRoundChange(r);
+                }
+              }}
+            >
+              {r}
+            </button>
+          );
+        })}
       </div>
 
       <div className="session-tabs" role="tablist" aria-label="교시 선택">
