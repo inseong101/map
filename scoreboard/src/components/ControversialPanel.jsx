@@ -140,85 +140,97 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      console.log("데이터 로딩 시작:", roundLabel);
-      setLoading(true);
-      
-      if (!isRoundAvailable(roundLabel)) {
-        console.log("매핑되지 않은 회차:", roundLabel);
-        if (!cancelled) {
-          setHighErrorQuestions({});
-          setFireBySession({
-            "1교시": new Set(), "2교시": new Set(), "3교시": new Set(), "4교시": new Set(),
-          });
-          setActiveSubject(null);
-          setLoading(false);
-        }
-        return;
+  let cancelled = false;
+  (async () => {
+    console.log("데이터 로딩 시작:", roundLabel);
+    setLoading(true);
+    
+    if (!isRoundAvailable(roundLabel)) {
+      console.log("매핑되지 않은 회차:", roundLabel);
+      if (!cancelled) {
+        setHighErrorQuestions({});
+        setFireBySession({
+          "1교시": new Set(), "2교시": new Set(), "3교시": new Set(), "4교시": new Set(),
+        });
+        setActiveSubject(null);
+        setLoading(false);
       }
+      return;
+    }
+    
+    try {
+      // 해설 인덱스만 가져옴 (Functions의 더미 데이터는 사용하지 않음)
+      const explanationIndex = await getExplanationIndex(roundLabel);
       
-      try {
-        const [dummyData, explanationIndex] = await Promise.all([
-          getHighErrorRateQuestions(roundLabel),
-          getExplanationIndex(roundLabel)
-        ]);
+      if (!cancelled) {
+        // 프론트엔드에서 모든 문항 생성
+        const allQuestions = {};
         
-        if (!cancelled) {
-          console.log("받은 더미 데이터:", dummyData);
-          
-          // 더미 데이터를 실제 과목 매핑으로 필터링
-          const filteredQuestions = {};
-          
-          // 각 과목별로 해당 교시의 문항만 필터링
-          Object.keys(dummyData).forEach(subject => {
-            const questions = dummyData[subject] || [];
-            filteredQuestions[subject] = questions.filter(q => {
-              const session = q.session;
-              const qNum = q.questionNum;
-              // 해당 교시에서 이 문항번호가 실제로 이 과목에 해당하는지 확인
-              const actualSubject = getSubjectByQuestion(qNum, session, roundLabel);
-              return actualSubject === subject;
+        // 모든 교시의 모든 문항을 생성
+        const sessions = {
+          "1교시": { min: 1, max: 80 },
+          "2교시": { min: 1, max: 100 },
+          "3교시": { min: 1, max: 80 },
+          "4교시": { min: 1, max: 80 }
+        };
+
+        Object.entries(sessions).forEach(([session, range]) => {
+          for (let qNum = range.min; qNum <= range.max; qNum++) {
+            const subject = getSubjectByQuestion(qNum, session, roundLabel);
+            if (!allQuestions[subject]) {
+              allQuestions[subject] = [];
+            }
+            
+            allQuestions[subject].push({
+              questionNum: qNum,
+              session: session,
+              errorRate: Math.random() * 0.7 + 0.3 // 더미 오답률
             });
-          });
-          
-          console.log("필터링된 데이터:", filteredQuestions);
-          setHighErrorQuestions(filteredQuestions);
-          setFireBySession({
-            "1교시": new Set(explanationIndex["1교시"] || []),
-            "2교시": new Set(explanationIndex["2교시"] || []),
-            "3교시": new Set(explanationIndex["3교시"] || []),
-            "4교시": new Set(explanationIndex["4교시"] || []),
-          });
-          
-          // 첫 번째 과목 활성화 (데이터가 있는 과목만)
-          const subjectKeys = Object.keys(filteredQuestions).filter(subject => 
-            filteredQuestions[subject].length > 0
-          );
-          if (subjectKeys.length > 0) {
-            const sortedSubjects = subjectKeys.sort((a, b) => {
-              const aIndex = SUBJECT_ORDER.indexOf(a);
-              const bIndex = SUBJECT_ORDER.indexOf(b);
-              return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
-            });
-            setActiveSubject(sortedSubjects[0]);
-            console.log("활성 과목 설정:", sortedSubjects[0]);
-          } else {
-            setActiveSubject(null);
-            console.log("데이터가 있는 과목 없음");
           }
-        }
-      } catch (error) {
-        console.error("데이터 로딩 실패:", error);
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
+        });
+
+        // 각 과목별로 문항번호 순 정렬
+        Object.keys(allQuestions).forEach(subject => {
+          allQuestions[subject].sort((a, b) => a.questionNum - b.questionNum);
+        });
+        
+        console.log("생성된 모든 문항:", allQuestions);
+        setHighErrorQuestions(allQuestions);
+        setFireBySession({
+          "1교시": new Set(explanationIndex["1교시"] || []),
+          "2교시": new Set(explanationIndex["2교시"] || []),
+          "3교시": new Set(explanationIndex["3교시"] || []),
+          "4교시": new Set(explanationIndex["4교시"] || []),
+        });
+        
+        // 첫 번째 과목 활성화
+        const subjectKeys = Object.keys(allQuestions).filter(subject => 
+          allQuestions[subject].length > 0
+        );
+        if (subjectKeys.length > 0) {
+          const sortedSubjects = subjectKeys.sort((a, b) => {
+            const aIndex = SUBJECT_ORDER.indexOf(a);
+            const bIndex = SUBJECT_ORDER.indexOf(b);
+            return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+          });
+          setActiveSubject(sortedSubjects[0]);
+          console.log("활성 과목 설정:", sortedSubjects[0]);
+        } else {
+          setActiveSubject(null);
         }
       }
-    })();
-    return () => { cancelled = true; };
-  }, [roundLabel, getHighErrorRateQuestions, getExplanationIndex]);
+    } catch (error) {
+      console.error("데이터 로딩 실패:", error);
+    } finally {
+      if (!cancelled) {
+        setLoading(false);
+      }
+    }
+  })();
+  return () => { cancelled = true; };
+}, [roundLabel, getExplanationIndex]); // getHighErrorRateQuestions 제거
 
+  
   // 그리드 크기 재계산 (디바운스 추가로 크기 오류 방지)
   useEffect(() => {
     const el = gridWrapRef.current;
