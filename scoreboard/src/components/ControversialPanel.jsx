@@ -78,57 +78,104 @@ function isRoundAvailable(roundLabel) {
   return !!(SUBJECT_MAPPINGS[roundLabel]);
 }
 
-function bestGrid(n, W, H, gap = 2, aspect = 1) {
-  if (!n || !W || !H) return { cols: 10, rows: 1, cellW: 60, cellH: 60 };
-  
-  // 모바일 체크
-  const isMobile = W < 600;
-  const isSmallMobile = W < 400;
-  
-  // 모바일별 열 수 조정
-  let preferredCols = 10;
-  if (isSmallMobile) {
-    preferredCols = 6; // 작은 화면: 6개 열
-  } else if (isMobile) {
-    preferredCols = 8; // 중간 화면: 8개 열
+// 개선된 그리드 계산 함수 - 모바일 우선 최적화
+function calculateOptimalGrid(questionCount, containerWidth, containerHeight) {
+  if (!questionCount || !containerWidth || !containerHeight) {
+    return { cols: 8, rows: 1, cellW: 50, cellH: 50 };
   }
   
-  // 실제로 들어갈 수 있는 열 수 계산
-  const minCellSize = 32; // 최소 버튼 크기
-  const maxPossibleCols = Math.floor((W - gap * 9) / minCellSize);
-  const finalCols = Math.min(preferredCols, maxPossibleCols, n);
+  const isMobile = containerWidth < 600;
+  const isTablet = containerWidth >= 600 && containerWidth < 900;
+  const isDesktop = containerWidth >= 900;
   
-  const rows = Math.ceil(n / finalCols);
-  const totalGapW = gap * (finalCols - 1);
-  const totalGapH = gap * (rows - 1);
-  const maxCellW = Math.floor((W - totalGapW) / finalCols);
-  const maxCellH = Math.floor((H - totalGapH) / rows);
+  // 최소/최대 버튼 크기 정의
+  const minButtonSize = 35;
+  const maxButtonSize = isMobile ? 55 : isTablet ? 65 : 80;
+  const gap = isMobile ? 2 : 3;
   
-  // 모바일에서 더 작은 버튼 크기
-  let maxSize = 80;
-  if (isSmallMobile) {
-    maxSize = 50; // 작은 화면: 최대 50px
-  } else if (isMobile) {
-    maxSize = 60; // 중간 화면: 최대 60px
+  // 다양한 열 수 후보들 시도
+  const possibleCols = [];
+  
+  if (isMobile) {
+    // 모바일: 6-10열 우선
+    for (let cols = 6; cols <= 12; cols++) {
+      possibleCols.push(cols);
+    }
+  } else if (isTablet) {
+    // 태블릿: 8-14열
+    for (let cols = 8; cols <= 16; cols++) {
+      possibleCols.push(cols);
+    }
+  } else {
+    // 데스크톱: 10-20열
+    for (let cols = 10; cols <= 20; cols++) {
+      possibleCols.push(cols);
+    }
   }
   
-  const targetSize = Math.min(maxCellW, maxCellH, maxSize);
-  const finalW = Math.max(32, targetSize); // 최소 32px
-  const finalH = finalW; // 정사각형 유지
+  let bestLayout = null;
+  let bestScore = -1;
   
-  return { 
-    cols: finalCols, 
-    rows, 
-    cellW: finalW, 
-    cellH: finalH, 
-    score: finalW * finalH 
-  };
+  for (const cols of possibleCols) {
+    const rows = Math.ceil(questionCount / cols);
+    
+    // 그리드가 컨테이너에 들어가는지 확인
+    const totalGapW = gap * (cols - 1);
+    const totalGapH = gap * (rows - 1);
+    const availableW = containerWidth - totalGapW - 20; // 여백 고려
+    const availableH = containerHeight - totalGapH - 40; // 여백 고려
+    
+    if (availableW < cols * minButtonSize || availableH < rows * minButtonSize) {
+      continue; // 너무 작아서 못 들어감
+    }
+    
+    const maxPossibleW = Math.floor(availableW / cols);
+    const maxPossibleH = Math.floor(availableH / rows);
+    const cellSize = Math.min(maxPossibleW, maxPossibleH, maxButtonSize);
+    
+    if (cellSize < minButtonSize) continue;
+    
+    // 점수 계산: 버튼 크기 + 화면 활용률 + 가로세로 비율
+    const utilization = (cellSize * cellSize * questionCount) / (containerWidth * containerHeight);
+    const aspectRatio = Math.abs(1 - (cols / rows)); // 정사각형에 가까울수록 좋음
+    const sizeScore = cellSize / maxButtonSize; // 버튼이 클수록 좋음
+    
+    const score = (sizeScore * 0.4) + (utilization * 0.4) + ((1 - aspectRatio) * 0.2);
+    
+    if (score > bestScore) {
+      bestScore = score;
+      bestLayout = {
+        cols,
+        rows,
+        cellW: cellSize,
+        cellH: cellSize,
+        score: score,
+        utilization: utilization
+      };
+    }
+  }
+  
+  // 최적 레이아웃을 찾지 못한 경우 기본값
+  if (!bestLayout) {
+    const defaultCols = isMobile ? 6 : isTablet ? 8 : 10;
+    const defaultRows = Math.ceil(questionCount / defaultCols);
+    return {
+      cols: defaultCols,
+      rows: defaultRows,
+      cellW: minButtonSize,
+      cellH: minButtonSize,
+      score: 0
+    };
+  }
+  
+  return bestLayout;
 }
+
 export default function ControversialPanel({ allRoundLabels, roundLabel, onRoundChange, sid }) {
   const [activeSession, setActiveSession] = useState("1교시");
   const [activeSubject, setActiveSubject] = useState(null);
   const gridWrapRef = useRef(null);
-  const [gridStyle, setGridStyle] = useState({ cols: 10, cellW: 60, cellH: 60 });
+  const [gridStyle, setGridStyle] = useState({ cols: 8, cellW: 50, cellH: 50 });
   const [pdfOpen, setPdfOpen] = useState(false);
   const [pdfPath, setPdfPath] = useState(null);
   const [highErrorQuestions, setHighErrorQuestions] = useState({});
@@ -162,110 +209,111 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
   }, []);
 
   useEffect(() => {
-  let cancelled = false;
-  (async () => {
-    console.log("데이터 로딩 시작:", roundLabel);
-    setLoading(true);
-    
-    if (!isRoundAvailable(roundLabel)) {
-      console.log("매핑되지 않은 회차:", roundLabel);
-      if (!cancelled) {
-        setHighErrorQuestions({});
-        setFireBySession({
-          "1교시": new Set(), "2교시": new Set(), "3교시": new Set(), "4교시": new Set(),
-        });
-        setActiveSubject(null);
-        setLoading(false);
-      }
-      return;
-    }
-    
-    try {
-      // 해설 인덱스만 가져옴 (Functions의 더미 데이터는 사용하지 않음)
-      const explanationIndex = await getExplanationIndex(roundLabel);
+    let cancelled = false;
+    (async () => {
+      console.log("데이터 로딩 시작:", roundLabel);
+      setLoading(true);
       
-      if (!cancelled) {
-        // 프론트엔드에서 모든 문항 생성
-        const allQuestions = {};
-        
-        // 모든 교시의 모든 문항을 생성
-        const sessions = {
-          "1교시": { min: 1, max: 80 },
-          "2교시": { min: 1, max: 100 },
-          "3교시": { min: 1, max: 80 },
-          "4교시": { min: 1, max: 80 }
-        };
-
-        Object.entries(sessions).forEach(([session, range]) => {
-          for (let qNum = range.min; qNum <= range.max; qNum++) {
-            const subject = getSubjectByQuestion(qNum, session, roundLabel);
-            if (!allQuestions[subject]) {
-              allQuestions[subject] = [];
-            }
-            
-            allQuestions[subject].push({
-              questionNum: qNum,
-              session: session,
-              errorRate: Math.random() * 0.7 + 0.3 // 더미 오답률
-            });
-          }
-        });
-
-        // 각 과목별로 문항번호 순 정렬
-        Object.keys(allQuestions).forEach(subject => {
-          allQuestions[subject].sort((a, b) => a.questionNum - b.questionNum);
-        });
-        
-        console.log("생성된 모든 문항:", allQuestions);
-        setHighErrorQuestions(allQuestions);
-        setFireBySession({
-          "1교시": new Set(explanationIndex["1교시"] || []),
-          "2교시": new Set(explanationIndex["2교시"] || []),
-          "3교시": new Set(explanationIndex["3교시"] || []),
-          "4교시": new Set(explanationIndex["4교시"] || []),
-        });
-        
-        // 첫 번째 과목 활성화
-        const subjectKeys = Object.keys(allQuestions).filter(subject => 
-          allQuestions[subject].length > 0
-        );
-        if (subjectKeys.length > 0) {
-          const sortedSubjects = subjectKeys.sort((a, b) => {
-            const aIndex = SUBJECT_ORDER.indexOf(a);
-            const bIndex = SUBJECT_ORDER.indexOf(b);
-            return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+      if (!isRoundAvailable(roundLabel)) {
+        console.log("매핑되지 않은 회차:", roundLabel);
+        if (!cancelled) {
+          setHighErrorQuestions({});
+          setFireBySession({
+            "1교시": new Set(), "2교시": new Set(), "3교시": new Set(), "4교시": new Set(),
           });
-          setActiveSubject(sortedSubjects[0]);
-          console.log("활성 과목 설정:", sortedSubjects[0]);
-        } else {
           setActiveSubject(null);
+          setLoading(false);
+        }
+        return;
+      }
+      
+      try {
+        // 해설 인덱스만 가져옴 (Functions의 더미 데이터는 사용하지 않음)
+        const explanationIndex = await getExplanationIndex(roundLabel);
+        
+        if (!cancelled) {
+          // 프론트엔드에서 모든 문항 생성
+          const allQuestions = {};
+          
+          // 모든 교시의 모든 문항을 생성
+          const sessions = {
+            "1교시": { min: 1, max: 80 },
+            "2교시": { min: 1, max: 100 },
+            "3교시": { min: 1, max: 80 },
+            "4교시": { min: 1, max: 80 }
+          };
+
+          Object.entries(sessions).forEach(([session, range]) => {
+            for (let qNum = range.min; qNum <= range.max; qNum++) {
+              const subject = getSubjectByQuestion(qNum, session, roundLabel);
+              if (!allQuestions[subject]) {
+                allQuestions[subject] = [];
+              }
+              
+              allQuestions[subject].push({
+                questionNum: qNum,
+                session: session,
+                errorRate: Math.random() * 0.7 + 0.3 // 더미 오답률
+              });
+            }
+          });
+
+          // 각 과목별로 문항번호 순 정렬
+          Object.keys(allQuestions).forEach(subject => {
+            allQuestions[subject].sort((a, b) => a.questionNum - b.questionNum);
+          });
+          
+          console.log("생성된 모든 문항:", allQuestions);
+          setHighErrorQuestions(allQuestions);
+          setFireBySession({
+            "1교시": new Set(explanationIndex["1교시"] || []),
+            "2교시": new Set(explanationIndex["2교시"] || []),
+            "3교시": new Set(explanationIndex["3교시"] || []),
+            "4교시": new Set(explanationIndex["4교시"] || []),
+          });
+          
+          // 첫 번째 과목 활성화
+          const subjectKeys = Object.keys(allQuestions).filter(subject => 
+            allQuestions[subject].length > 0
+          );
+          if (subjectKeys.length > 0) {
+            const sortedSubjects = subjectKeys.sort((a, b) => {
+              const aIndex = SUBJECT_ORDER.indexOf(a);
+              const bIndex = SUBJECT_ORDER.indexOf(b);
+              return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+            });
+            setActiveSubject(sortedSubjects[0]);
+            console.log("활성 과목 설정:", sortedSubjects[0]);
+          } else {
+            setActiveSubject(null);
+          }
+        }
+      } catch (error) {
+        console.error("데이터 로딩 실패:", error);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
         }
       }
-    } catch (error) {
-      console.error("데이터 로딩 실패:", error);
-    } finally {
-      if (!cancelled) {
-        setLoading(false);
-      }
-    }
-  })();
-  return () => { cancelled = true; };
-}, [roundLabel, getExplanationIndex]); // getHighErrorRateQuestions 제거
+    })();
+    return () => { cancelled = true; };
+  }, [roundLabel, getExplanationIndex]);
 
-  
-  // 그리드 크기 재계산 (디바운스 추가로 크기 오류 방지)
+  // 개선된 그리드 크기 재계산 (디바운스 + 반응형 최적화)
   useEffect(() => {
     const el = gridWrapRef.current;
     if (!el) return;
     
     let timeoutId = null;
     
-    const compute = () => {
+    const computeGrid = () => {
       clearTimeout(timeoutId);
       timeoutId = setTimeout(() => {
-        const total = activeSubject ? (highErrorQuestions[activeSubject]?.length || 0) : 0;
-        if (total === 0) {
-          setGridStyle({ cols: 10, cellW: 60, cellH: 60 });
+        const currentQuestions = activeSubject ? (highErrorQuestions[activeSubject] || []) : [];
+        const questionCount = currentQuestions.length;
+        
+        if (questionCount === 0) {
+          setGridStyle({ cols: 8, cellW: 50, cellH: 50 });
           return;
         }
         
@@ -273,22 +321,57 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
         const { width, height } = rect;
         
         if (width > 0 && height > 0) {
-          const { cols, cellW, cellH } = bestGrid(total, width, height, 2, 1);
-          setGridStyle({ 
-            cols: Math.max(1, cols), 
-            cellW: Math.max(40, Math.min(80, cellW)),
-            cellH: Math.max(40, Math.min(80, cellH)) 
-          });
+          const optimalGrid = calculateOptimalGrid(questionCount, width, height);
+          console.log(`그리드 최적화: ${questionCount}개 문제 → ${optimalGrid.cols}x${optimalGrid.rows} (${optimalGrid.cellW}px)`);
+          setGridStyle(optimalGrid);
         }
-      }, 100);
+      }, 150); // 디바운스 시간 증가
     };
     
-    const ro = new ResizeObserver(compute);
-    ro.observe(el);
-    compute();
+    // ResizeObserver로 실시간 크기 변화 감지
+    const resizeObserver = new ResizeObserver(computeGrid);
+    resizeObserver.observe(el);
+    
+    // 초기 계산
+    computeGrid();
     
     return () => {
-      ro.disconnect();
+      resizeObserver.disconnect();
+      clearTimeout(timeoutId);
+    };
+  }, [activeSubject, highErrorQuestions]);
+
+  // 윈도우 리사이즈 시에도 재계산 (모바일 회전 대응)
+  useEffect(() => {
+    let timeoutId = null;
+    
+    const handleResize = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        const el = gridWrapRef.current;
+        if (!el) return;
+        
+        const currentQuestions = activeSubject ? (highErrorQuestions[activeSubject] || []) : [];
+        const questionCount = currentQuestions.length;
+        
+        if (questionCount > 0) {
+          const rect = el.getBoundingClientRect();
+          const { width, height } = rect;
+          
+          if (width > 0 && height > 0) {
+            const optimalGrid = calculateOptimalGrid(questionCount, width, height);
+            setGridStyle(optimalGrid);
+          }
+        }
+      }, 200);
+    };
+    
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
       clearTimeout(timeoutId);
     };
   }, [activeSubject, highErrorQuestions]);
@@ -309,18 +392,26 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     }
     
     const questions = highErrorQuestions[activeSubject];
-    console.log("버튼 렌더링:", { activeSubject, questions: questions.length });
+    console.log("버튼 렌더링:", { activeSubject, questions: questions.length, gridStyle });
     
     // 문제 번호 순으로 정렬 (작은 번호부터 왼쪽에서 오른쪽으로)
     const sortedQuestions = [...questions].sort((a, b) => a.questionNum - b.questionNum);
     
-    const { cols, cellW, cellH } = gridStyle;
+    const { cols, rows, cellW, cellH } = gridStyle;
+    
     return (
       <div
         className="btn-grid"
         style={{
+          display: 'grid',
           gridTemplateColumns: `repeat(${cols}, ${cellW}px)`,
-          gridTemplateRows: `repeat(${Math.ceil(sortedQuestions.length / cols)}, ${cellH}px)`,
+          gridTemplateRows: `repeat(${rows}, ${cellH}px)`,
+          gap: `${window.innerWidth < 600 ? 2 : 3}px`,
+          justifyContent: 'center',
+          alignContent: 'start',
+          width: '100%',
+          maxWidth: '100%',
+          overflow: 'visible'
         }}
       >
         {sortedQuestions.map((q) => {
@@ -355,6 +446,10 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
                 width: `${cellW}px`,
                 height: `${cellH}px`,
                 cursor: hasExp ? "pointer" : "default",
+                fontSize: `${Math.max(8, Math.min(12, cellW / 5))}px`, // 버튼 크기에 따른 폰트 조절
+                minWidth: 0,
+                minHeight: 0,
+                boxSizing: 'border-box'
               }}
             >
               {qNum}
