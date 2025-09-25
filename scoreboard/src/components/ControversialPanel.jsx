@@ -78,7 +78,7 @@ function isRoundAvailable(roundLabel) {
   return !!(SUBJECT_MAPPINGS[roundLabel]);
 }
 
-// 개선된 그리드 계산 함수 - 모바일 우선 최적화
+// 안정화된 그리드 계산 함수 - 깜빡임 방지
 function calculateOptimalGrid(questionCount, containerWidth, containerHeight) {
   if (!questionCount || !containerWidth || !containerHeight) {
     return { cols: 8, rows: 1, cellW: 50, cellH: 50 };
@@ -86,89 +86,62 @@ function calculateOptimalGrid(questionCount, containerWidth, containerHeight) {
   
   const isMobile = containerWidth < 600;
   const isTablet = containerWidth >= 600 && containerWidth < 900;
-  const isDesktop = containerWidth >= 900;
   
-  // 최소/최대 버튼 크기 정의
-  const minButtonSize = 35;
-  const maxButtonSize = isMobile ? 55 : isTablet ? 65 : 80;
-  const gap = isMobile ? 2 : 3;
-  
-  // 다양한 열 수 후보들 시도
-  const possibleCols = [];
+  // 문제 개수 구간별로 고정된 레이아웃 사용 (깜빡임 방지)
+  let targetCols;
   
   if (isMobile) {
-    // 모바일: 6-10열 우선
-    for (let cols = 6; cols <= 12; cols++) {
-      possibleCols.push(cols);
-    }
+    // 모바일: 문제 수에 따른 고정 열 수
+    if (questionCount <= 12) targetCols = 6;      // 1-12개: 6열
+    else if (questionCount <= 16) targetCols = 8; // 13-16개: 8열  
+    else if (questionCount <= 24) targetCols = 8; // 17-24개: 8열
+    else if (questionCount <= 32) targetCols = 8; // 25-32개: 8열
+    else if (questionCount <= 48) targetCols = 8; // 33-48개: 8열
+    else targetCols = 10; // 49개 이상: 10열
   } else if (isTablet) {
-    // 태블릿: 8-14열
-    for (let cols = 8; cols <= 16; cols++) {
-      possibleCols.push(cols);
-    }
+    // 태블릿: 안정적인 열 수
+    if (questionCount <= 20) targetCols = 10;     // 1-20개: 10열
+    else if (questionCount <= 32) targetCols = 12; // 21-32개: 12열
+    else if (questionCount <= 48) targetCols = 12; // 33-48개: 12열
+    else targetCols = 14; // 49개 이상: 14열
   } else {
-    // 데스크톱: 10-20열
-    for (let cols = 10; cols <= 20; cols++) {
-      possibleCols.push(cols);
-    }
+    // 데스크톱: 큰 화면 최적화
+    if (questionCount <= 20) targetCols = 10;     // 1-20개: 10열
+    else if (questionCount <= 32) targetCols = 12; // 21-32개: 12열
+    else if (questionCount <= 48) targetCols = 14; // 33-48개: 14열
+    else if (questionCount <= 80) targetCols = 16; // 49-80개: 16열
+    else targetCols = 20; // 81개 이상: 20열
   }
   
-  let bestLayout = null;
-  let bestScore = -1;
+  const rows = Math.ceil(questionCount / targetCols);
+  const gap = isMobile ? 2 : 3;
   
-  for (const cols of possibleCols) {
-    const rows = Math.ceil(questionCount / cols);
-    
-    // 그리드가 컨테이너에 들어가는지 확인
-    const totalGapW = gap * (cols - 1);
-    const totalGapH = gap * (rows - 1);
-    const availableW = containerWidth - totalGapW - 20; // 여백 고려
-    const availableH = containerHeight - totalGapH - 40; // 여백 고려
-    
-    if (availableW < cols * minButtonSize || availableH < rows * minButtonSize) {
-      continue; // 너무 작아서 못 들어감
-    }
-    
-    const maxPossibleW = Math.floor(availableW / cols);
-    const maxPossibleH = Math.floor(availableH / rows);
-    const cellSize = Math.min(maxPossibleW, maxPossibleH, maxButtonSize);
-    
-    if (cellSize < minButtonSize) continue;
-    
-    // 점수 계산: 버튼 크기 + 화면 활용률 + 가로세로 비율
-    const utilization = (cellSize * cellSize * questionCount) / (containerWidth * containerHeight);
-    const aspectRatio = Math.abs(1 - (cols / rows)); // 정사각형에 가까울수록 좋음
-    const sizeScore = cellSize / maxButtonSize; // 버튼이 클수록 좋음
-    
-    const score = (sizeScore * 0.4) + (utilization * 0.4) + ((1 - aspectRatio) * 0.2);
-    
-    if (score > bestScore) {
-      bestScore = score;
-      bestLayout = {
-        cols,
-        rows,
-        cellW: cellSize,
-        cellH: cellSize,
-        score: score,
-        utilization: utilization
-      };
-    }
-  }
+  // 여백 계산
+  const padding = isMobile ? 8 : 12;
+  const totalGapW = gap * (targetCols - 1);
+  const totalGapH = gap * (rows - 1);
+  const availableW = containerWidth - totalGapW - (padding * 2);
+  const availableH = containerHeight - totalGapH - (padding * 2);
   
-  // 최적 레이아웃을 찾지 못한 경우 기본값
-  if (!bestLayout) {
-    const defaultCols = isMobile ? 6 : isTablet ? 8 : 10;
-    const defaultRows = Math.ceil(questionCount / defaultCols);
-    return {
-      cols: defaultCols,
-      rows: defaultRows,
-      cellW: minButtonSize,
-      cellH: minButtonSize,
-      score: 0
-    };
-  }
+  // 버튼 크기 계산
+  const maxPossibleW = Math.floor(availableW / targetCols);
+  const maxPossibleH = Math.floor(availableH / rows);
   
-  return bestLayout;
+  // 크기 제한
+  const minSize = isMobile ? 32 : 38;
+  const maxSize = isMobile ? 58 : isTablet ? 68 : 78;
+  
+  let cellSize = Math.min(maxPossibleW, maxPossibleH);
+  cellSize = Math.max(minSize, Math.min(cellSize, maxSize));
+  
+  return {
+    cols: targetCols,
+    rows: rows,
+    cellW: cellSize,
+    cellH: cellSize,
+    questionCount: questionCount,
+    containerWidth: Math.floor(containerWidth) // 정수화로 안정성 증대
+  };
 }
 
 export default function ControversialPanel({ allRoundLabels, roundLabel, onRoundChange, sid }) {
@@ -299,12 +272,13 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     return () => { cancelled = true; };
   }, [roundLabel, getExplanationIndex]);
 
-  // 개선된 그리드 크기 재계산 (디바운스 + 반응형 최적화)
+  // 안정화된 그리드 크기 재계산 (깜빡임 방지)
   useEffect(() => {
     const el = gridWrapRef.current;
     if (!el) return;
     
     let timeoutId = null;
+    let lastCalculation = null;
     
     const computeGrid = () => {
       clearTimeout(timeoutId);
@@ -321,19 +295,60 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
         const { width, height } = rect;
         
         if (width > 0 && height > 0) {
+          // 현재 계산 키 생성 (반올림으로 안정화)
+          const currentKey = `${questionCount}-${Math.round(width/20)*20}-${Math.round(height/20)*20}`;
+          
+          // 동일한 조건이면 재계산하지 않음 (깜빡임 방지)
+          if (lastCalculation && lastCalculation.key === currentKey) {
+            return;
+          }
+          
           const optimalGrid = calculateOptimalGrid(questionCount, width, height);
-          console.log(`그리드 최적화: ${questionCount}개 문제 → ${optimalGrid.cols}x${optimalGrid.rows} (${optimalGrid.cellW}px)`);
+          
+          // 이전 그리드와 큰 차이가 없으면 변경하지 않음 (안정화)
+          if (lastCalculation && 
+              Math.abs(lastCalculation.grid.cols - optimalGrid.cols) <= 1 && 
+              Math.abs(lastCalculation.grid.cellW - optimalGrid.cellW) <= 5) {
+            return;
+          }
+          
+          console.log(`그리드 계산: ${questionCount}개 문제 → ${optimalGrid.cols}x${optimalGrid.rows} (${optimalGrid.cellW}px)`);
           setGridStyle(optimalGrid);
+          
+          // 마지막 계산 결과 저장
+          lastCalculation = {
+            key: currentKey,
+            grid: optimalGrid,
+            timestamp: Date.now()
+          };
         }
-      }, 150); // 디바운스 시간 증가
+      }, 300); // 디바운스 시간 증가
     };
     
-    // ResizeObserver로 실시간 크기 변화 감지
-    const resizeObserver = new ResizeObserver(computeGrid);
+    // ResizeObserver로 크기 변화 감지 (과도한 실행 방지)
+    const resizeObserver = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      
+      const { width, height } = entry.contentRect;
+      
+      // 크기 변화가 충분히 클 때만 재계산 (깜빡임 방지)
+      if (lastCalculation) {
+        const widthDiff = Math.abs(width - (lastCalculation.containerWidth || 0));
+        const heightDiff = Math.abs(height - (lastCalculation.containerHeight || 0));
+        
+        if (widthDiff < 30 && heightDiff < 30) {
+          return; // 작은 크기 변화는 무시
+        }
+      }
+      
+      computeGrid();
+    });
+    
     resizeObserver.observe(el);
     
-    // 초기 계산
-    computeGrid();
+    // 초기 계산 (지연 실행)
+    setTimeout(computeGrid, 100);
     
     return () => {
       resizeObserver.disconnect();
@@ -341,29 +356,35 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     };
   }, [activeSubject, highErrorQuestions]);
 
-  // 윈도우 리사이즈 시에도 재계산 (모바일 회전 대응)
+  // 윈도우 리사이즈는 더 보수적으로 처리 (모바일 회전시만)
   useEffect(() => {
     let timeoutId = null;
+    let lastOrientation = window.orientation;
     
     const handleResize = () => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        const el = gridWrapRef.current;
-        if (!el) return;
+      // 방향 변경이 있을 때만 처리 (모바일 회전)
+      if (window.orientation !== undefined && window.orientation !== lastOrientation) {
+        lastOrientation = window.orientation;
         
-        const currentQuestions = activeSubject ? (highErrorQuestions[activeSubject] || []) : [];
-        const questionCount = currentQuestions.length;
-        
-        if (questionCount > 0) {
-          const rect = el.getBoundingClientRect();
-          const { width, height } = rect;
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          const el = gridWrapRef.current;
+          if (!el) return;
           
-          if (width > 0 && height > 0) {
-            const optimalGrid = calculateOptimalGrid(questionCount, width, height);
-            setGridStyle(optimalGrid);
+          const currentQuestions = activeSubject ? (highErrorQuestions[activeSubject] || []) : [];
+          const questionCount = currentQuestions.length;
+          
+          if (questionCount > 0) {
+            const rect = el.getBoundingClientRect();
+            const { width, height } = rect;
+            
+            if (width > 0 && height > 0) {
+              const optimalGrid = calculateOptimalGrid(questionCount, width, height);
+              setGridStyle(optimalGrid);
+            }
           }
-        }
-      }, 200);
+        }, 500); // 방향 변경 후 충분한 대기
+      }
     };
     
     window.addEventListener('resize', handleResize);
