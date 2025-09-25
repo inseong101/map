@@ -321,13 +321,18 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
   }, [activeSubject, highErrorQuestions]);
 
   const openExplanation = (session, qNum) => {
-    const rNum = parseInt(String(roundLabel).replace(/\D/g, ""), 10) || 1;
-    const sNum = parseInt(String(session).replace(/\D/g, ""), 10) || 1;
-    const path = `explanation/${rNum}-${sNum}-${qNum}.pdf`;
-    console.log("PDF 열기:", path);
+  const rNum = parseInt(String(roundLabel).replace(/\D/g, ""), 10) || 1;
+  const sNum = parseInt(String(session).replace(/\D/g, ""), 10) || 1;
+  const path = `explanation/${rNum}-${sNum}-${qNum}.pdf`;
+  
+  console.log("PDF 열기:", path);
+  
+  // 모달을 먼저 열고 잠시 기다린 후 PDF 경로 설정
+  setPdfOpen(true);
+  setTimeout(() => {
     setPdfPath(path);
-    setPdfOpen(true);
-  };
+  }, 100); // 100ms 지연
+};
 
   const renderButtons = () => {
     if (!activeSubject || !highErrorQuestions[activeSubject]) {
