@@ -32,73 +32,73 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   };
 
   // 저해상도 → 고해상도 단계적 렌더링 (깜빡임 없이)
-  const renderPage = useCallback(
-    async (doc, num) => {
-      if (!doc || !canvasRef.current || !holderRef.current || renderedRef.current) return;
+ // 모바일 해상도 개선 - renderPage 함수 수정
+const renderPage = useCallback(
+  async (doc, num) => {
+    if (!doc || !canvasRef.current || !holderRef.current || renderedRef.current) return;
+    
+    try {
+      renderedRef.current = true;
       
-      try {
-        renderedRef.current = true;
-        
-        const page = await doc.getPage(num);
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext("2d", { alpha: false });
+      const page = await doc.getPage(num);
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d", { alpha: false });
 
-        const containerWidth = getContainerWidth();
-        const baseViewport = page.getViewport({ scale: 1 });
-        const targetScale = Math.min(1.5, containerWidth / baseViewport.width);
-
-        // 1단계: 저해상도로 빠른 렌더링
-        const quickScale = targetScale * 0.7;
-        const quickViewport = page.getViewport({ scale: quickScale });
-        
-        canvas.width = Math.floor(quickViewport.width);
-        canvas.height = Math.floor(quickViewport.height);
-        canvas.style.width = `${Math.floor(quickViewport.width)}px`;
-        canvas.style.height = `${Math.floor(quickViewport.height)}px`;
-        
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.fillStyle = "#fff";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        await page.render({
-          canvasContext: ctx,
-          viewport: quickViewport
-        }).promise;
-
-        // 2단계: 고해상도로 업그레이드 (자연스럽게)
-        setTimeout(async () => {
-          try {
-            const finalViewport = page.getViewport({ scale: targetScale });
-            
-            canvas.width = Math.floor(finalViewport.width);
-            canvas.height = Math.floor(finalViewport.height);
-            canvas.style.width = `${Math.floor(finalViewport.width)}px`;
-            canvas.style.height = `${Math.floor(finalViewport.height)}px`;
-            
-            ctx.setTransform(1, 0, 0, 1, 0, 0);
-            ctx.fillStyle = "#fff";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            await page.render({
-              canvasContext: ctx,
-              viewport: finalViewport
-            }).promise;
-          } catch (error) {
-            console.error("고해상도 렌더링 오류:", error);
-          }
-        }, 50); // 50ms 후 고해상도로 업그레이드
-        
-      } catch (error) {
-        console.error("PDF 렌더링 오류:", error);
-      } finally {
-        setTimeout(() => {
-          renderedRef.current = false;
-        }, 200);
+      const containerWidth = getContainerWidth();
+      const baseViewport = page.getViewport({ scale: 1 });
+      let targetScale = Math.min(2.0, containerWidth / baseViewport.width); // 최대 스케일 증가
+      
+      // 모바일에서 더 높은 해상도 사용
+      const isMobile = window.innerWidth <= 768;
+      if (isMobile) {
+        targetScale = Math.min(2.5, targetScale * 1.5); // 모바일에서 1.5배 추가 확대
       }
-    },
-    []
-  );
 
+      // 1단계: 저해상도 퀵 렌더링
+      const quickScale = targetScale * 0.7;
+      const quickViewport = page.getViewport({ scale: quickScale });
+      
+      canvas.width = Math.floor(quickViewport.width);
+      canvas.height = Math.floor(quickViewport.height);
+      canvas.style.width = `${Math.floor(quickViewport.width)}px`;
+      canvas.style.height = `${Math.floor(quickViewport.height)}px`;
+      
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      await page.render({ canvasContext: ctx, viewport: quickViewport }).promise;
+
+      // 2단계: 고해상도 업그레이드 (모바일에서 더 선명하게)
+      setTimeout(async () => {
+        try {
+          const finalViewport = page.getViewport({ scale: targetScale });
+          
+          canvas.width = Math.floor(finalViewport.width);
+          canvas.height = Math.floor(finalViewport.height);
+          canvas.style.width = `${Math.floor(finalViewport.width)}px`;
+          canvas.style.height = `${Math.floor(finalViewport.height)}px`;
+          
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.fillStyle = "#fff";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          
+          await page.render({ canvasContext: ctx, viewport: finalViewport }).promise;
+        } catch (error) {
+          console.error("고해상도 렌더링 오류:", error);
+        }
+      }, 50);
+      
+    } catch (error) {
+      console.error("PDF 렌더링 오류:", error);
+    } finally {
+      setTimeout(() => {
+        renderedRef.current = false;
+      }, 200);
+    }
+  },
+  []
+);
   // 첫 렌더링
   const renderFirstPage = useCallback(
     async (doc) => {
