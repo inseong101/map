@@ -1,17 +1,16 @@
-/* ==== WrongAnswerPanel (탭 전환형, 내부 스크롤 없음) ==== */
+/* ==== WrongAnswerPanel (탭 전환형, 반응형 최적화) ==== */
 .wrong-panel-root {
-  /* 카드 앞면 높이를 그대로 따르도록: 부모가 높이를 정해둔다고 가정 */
   height: 100%;
   display: flex;
   flex-direction: column;
-
-  /* 내부에 자체 스크롤을 만들지 않음 */
   overflow: hidden;
+  min-height: 400px; /* 최소 높이 보장 */
 }
 
 /* 제목 가운데 정렬 */
 .wrong-panel-root h2 {
   text-align: center;
+  margin-bottom: 16px;
 }
 
 /* 설명 줄 */
@@ -20,8 +19,9 @@
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+  justify-content: center; /* 가운데 정렬 */
   opacity: .9;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
   font-size: 13px;
 }
 .legend-red { color: #ffd8d8; }
@@ -31,29 +31,39 @@
   gap: 6px;
 }
 
-/* 상단 탭 - 가운데 정렬 */
+/* 상단 탭 - 가운데 정렬 및 반응형 */
 .session-tabs, .round-tabs, .subject-tabs {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-  margin: 8px 0 10px;
-  justify-content: center; /* 가운데 정렬 */
+  margin: 8px 0 12px;
+  justify-content: center;
 }
+
 .tab-btn {
   appearance: none;
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--ink);
   border-radius: 999px;
-  padding: 6px 12px;
+  padding: 8px 14px;
   font-weight: 700;
   font-size: 13px;
   cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
 }
+
+.tab-btn:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--primary);
+}
+
 .tab-btn.active {
   background: var(--primary);
   border-color: var(--primary);
   color: #fff;
+  box-shadow: 0 2px 8px rgba(126,162,255,.3);
 }
 
 /* 비활성화된 탭 */
@@ -65,203 +75,391 @@
   color: var(--muted);
 }
 
-/* 탭 콘텐츠 래퍼 — 남은 공간만 차지, 내부 스크롤 끔 */
+/* 탭 콘텐츠 래퍼 — 남은 공간만 차지, 스크롤 방지 */
 .tab-content {
-  flex: 1;           /* 위 요소들(제목/설명/탭) 제외한 나머지 높이 채움 */
-  overflow: hidden;  /* 내부 스크롤 금지 */
+  flex: 1;
+  overflow: hidden;
   position: relative;
-  min-height: 200px; /* 최소 높이 보장 */
+  min-height: 250px;
+  padding: 8px;
 }
 
-/* 번호 버튼 그리드: 행/열은 JSX에서 픽셀로 지정 */
+/* 번호 버튼 그리드: 완전 반응형 그리드 */
 .btn-grid {
-  display: grid;
-  gap: 2px;          /* 🔧 간격 더 줄임 (기존 3px → 2px) */
-  width: 100%;
-  height: 100%;      /* 탭 콘텐츠 영역을 꽉 채움 */
-  justify-content: center;
-  align-content: start;
-}
-
-/* 기본 번호 버튼 - 해설 없는 문제는 평범한 색상 */
-.qbtn {
-  position: relative; /* 🔥 이모지 배치용 */
-  appearance: none;
-  border: 1px solid var(--line);
-  background: rgba(255,255,255,0.03);
-  color: var(--ink);
-  border-radius: 6px;
-  font-weight: 800;
-  font-size: 10px;   /* 🔧 폰트 크기 줄임 */
-  line-height: 1;
-  cursor: default;
-
   width: 100%;
   height: 100%;
+  display: grid;
+  justify-content: center;
+  align-content: start;
+  padding: 4px;
+  box-sizing: border-box;
+  overflow: visible;
+}
+
+/* 기본 번호 버튼 - 개선된 스타일링 */
+.qbtn {
+  position: relative;
+  appearance: none;
+  border: 1.5px solid var(--line);
+  background: rgba(255,255,255,0.04);
+  color: var(--ink);
+  border-radius: 8px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: default;
+  
   display: flex; 
   align-items: center; 
   justify-content: center;
-
+  
   padding: 0;
+  margin: 0;
   min-width: 0;
   min-height: 0;
+  box-sizing: border-box;
+  
+  transition: all 0.2s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* 내 오답 = 빨강 (해설 있는 문제만) */
-.qbtn.red {
-  background: rgba(239,68,68,.16);
-  border-color: rgba(239,68,68,.45);
-  color: #ffd8d8;
-}
-
-/* 해설 없는 문제는 회색 톤 유지 */
-.qbtn.no-explanation {
-  background: rgba(255,255,255,0.03);
-  border-color: var(--line);
-  color: var(--muted);
-}
-
-/* 🔥 불타는 버튼 효과 */
-.qbtn.fire {
-  animation: blazing 0.6s ease-in-out infinite alternate;
-  box-shadow:
-    0 0 16px #ff4500,
-    0 0 32px #ff6b35,
-    0 0 48px #ff8c42;
+/* 해설 있는 문제 - 불타는 효과 */
+.qbtn.red.fire {
+  background: linear-gradient(135deg, rgba(255,69,0,0.2), rgba(239,68,68,0.16));
   border-color: #ff7a3a;
+  color: #fff;
+  cursor: pointer;
+  
+  animation: blazing 1.2s ease-in-out infinite alternate;
+  box-shadow: 
+    0 0 12px rgba(255,69,0,0.4),
+    0 0 24px rgba(255,107,53,0.2),
+    0 2px 8px rgba(0,0,0,0.2);
 }
 
-/* 🔥 이모지 위치 */
-.qbtn.fire .flame-emoji {
-  position: absolute;
-  top: -6px;
-  right: -5px;
-  font-size: 13px;
-  transform-origin: center;
-  animation: flame-wiggle 0.9s ease-in-out infinite;
-  pointer-events: none;
+.qbtn.red.fire:hover {
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: 
+    0 0 16px rgba(255,69,0,0.6),
+    0 0 32px rgba(255,107,53,0.3),
+    0 4px 12px rgba(0,0,0,0.3);
 }
 
-/* 불타는 글로우 & 살짝 커졌다 작아짐 */
+.qbtn.red.fire:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* 해설 없는 문제는 회색 톤 */
+.qbtn.no-explanation {
+  background: rgba(255,255,255,0.02);
+  border-color: rgba(255,255,255,0.1);
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+.qbtn.no-explanation:hover {
+  opacity: 0.9;
+  background: rgba(255,255,255,0.04);
+}
+
+/* 🔥 불타는 버튼 애니메이션 */
 @keyframes blazing {
   0% {
-    box-shadow: 0 0 16px #ff4500, 0 0 32px #ff6b35, 0 0 48px #ff8c42;
+    box-shadow: 
+      0 0 12px rgba(255,69,0,0.4),
+      0 0 24px rgba(255,107,53,0.2),
+      0 2px 8px rgba(0,0,0,0.2);
     transform: scale(1);
   }
   100% {
-    box-shadow: 0 0 22px #ff4500, 0 0 44px #ff6b35, 0 0 66px #ff8c42;
-    transform: scale(1.04);
+    box-shadow: 
+      0 0 18px rgba(255,69,0,0.6),
+      0 0 36px rgba(255,107,53,0.3),
+      0 3px 12px rgba(0,0,0,0.25);
+    transform: scale(1.02);
   }
 }
 
-/* 🔥 이모지 살짝 흔들리는 모션 */
-@keyframes flame-wiggle {
-  0%   { transform: translateY(0) rotate(0deg) scale(1); }
-  50%  { transform: translateY(-1px) rotate(-6deg) scale(1.05); }
-  100% { transform: translateY(0) rotate(0deg) scale(1); }
-}
-
-/* 아주 작은 화면 보정 */
-@media (max-width: 380px) {
-  .qbtn { font-size: 10px; }
-}
-
-/* 예시 버튼을 번호 박스와 완전 동일 크기/정렬로 */
-.qbtn.sample {
-  padding: 0;                 /* 내부 여백 제거 */
-  min-width: 0;               /* 폭 고정 */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* " = 특별 해설 제공" 을 한 줄로 버튼 옆에 고정 */
-.legend-example { display: inline-flex; align-items: center; gap: 6px; }
-.legend-label { white-space: nowrap; }
-
-
-/* 불 아이콘이 버튼 클릭을 가로채지 않도록 */
-.flame-emoji {
+/* 🔥 이모지 위치 및 애니메이션 */
+.qbtn.fire .flame-emoji {
   position: absolute;
-  right: 2px;
-  top: 2px;
+  top: -4px;
+  right: -3px;
   font-size: 0.9em;
-  line-height: 1;
-  pointer-events: none; /* 중요! 클릭 차단 */
+  transform-origin: center;
+  animation: flame-wiggle 1.5s ease-in-out infinite;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));
 }
 
-/* flip 기본 레이아웃 */
-.qbtn {
-  position: relative;
-  perspective: 600px;
-  transform-style: preserve-3d;
-  transition: transform 0.3s ease;
+@keyframes flame-wiggle {
+  0%, 100% { 
+    transform: translateY(0) rotate(-2deg) scale(1); 
+  }
+  25% { 
+    transform: translateY(-2px) rotate(2deg) scale(1.05); 
+  }
+  50% { 
+    transform: translateY(-1px) rotate(-1deg) scale(1.02); 
+  }
+  75% { 
+    transform: translateY(-2px) rotate(1deg) scale(1.03); 
+  }
 }
 
-/* 앞/뒤 면 */
-.qbtn .qbtn-front,
-.qbtn .qbtn-back {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  backface-visibility: hidden;
-  border-radius: inherit;
-}
-
-/* 뒤면 */
-.qbtn .qbtn-back {
-  transform: rotateY(180deg);
-  opacity: 0.85;
-}
-
-/* 해설 없는 문제는 hover에만 flip (클릭 안 뺏음) */
-.qbtn.noexp:hover {
-  transform: rotateY(180deg);
-}
-
-/* 샘플 버튼도 동일하게 보여주기 */
+/* 예시 버튼 */
 .qbtn.sample {
   cursor: default;
+  position: relative;
 }
 
-/* 혹시 상위 그리드가 이벤트를 막는 스타일이 있을 경우 대비 */
-.btn-grid {
-  pointer-events: auto;
+.legend-example { 
+  display: inline-flex; 
+  align-items: center; 
+  gap: 6px; 
 }
 
-/* 혹시 qbtn에 pointer-events: none 이 들어갔던 경우 복구 */
-.qbtn {
-  pointer-events: auto;
+.legend-label { 
+  white-space: nowrap; 
+  font-weight: 600;
 }
 
-/* 🔧 PDF 모달이 뒤집히는 버그를 막기 위해 transform을 초기화 */
+/* 스피너 개선 */
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(126,162,255,0.2);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 모바일 최적화 */
+@media (max-width: 600px) {
+  .wrong-panel-root {
+    min-height: 350px;
+  }
+  
+  .wrong-panel-root h2 {
+    font-size: 18px;
+    margin-bottom: 12px;
+  }
+  
+  .tab-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  
+  .session-tabs, .round-tabs, .subject-tabs {
+    gap: 4px;
+    margin: 6px 0 10px;
+  }
+  
+  .tab-content {
+    min-height: 200px;
+    padding: 4px;
+  }
+  
+  .btn-grid {
+    padding: 2px;
+  }
+  
+  .qbtn {
+    border-radius: 6px;
+    border-width: 1px;
+  }
+  
+  .qbtn.fire .flame-emoji {
+    font-size: 0.8em;
+    top: -3px;
+    right: -2px;
+  }
+  
+  .legend-line {
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+}
+
+/* 작은 모바일 화면 */
+@media (max-width: 400px) {
+  .wrong-panel-root h2 {
+    font-size: 16px;
+  }
+  
+  .tab-btn {
+    padding: 5px 8px;
+    font-size: 11px;
+  }
+  
+  .session-tabs, .round-tabs, .subject-tabs {
+    gap: 3px;
+  }
+  
+  .qbtn.fire .flame-emoji {
+    font-size: 0.7em;
+    top: -2px;
+    right: -1px;
+  }
+}
+
+/* 태블릿 최적화 */
+@media (min-width: 601px) and (max-width: 900px) {
+  .tab-btn {
+    padding: 7px 12px;
+    font-size: 13px;
+  }
+  
+  .tab-content {
+    padding: 6px;
+  }
+}
+
+/* 데스크톱 최적화 */
+@media (min-width: 901px) {
+  .wrong-panel-root h2 {
+    font-size: 22px;
+  }
+  
+  .tab-btn {
+    padding: 8px 16px;
+    font-size: 14px;
+  }
+  
+  .tab-content {
+    padding: 10px;
+  }
+}
+
+/* 고해상도 디스플레이 최적화 */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 2dppx) {
+  .qbtn.fire {
+    border-width: 1.5px;
+  }
+  
+  .qbtn.fire .flame-emoji {
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
+  }
+}
+
+/* 접근성 개선 */
+@media (prefers-reduced-motion: reduce) {
+  .qbtn.fire {
+    animation: none;
+  }
+  
+  .qbtn.fire .flame-emoji {
+    animation: none;
+  }
+  
+  .qbtn.fire:hover {
+    transform: none;
+  }
+  
+  .tab-btn {
+    transition: none;
+  }
+}
+
+/* 포커스 접근성 */
+.tab-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.qbtn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+/* 터치 디바이스 최적화 */
+@media (hover: none) and (pointer: coarse) {
+  .qbtn.fire:hover {
+    transform: none;
+  }
+  
+  .qbtn.fire:active {
+    transform: scale(0.95);
+  }
+  
+  .tab-btn:hover:not(:disabled) {
+    background: var(--surface);
+  }
+  
+  .tab-btn:active:not(:disabled) {
+    background: var(--surface-2);
+    transform: scale(0.98);
+  }
+}
+
+/* PDF 모달 충돌 방지 */
 .pdf-modal-root, .pdf-modal-root * {
   transform: none !important;
   transform-style: flat !important;
   backface-visibility: visible !important;
+  animation: none !important;
 }
 
-
-/* 모바일 반응형 추가 */
-@media (max-width: 600px) {
-  .btn-grid {
-    gap: 1px; /* 모바일에서 간격 줄임 */
-  }
-  
-  .qbtn {
-    font-size: 9px; /* 모바일에서 폰트 더 작게 */
-  }
-  
-  .qbtn.fire .flame-emoji {
-    font-size: 11px; /* 불 이모지도 작게 */
-    top: -4px;
-    right: -3px;
-  }
+/* 로딩 상태 스타일 */
+.tab-content .loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 200px;
+  gap: 16px;
+  color: var(--muted);
 }
 
-@media (max-width: 400px) {
-  .qbtn {
-    font-size: 8px; /* 작은 화면에서 더 작게 */
-  }
+.tab-content .loading-text {
+  font-size: 14px;
+  text-align: center;
+  font-weight: 600;
+}
+
+/* 에러 상태 */
+.tab-content .error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 200px;
+  gap: 12px;
+  color: var(--bad);
+  text-align: center;
+}
+
+/* 빈 상태 */
+.tab-content .empty-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 200px;
+  gap: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.tab-content .empty-container .empty-icon {
+  font-size: 48px;
+  opacity: 0.5;
+}
+
+.tab-content .empty-container .empty-text {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.tab-content .empty-container .empty-subtitle {
+  font-size: 14px;
+  opacity: 0.8;
 }
