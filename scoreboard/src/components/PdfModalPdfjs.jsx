@@ -103,27 +103,38 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     await renderPage(doc, 1);
   }, [renderPage]);
 
-  // 브라우저 뒤로가기 차단 (핵심 기능)
+  // 브라우저 뒤로가기 차단 (수정된 버전)
   useEffect(() => {
     if (!open) return;
     
-    // 히스토리에 가상 엔트리 추가
-    window.history.pushState({ modal: 'pdf' }, '');
+    // 약간의 지연 후 히스토리 추가 (즉시 실행 방지)
+    const timeoutId = setTimeout(() => {
+      window.history.pushState({ modal: 'pdf' }, '');
+    }, 100);
     
     const handlePopState = (e) => {
-      if (e.state?.modal === 'pdf' || !e.state) {
-        onClose(); // PDF 모달만 닫기
+      // PDF 모달 상태가 있거나, 이전 상태가 없을 때만 처리
+      if (e.state?.modal === 'pdf' || (!e.state && window.history.state?.modal === 'pdf')) {
         e.preventDefault();
+        e.stopPropagation();
+        onClose(); // PDF 모달만 닫기
       }
     };
     
     window.addEventListener('popstate', handlePopState);
     
     return () => {
+      clearTimeout(timeoutId);
       window.removeEventListener('popstate', handlePopState);
-      // 모달이 닫힐 때 히스토리 정리
-      if (window.history.state?.modal === 'pdf') {
-        window.history.back();
+      
+      // 정리: 추가한 히스토리 엔트리가 현재 상태면 제거
+      try {
+        if (window.history.state?.modal === 'pdf') {
+          window.history.back();
+        }
+      } catch (e) {
+        // 히스토리 조작 실패시 무시
+        console.warn('히스토리 정리 실패:', e);
       }
     };
   }, [open, onClose]);
