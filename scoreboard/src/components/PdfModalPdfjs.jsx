@@ -164,6 +164,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     };
   }, [open, filePath, sid, renderFirstPage, pdfDoc]);
 
+  // 키보드 내비게이션
   useEffect(() => {
     if (!open) return;
     
@@ -178,6 +179,9 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         const prev = pageNum - 1;
         setPageNum(prev);
         await renderPage(pdfDoc, prev);
+      } else if (e.key === "Escape") {
+        // ESC 키로도 모달 닫기
+        onClose();
       }
       
       if ((e.ctrlKey || e.metaKey) && (e.key === "p" || e.key === "P")) {
@@ -188,27 +192,54 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     
     window.addEventListener("keydown", handler, { capture: true });
     return () => window.removeEventListener("keydown", handler, { capture: true });
-  }, [open, pdfDoc, pageNum, numPages, renderPage]);
+  }, [open, pdfDoc, pageNum, numPages, renderPage, onClose]);
 
+  // 브라우저 뒤로가기로 모달 닫기
   useEffect(() => {
-    if (!open || !pdfDoc) return;
+    if (!open) return;
+
+    // 모달이 열릴 때 히스토리에 상태 추가
+    const modalState = { modal: 'pdf-open' };
+    window.history.pushState(modalState, '', window.location.href);
     
-    let timeoutId;
-    const handleResize = () => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(async () => {
-        if (!renderedRef.current) {
-          await renderPage(pdfDoc, pageNum);
-        }
-      }, 300);
+    const handlePopstate = (e) => {
+      // 뒤로가기가 감지되면 모달 닫기
+      if (e.state?.modal !== 'pdf-open') {
+        onClose();
+      }
     };
     
-    window.addEventListener('resize', handleResize);
+    window.addEventListener('popstate', handlePopstate);
+    
     return () => {
-      window.removeEventListener('resize', handleResize);
-      clearTimeout(timeoutId);
+      window.removeEventListener('popstate', handlePopstate);
+      // 컴포넌트 언마운트 시 히스토리 정리 (모달이 정상적으로 닫힌 경우)
+      if (window.history.state?.modal === 'pdf-open') {
+        window.history.back();
+      }
     };
-  }, [open, pdfDoc, pageNum, renderPage]);
+  }, [open, onClose]);
+
+  // ❌ 문제가 되는 리사이즈 핸들러 제거
+  // useEffect(() => {
+  //   if (!open || !pdfDoc) return;
+  //   
+  //   let timeoutId;
+  //   const handleResize = () => {
+  //     clearTimeout(timeoutId);
+  //     timeoutId = setTimeout(async () => {
+  //       if (!renderedRef.current) {
+  //         await renderPage(pdfDoc, pageNum);
+  //       }
+  //     }, 300);
+  //   };
+  //   
+  //   window.addEventListener('resize', handleResize);
+  //   return () => {
+  //     window.removeEventListener('resize', handleResize);
+  //     clearTimeout(timeoutId);
+  //   };
+  // }, [open, pdfDoc, pageNum, renderPage]);
 
   if (!open) return null;
 
