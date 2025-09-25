@@ -164,23 +164,13 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     };
   }, [open, filePath, sid, renderFirstPage, pdfDoc]);
 
-  // 키보드 내비게이션
+  // 키보드 단축키 (ESC로 모달 닫기, 인쇄 차단)
   useEffect(() => {
     if (!open) return;
     
-    const handler = async (e) => {
-      if (renderedRef.current) return;
-      
-      if (e.key === "ArrowRight" && pdfDoc && pageNum < numPages) {
-        const next = pageNum + 1;
-        setPageNum(next);
-        await renderPage(pdfDoc, next);
-      } else if (e.key === "ArrowLeft" && pdfDoc && pageNum > 1) {
-        const prev = pageNum - 1;
-        setPageNum(prev);
-        await renderPage(pdfDoc, prev);
-      } else if (e.key === "Escape") {
-        // ESC 키로도 모달 닫기
+    const handler = (e) => {
+      if (e.key === "Escape") {
+        // ESC 키로 모달 닫기
         onClose();
       }
       
@@ -192,7 +182,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     
     window.addEventListener("keydown", handler, { capture: true });
     return () => window.removeEventListener("keydown", handler, { capture: true });
-  }, [open, pdfDoc, pageNum, numPages, renderPage, onClose]);
+  }, [open, onClose]);
 
   // 브라우저 뒤로가기로 모달 닫기
   useEffect(() => {
