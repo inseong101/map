@@ -169,8 +169,8 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     if (!open) return;
     
     const handler = (e) => {
-      if (e.key === "Escape") {
-        // ESC 키로 모달 닫기
+      if (e.key === "Escape" && !loading) {
+        // 로딩 중일 때는 ESC로도 닫지 못하게 함
         onClose();
       }
       
@@ -182,19 +182,27 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     
     window.addEventListener("keydown", handler, { capture: true });
     return () => window.removeEventListener("keydown", handler, { capture: true });
-  }, [open, onClose]);
+  }, [open, onClose, loading]);
 
-  // 브라우저 뒤로가기로 모달 닫기
+  // 안전한 뒤로가기 처리
   useEffect(() => {
     if (!open) return;
 
-    // 모달이 열릴 때 히스토리에 상태 추가
-    const modalState = { modal: 'pdf-open' };
-    window.history.pushState(modalState, '', window.location.href);
+    let isSetup = false;
+    
+    // 모달 완전히 열린 후 히스토리 설정 (지연 실행)
+    const setupTimer = setTimeout(() => {
+      const modalState = { modal: 'pdf-open', timestamp: Date.now() };
+      window.history.pushState(modalState, '', window.location.href);
+      isSetup = true;
+    }, 300); // 300ms 지연
     
     const handlePopstate = (e) => {
-      // 뒤로가기가 감지되면 모달 닫기
-      if (e.state?.modal !== 'pdf-open') {
+      // 설정이 완료된 후에만 처리
+      if (!isSetup) return;
+      
+      // 모달 상태가 아니고 로딩 중이 아닐 때만 닫기
+      if (e.state?.modal !== 'pdf-open' && !loading) {
         onClose();
       }
     };
@@ -202,13 +210,15 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     window.addEventListener('popstate', handlePopstate);
     
     return () => {
+      clearTimeout(setupTimer);
       window.removeEventListener('popstate', handlePopstate);
-      // 컴포넌트 언마운트 시 히스토리 정리 (모달이 정상적으로 닫힌 경우)
-      if (window.history.state?.modal === 'pdf-open') {
+      
+      // 정상적으로 설정된 경우에만 히스토리 정리
+      if (isSetup && window.history.state?.modal === 'pdf-open') {
         window.history.back();
       }
     };
-  }, [open, onClose]);
+  }, [open, onClose, loading]);
 
   // ❌ 문제가 되는 리사이즈 핸들러 제거
   // useEffect(() => {
@@ -234,7 +244,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   if (!open) return null;
 
   return (
-    <div style={backdropStyle} onClick={onClose}>
+    <div style={backdropStyle} onClick={loading ? undefined : onClose}>
       <style>{`
         @media print { 
           .pdf-modal-root { display: none !important; } 
@@ -271,18 +281,37 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         <div ref={holderRef} style={viewerStyle} onClick={(e) => e.stopPropagation()}>
           {loading && (
             <div style={centerStyle}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                 <div style={{ 
-                  width: '40px', 
-                  height: '40px', 
+                  width: '50px', 
+                  height: '50px', 
                   border: '4px solid #333', 
                   borderTop: '4px solid #7ea2ff', 
                   borderRadius: '50%', 
                   animation: 'spin 1s linear infinite' 
                 }}></div>
-                <div>고화질 PDF를 준비하는 중...</div>
-                <div>전졸협 자료는 법적으로 저작권이 보호됩니다.</div>
-                <div>무단 복제 및 배포는 법적으로 처벌받을 수 있습니다.</div>
+                <div style={{ fontSize: '16px', fontWeight: '700', color: '#7ea2ff' }}>
+                  고화질 PDF를 준비하는 중...
+                </div>
+                <div style={{ fontSize: '14px', textAlign: 'center', lineHeight: '1.4' }}>
+                  처음 접속 시 1-2분 정도 소요될 수 있습니다.<br/>
+                  잠시만 기다려주세요.
+                </div>
+                <div style={{ fontSize: '12px', color: '#999', textAlign: 'center', lineHeight: '1.3' }}>
+                  전졸협 자료는 법적으로 저작권이 보호됩니다.<br/>
+                  무단 복제 및 배포는 법적으로 처벌받을 수 있습니다.
+                </div>
+                <div style={{ 
+                  marginTop: '10px',
+                  padding: '8px 16px', 
+                  background: 'rgba(126,162,255,0.15)', 
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  color: '#7ea2ff',
+                  textAlign: 'center'
+                }}>
+                  💡 로딩 중에는 모달이 자동으로 닫히지 않습니다
+                </div>
               </div>
             </div>
           )}
