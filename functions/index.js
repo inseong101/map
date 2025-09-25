@@ -332,3 +332,18 @@ exports.getMyBindings = functions.https.onCall(async (data, context) => {
   const { sids = [], phone = null } = snap.data() || {};
   return { ok: true, sids, phone };
 });
+
+
+exports.warmupPdfService = functions
+  .region('us-central1')
+  .runWith({ memory: '256MB', timeoutSeconds: 10 })
+  .https.onCall(async (data, context) => {
+    console.log('PDF 서비스 워밍업');
+    try {
+      const testPdf = await PDFDocument.create();
+      await testPdf.embedFont(StandardFonts.Helvetica);
+      return { warmed: true, timestamp: Date.now() };
+    } catch (error) {
+      return { warmed: false, error: error.message };
+    }
+  });
