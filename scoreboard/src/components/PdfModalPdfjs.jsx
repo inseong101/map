@@ -103,42 +103,6 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     await renderPage(doc, 1);
   }, [renderPage]);
 
-  // 브라우저 뒤로가기 차단 (수정된 버전)
-  useEffect(() => {
-    if (!open) return;
-    
-    // 약간의 지연 후 히스토리 추가 (즉시 실행 방지)
-    const timeoutId = setTimeout(() => {
-      window.history.pushState({ modal: 'pdf' }, '');
-    }, 100);
-    
-    const handlePopState = (e) => {
-      // PDF 모달 상태가 있거나, 이전 상태가 없을 때만 처리
-      if (e.state?.modal === 'pdf' || (!e.state && window.history.state?.modal === 'pdf')) {
-        e.preventDefault();
-        e.stopPropagation();
-        onClose(); // PDF 모달만 닫기
-      }
-    };
-    
-    window.addEventListener('popstate', handlePopState);
-    
-    return () => {
-      clearTimeout(timeoutId);
-      window.removeEventListener('popstate', handlePopState);
-      
-      // 정리: 추가한 히스토리 엔트리가 현재 상태면 제거
-      try {
-        if (window.history.state?.modal === 'pdf') {
-          window.history.back();
-        }
-      } catch (e) {
-        // 히스토리 조작 실패시 무시
-        console.warn('히스토리 정리 실패:', e);
-      }
-    };
-  }, [open, onClose]);
-
   useEffect(() => {
     let cancelled = false;
 
@@ -285,12 +249,8 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
                   animation: 'spin 1s linear infinite' 
                 }}></div>
                 <div>고화질 PDF를 준비하는 중...</div>
-                <div style={{ textDecoration: 'underline' }}>
-                  전졸협 자료는 법적으로 저작권이 보호됩니다
-                </div>
-                <div style={{ textDecoration: 'underline' }}>
-                  무단 복제 및 배포는 법적으로 처벌받을 수 있습니다.
-                </div>
+                <div>전졸협 자료는 법적으로 저작권이 보호됩니다.</div>
+                <div>무단 복제 및 배포는 법적으로 처벌받을 수 있습니다.</div>
               </div>
             </div>
           )}
