@@ -1,4 +1,5 @@
-// src/components/ControversialPanel.jsx
+
+
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import PdfModalPdfjs from "./PdfModalPdfjs";
 import { getFunctions, httpsCallable } from "firebase/functions";
