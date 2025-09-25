@@ -241,3 +241,27 @@
   transform-style: flat !important;
   backface-visibility: visible !important;
 }
+
+
+/* 모바일 반응형 추가 */
+@media (max-width: 600px) {
+  .btn-grid {
+    gap: 1px; /* 모바일에서 간격 줄임 */
+  }
+  
+  .qbtn {
+    font-size: 9px; /* 모바일에서 폰트 더 작게 */
+  }
+  
+  .qbtn.fire .flame-emoji {
+    font-size: 11px; /* 불 이모지도 작게 */
+    top: -4px;
+    right: -3px;
+  }
+}
+
+@media (max-width: 400px) {
+  .qbtn {
+    font-size: 8px; /* 작은 화면에서 더 작게 */
+  }
+}
