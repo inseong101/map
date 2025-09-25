@@ -254,7 +254,16 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
           <div style={{ fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {title || "특별해설"}
           </div>
-          <button onClick={onClose} style={closeBtnStyle} aria-label="닫기">✕</button>
+          <button 
+            onClick={(e) => {
+              e.stopPropagation(); // 🔧 이벤트 버블링 방지
+              onClose();
+            }} 
+            style={closeBtnStyle} 
+            aria-label="닫기"
+          >
+            ✕
+          </button>
         </div>
 
         <div ref={holderRef} style={viewerStyle}>
@@ -269,7 +278,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
                   borderRadius: '50%', 
                   animation: 'spin 1s linear infinite' 
                 }}></div>
-                <div>고화질 PDF를 준비하는 중...</div>
+                <div>자료를 불러오는 중...</div>
                 <div>전졸협 자료는 법적으로 저작권이 보호됩니다.</div>
                 <div>무단 복제 및 배포는 법적으로 처벌받을 수 있습니다.</div>
               </div>
@@ -297,7 +306,8 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
             <button
               style={{...navBtnStyle, opacity: renderedRef.current || pageNum <= 1 ? 0.5 : 1}}
               disabled={renderedRef.current || pageNum <= 1}
-              onClick={async () => {
+              onClick={async (e) => {
+                e.stopPropagation(); // 🔧 이벤트 버블링 방지
                 if (renderedRef.current || !pdfDoc || pageNum <= 1) return;
                 const prev = pageNum - 1;
                 setPageNum(prev);
@@ -310,7 +320,8 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
             <button
               style={{...navBtnStyle, opacity: renderedRef.current || pageNum >= numPages ? 0.5 : 1}}
               disabled={renderedRef.current || pageNum >= numPages}
-              onClick={async () => {
+              onClick={async (e) => {
+                e.stopPropagation(); // 🔧 이벤트 버블링 방지
                 if (renderedRef.current || !pdfDoc || pageNum >= numPages) return;
                 const next = pageNum + 1;
                 setPageNum(next);
