@@ -23,87 +23,104 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   const lastKeyRef = useRef(null);
   const renderedRef = useRef(false);
 
-  // 현재 컨테이너 폭 읽기
-  const getContainerWidth = () => {
+  // 현재 컨테이너 크기 읽기 (가로/세로 모두 고려)
+  const getContainerSize = () => {
     const el = holderRef.current;
-    if (!el) return 600;
+    if (!el) return { width: 600, height: 400 };
     const rect = el.getBoundingClientRect();
-    return Math.max(320, Math.floor(rect.width - 20));
+    return { 
+      width: Math.max(320, Math.floor(rect.width - 20)), 
+      height: Math.max(300, Math.floor(rect.height - 20))
+    };
   };
 
-  // 저해상도 → 고해상도 단계적 렌더링 (깜빡임 없이)
- // 모바일 해상도 개선 - renderPage 함수 수정
-const renderPage = useCallback(
-  async (doc, num) => {
-    if (!doc || !canvasRef.current || !holderRef.current || renderedRef.current) return;
-    
-    try {
-      renderedRef.current = true;
+  // 고화질 렌더링 (가로/세로 비율 유지, 찌그러짐 방지)
+  const renderPage = useCallback(
+    async (doc, num) => {
+      if (!doc || !canvasRef.current || !holderRef.current || renderedRef.current) return;
       
-      const page = await doc.getPage(num);
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext("2d", { alpha: false });
+      try {
+        renderedRef.current = true;
+        
+        const page = await doc.getPage(num);
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext("2d", { alpha: false });
 
-      const containerWidth = getContainerWidth();
-      const baseViewport = page.getViewport({ scale: 1 });
-      let targetScale = Math.min(2.0, containerWidth / baseViewport.width); // 최대 스케일 증가
-      
-      // 모바일에서 더 높은 해상도 사용
-      const isMobile = window.innerWidth <= 768;
-      if (isMobile) {
-        targetScale = Math.min(2.5, targetScale * 1.5); // 모바일에서 1.5배 추가 확대
+        const { width: containerWidth, height: containerHeight } = getContainerSize();
+        const baseViewport = page.getViewport({ scale: 1 });
+        
+        // 가로/세로 비율을 유지하면서 컨테이너에 맞는 스케일 계산
+        const scaleX = containerWidth / baseViewport.width;
+        const scaleY = containerHeight / baseViewport.height;
+        let targetScale = Math.min(scaleX, scaleY); // 찌그러짐 방지
+        
+        // 고화질을 위해 스케일 증가 (모바일에서도 선명하게)
+        const isMobile = window.innerWidth <= 768;
+        const pixelRatio = window.devicePixelRatio || 1;
+        const qualityMultiplier = isMobile ? 2.5 : 3.0; // 모바일/데스크톱 화질 개선
+        
+        targetScale = Math.min(targetScale * qualityMultiplier, 4.0); // 최대 4배 확대
+
+        // 1단계: 중해상도 퀵 렌더링 (로딩 시간 단축)
+        const quickScale = targetScale * 0.6;
+        const quickViewport = page.getViewport({ scale: quickScale });
+        
+        // 캔버스 크기 설정 (비율 유지)
+        canvas.width = Math.floor(quickViewport.width * pixelRatio);
+        canvas.height = Math.floor(quickViewport.height * pixelRatio);
+        canvas.style.width = `${Math.floor(quickViewport.width)}px`;
+        canvas.style.height = `${Math.floor(quickViewport.height)}px`;
+        
+        // 고해상도 렌더링을 위한 스케일링
+        ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        await page.render({ canvasContext: ctx, viewport: quickViewport }).promise;
+
+        // 2단계: 최고해상도 업그레이드
+        setTimeout(async () => {
+          try {
+            const finalViewport = page.getViewport({ scale: targetScale });
+            
+            canvas.width = Math.floor(finalViewport.width * pixelRatio);
+            canvas.height = Math.floor(finalViewport.height * pixelRatio);
+            canvas.style.width = `${Math.floor(finalViewport.width)}px`;
+            canvas.style.height = `${Math.floor(finalViewport.height)}px`;
+            
+            ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+            ctx.fillStyle = "#fff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 고화질 렌더링 옵션 추가
+            await page.render({ 
+              canvasContext: ctx, 
+              viewport: finalViewport,
+              intent: 'display',
+              renderInteractiveForms: false,
+              optionalContentConfigPromise: null
+            }).promise;
+          } catch (error) {
+            console.error("고해상도 렌더링 오류:", error);
+          }
+        }, 100);
+        
+      } catch (error) {
+        console.error("PDF 렌더링 오류:", error);
+      } finally {
+        setTimeout(() => {
+          renderedRef.current = false;
+        }, 300);
       }
+    },
+    []
+  );
 
-      // 1단계: 저해상도 퀵 렌더링
-      const quickScale = targetScale * 0.7;
-      const quickViewport = page.getViewport({ scale: quickScale });
-      
-      canvas.width = Math.floor(quickViewport.width);
-      canvas.height = Math.floor(quickViewport.height);
-      canvas.style.width = `${Math.floor(quickViewport.width)}px`;
-      canvas.style.height = `${Math.floor(quickViewport.height)}px`;
-      
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      await page.render({ canvasContext: ctx, viewport: quickViewport }).promise;
-
-      // 2단계: 고해상도 업그레이드 (모바일에서 더 선명하게)
-      setTimeout(async () => {
-        try {
-          const finalViewport = page.getViewport({ scale: targetScale });
-          
-          canvas.width = Math.floor(finalViewport.width);
-          canvas.height = Math.floor(finalViewport.height);
-          canvas.style.width = `${Math.floor(finalViewport.width)}px`;
-          canvas.style.height = `${Math.floor(finalViewport.height)}px`;
-          
-          ctx.setTransform(1, 0, 0, 1, 0, 0);
-          ctx.fillStyle = "#fff";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          
-          await page.render({ canvasContext: ctx, viewport: finalViewport }).promise;
-        } catch (error) {
-          console.error("고해상도 렌더링 오류:", error);
-        }
-      }, 50);
-      
-    } catch (error) {
-      console.error("PDF 렌더링 오류:", error);
-    } finally {
-      setTimeout(() => {
-        renderedRef.current = false;
-      }, 200);
-    }
-  },
-  []
-);
   // 첫 렌더링
   const renderFirstPage = useCallback(
     async (doc) => {
       if (!doc) return;
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 150));
       await renderPage(doc, 1);
     },
     [renderPage]
@@ -142,7 +159,14 @@ const renderPage = useCallback(
         const bytes = new Uint8Array(bin.length);
         for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
 
-        const task = getDocument({ data: bytes });
+        // PDF 로딩 옵션 개선
+        const task = getDocument({ 
+          data: bytes,
+          useSystemFonts: true,
+          disableFontFace: false,
+          cMapUrl: 'https://unpkg.com/pdfjs-dist@3.11.174/cmaps/',
+          cMapPacked: true
+        });
         const doc = await task.promise;
         if (cancelled) return;
 
@@ -192,6 +216,27 @@ const renderPage = useCallback(
     return () => window.removeEventListener("keydown", handler, { capture: true });
   }, [open, pdfDoc, pageNum, numPages, renderPage]);
 
+  // 윈도우 리사이즈 시 재렌더링
+  useEffect(() => {
+    if (!open || !pdfDoc) return;
+    
+    let timeoutId;
+    const handleResize = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(async () => {
+        if (!renderedRef.current) {
+          await renderPage(pdfDoc, pageNum);
+        }
+      }, 300);
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      clearTimeout(timeoutId);
+    };
+  }, [open, pdfDoc, pageNum, renderPage]);
+
   if (!open) return null;
 
   return (
@@ -213,7 +258,19 @@ const renderPage = useCallback(
 
         <div ref={holderRef} style={viewer}>
           {loading && (
-            <div style={center}>불러오는 중...</div>
+            <div style={center}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                <div style={{ 
+                  width: '40px', 
+                  height: '40px', 
+                  border: '4px solid #333', 
+                  borderTop: '4px solid #7ea2ff', 
+                  borderRadius: '50%', 
+                  animation: 'spin 1s linear infinite' 
+                }}></div>
+                <div>고화질 PDF를 준비하는 중...</div>
+              </div>
+            </div>
           )}
           {err && <div style={{ ...center, color: "#ef4444" }}>{String(err)}</div>}
           {!loading && !err && (
@@ -224,7 +281,9 @@ const renderPage = useCallback(
                 margin: "0 auto",
                 userSelect: "none",
                 maxWidth: "100%",
-                height: "auto"
+                maxHeight: "100%",
+                objectFit: "contain", // 비율 유지
+                imageRendering: "high-quality" // 고화질 렌더링
               }}
             />
           )}
@@ -233,7 +292,7 @@ const renderPage = useCallback(
         {numPages > 1 && !loading && (
           <div style={footer}>
             <button
-              style={navBtn}
+              style={{...navBtn, opacity: renderedRef.current || pageNum <= 1 ? 0.5 : 1}}
               disabled={renderedRef.current || pageNum <= 1}
               onClick={async () => {
                 if (renderedRef.current || !pdfDoc || pageNum <= 1) return;
@@ -244,9 +303,9 @@ const renderPage = useCallback(
             >
               ← 이전
             </button>
-            <span>Page {pageNum} / {numPages}</span>
+            <span style={{ fontWeight: 700 }}>Page {pageNum} / {numPages}</span>
             <button
-              style={navBtn}
+              style={{...navBtn, opacity: renderedRef.current || pageNum >= numPages ? 0.5 : 1}}
               disabled={renderedRef.current || pageNum >= numPages}
               onClick={async () => {
                 if (renderedRef.current || !pdfDoc || pageNum >= numPages) return;
@@ -268,7 +327,7 @@ const renderPage = useCallback(
 const backdrop = {
   position: "fixed",
   inset: 0,
-  background: "rgba(0,0,0,.55)",
+  background: "rgba(0,0,0,.65)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -276,8 +335,8 @@ const backdrop = {
 };
 
 const modal = {
-  width: "min(680px, 92vw)",
-  height: "min(70vh, 700px)",
+  width: "min(85vw, 900px)", // 모바일에서 더 큰 화면 활용
+  height: "min(85vh, 800px)", // 높이도 증가
   background: "#1c1f24",
   color: "#e5e7eb",
   border: "1px solid #2d333b",
@@ -285,7 +344,7 @@ const modal = {
   display: "flex",
   flexDirection: "column",
   overflow: "hidden",
-  boxShadow: "0 10px 40px rgba(0,0,0,.35)",
+  boxShadow: "0 15px 50px rgba(0,0,0,.5)",
 };
 
 const modalHeader = {
@@ -296,7 +355,7 @@ const modalHeader = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  padding: "0 10px",
+  padding: "0 12px",
   borderBottom: "1px solid #2d333b",
   background: "linear-gradient(#1c1f24, #1a1d22)",
 };
@@ -305,11 +364,12 @@ const closeBtn = {
   border: "1px solid #2d333b",
   borderRadius: 6,
   background: "transparent",
-  padding: "2px 8px",
+  padding: "4px 10px",
   cursor: "pointer",
   color: "#e5e7eb",
-  fontSize: 18,
+  fontSize: 16,
   lineHeight: 1,
+  transition: "background 0.2s ease",
 };
 
 const viewer = {
@@ -317,7 +377,10 @@ const viewer = {
   background: "#111",
   position: "relative",
   overflow: "auto",
-  padding: "10px",
+  padding: "15px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
 };
 
 const center = {
@@ -329,12 +392,12 @@ const center = {
 
 const footer = {
   borderTop: "1px solid #2d333b",
-  padding: "6px 10px",
+  padding: "8px 12px",
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
   background: "#15181c",
-  fontSize: 13,
+  fontSize: 14,
 };
 
 const navBtn = {
@@ -342,6 +405,8 @@ const navBtn = {
   background: "transparent",
   color: "#e5e7eb",
   borderRadius: 8,
-  padding: "6px 10px",
+  padding: "8px 12px",
   cursor: "pointer",
+  transition: "background 0.2s ease",
+  fontWeight: 600,
 };
