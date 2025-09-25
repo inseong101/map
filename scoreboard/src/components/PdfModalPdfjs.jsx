@@ -270,8 +270,11 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
                 }}></div>
                 <div>고화질 PDF를 준비하는 중...</div>
                 <div style={{ textDecoration: 'underline' }}>
-          전졸협 자료는 법적으로 저작권이 보호됩니다
-              </div>
+  전졸협 자료는 법적으로 저작권이 보호됩니다
+</div>
+           <div style={{ textDecoration: 'underline' }}>
+  무단 복제 및 배포는 법적으로 처벌받을 수 있습니다.
+</div>     
             </div>
           )}
           {err && <div style={{ ...center, color: "#ef4444" }}>{String(err)}</div>}
