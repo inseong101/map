@@ -247,10 +247,12 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       <div
         className="pdf-modal-root"
         style={modalStyle}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation(); // 🔧 모달 내부 클릭 시 버블링 완전 차단
+        }}
         onContextMenu={(e) => e.preventDefault()}
       >
-        <div style={headerStyle}>
+        <div style={headerStyle} onClick={(e) => e.stopPropagation()}>
           <div style={{ fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {title || "특별해설"}
           </div>
@@ -266,7 +268,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
           </button>
         </div>
 
-        <div ref={holderRef} style={viewerStyle}>
+        <div ref={holderRef} style={viewerStyle} onClick={(e) => e.stopPropagation()}>
           {loading && (
             <div style={centerStyle}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
@@ -278,7 +280,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
                   borderRadius: '50%', 
                   animation: 'spin 1s linear infinite' 
                 }}></div>
-                <div>자료를 불러오는 중...</div>
+                <div>고화질 PDF를 준비하는 중...</div>
                 <div>전졸협 자료는 법적으로 저작권이 보호됩니다.</div>
                 <div>무단 복제 및 배포는 법적으로 처벌받을 수 있습니다.</div>
               </div>
@@ -288,6 +290,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
           {!loading && !err && (
             <canvas
               ref={canvasRef}
+              onClick={(e) => e.stopPropagation()} // 🔧 캔버스 클릭도 버블링 방지
               style={{ 
                 display: "block", 
                 margin: "0 auto",
@@ -302,7 +305,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         </div>
 
         {numPages > 1 && !loading && (
-          <div style={footerStyle}>
+          <div style={footerStyle} onClick={(e) => e.stopPropagation()}>
             <button
               style={{...navBtnStyle, opacity: renderedRef.current || pageNum <= 1 ? 0.5 : 1}}
               disabled={renderedRef.current || pageNum <= 1}
