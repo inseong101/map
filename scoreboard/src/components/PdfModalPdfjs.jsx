@@ -103,6 +103,31 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     await renderPage(doc, 1);
   }, [renderPage]);
 
+  // 브라우저 뒤로가기 차단 (핵심 기능)
+  useEffect(() => {
+    if (!open) return;
+    
+    // 히스토리에 가상 엔트리 추가
+    window.history.pushState({ modal: 'pdf' }, '');
+    
+    const handlePopState = (e) => {
+      if (e.state?.modal === 'pdf' || !e.state) {
+        onClose(); // PDF 모달만 닫기
+        e.preventDefault();
+      }
+    };
+    
+    window.addEventListener('popstate', handlePopState);
+    
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      // 모달이 닫힐 때 히스토리 정리
+      if (window.history.state?.modal === 'pdf') {
+        window.history.back();
+      }
+    };
+  }, [open, onClose]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -249,8 +274,12 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
                   animation: 'spin 1s linear infinite' 
                 }}></div>
                 <div>고화질 PDF를 준비하는 중...</div>
-                <div>전졸협 자료는 법적으로 저작권이 보호됩니다.</div>
-                <div>무단 복제 및 배포는 법적으로 처벌받을 수 있습니다.</div>
+                <div style={{ textDecoration: 'underline' }}>
+                  전졸협 자료는 법적으로 저작권이 보호됩니다
+                </div>
+                <div style={{ textDecoration: 'underline' }}>
+                  무단 복제 및 배포는 법적으로 처벌받을 수 있습니다.
+                </div>
               </div>
             </div>
           )}
