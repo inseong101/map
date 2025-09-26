@@ -1,4 +1,4 @@
-// src/components/PdfModalPdfjs.jsx - 단순화된 버전
+// src/components/PdfModalPdfjs.jsx
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/build/pdf";
@@ -16,6 +16,143 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   const lastKeyRef = useRef(null);
   const renderedRef = useRef(false);
 
+  // 터치/줌 상태 관리
+  const [isZoomed, setIsZoomed] = useState(false);
+  const touchState = useRef({
+    scale: 1,
+    translateX: 0,
+    translateY: 0,
+    initialDistance: 0,
+    lastTouchX: 0,
+    lastTouchY: 0,
+    isScaling: false,
+    isDragging: false
+  });
+
+  // 뒤로가기 상태 관리
+  const historyRef = useRef({ isSetup: false, timeoutId: null });
+
+  const getContainerSize = () => {
+    const el = holderRef.current;
+    if (!el) return { width: 600, height: 400 };
+    const rect = el.getBoundingClientRect();
+    return { 
+      width: Math.max(320, Math.floor(rect.width - 20)), 
+      height: Math.max(300, Math.floor(rect.height - 20))
+    };
+  };
+
+  // 터치 헬퍼 함수들
+  const getTouchDistance = (touch1, touch2) => {
+    const dx = touch1.clientX - touch2.clientX;
+    const dy = touch1.clientY - touch2.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  // 캔버스 transform 직접 적용 (CSS 우선순위 무시)
+  const applyCanvasTransform = useCallback((scale, translateX, translateY) => {
+    if (!canvasRef.current) return;
+    
+    const transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+    const canvas = canvasRef.current;
+    
+    // CSS 규칙을 완전히 무시하고 직접 적용
+    canvas.style.setProperty('transform', transform, 'important');
+    canvas.style.setProperty('transform-origin', 'center center', 'important');
+    canvas.style.setProperty('transition', touchState.current.isScaling || touchState.current.isDragging ? 'none' : 'transform 0.3s ease', 'important');
+    
+    setIsZoomed(scale > 1.1);
+  }, []);
+
+  const handleTouchStart = useCallback((e) => {
+    e.preventDefault();
+    const touches = e.touches;
+    const state = touchState.current;
+    
+    if (touches.length === 2) {
+      // 핀치 시작
+      state.isScaling = true;
+      state.isDragging = false;
+      state.initialDistance = getTouchDistance(touches[0], touches[1]);
+    } else if (touches.length === 1 && state.scale > 1) {
+      // 드래그 시작
+      state.isDragging = true;
+      state.isScaling = false;
+      state.lastTouchX = touches[0].clientX;
+      state.lastTouchY = touches[0].clientY;
+    }
+  }, []);
+
+  const handleTouchMove = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const touches = e.touches;
+    const state = touchState.current;
+    
+    if (touches.length === 2 && state.isScaling) {
+      // 핀치 줌
+      const currentDistance = getTouchDistance(touches[0], touches[1]);
+      const scaleChange = currentDistance / state.initialDistance;
+      let newScale = state.scale * scaleChange;
+      newScale = Math.max(1, Math.min(4, newScale));
+      
+      if (Math.abs(newScale - state.scale) > 0.01) {
+        state.scale = newScale;
+        applyCanvasTransform(state.scale, state.translateX, state.translateY);
+        state.initialDistance = currentDistance;
+      }
+      
+    } else if (touches.length === 1 && state.isDragging && state.scale > 1) {
+      // 드래그 이동
+      const deltaX = touches[0].clientX - state.lastTouchX;
+      const deltaY = touches[0].clientY - state.lastTouchY;
+      
+      if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1) {
+        state.translateX += deltaX;
+        state.translateY += deltaY;
+        state.lastTouchX = touches[0].clientX;
+        state.lastTouchY = touches[0].clientY;
+        
+        applyCanvasTransform(state.scale, state.translateX, state.translateY);
+      }
+    }
+  }, [applyCanvasTransform]);
+
+  const handleTouchEnd = useCallback(() => {
+    const state = touchState.current;
+    state.isScaling = false;
+    state.isDragging = false;
+    state.initialDistance = 0;
+  }, []);
+
+  const handleDoubleClick = useCallback(() => {
+    const state = touchState.current;
+    
+    if (state.scale > 1.1) {
+      // 줌 아웃
+      state.scale = 1;
+      state.translateX = 0;
+      state.translateY = 0;
+    } else {
+      // 2배 확대
+      state.scale = 2;
+      state.translateX = 0;
+      state.translateY = 0;
+    }
+    
+    applyCanvasTransform(state.scale, state.translateX, state.translateY);
+  }, [applyCanvasTransform]);
+
+  const resetZoom = useCallback(() => {
+    const state = touchState.current;
+    state.scale = 1;
+    state.translateX = 0;
+    state.translateY = 0;
+    applyCanvasTransform(1, 0, 0);
+  }, [applyCanvasTransform]);
+
+  // 고화질 렌더링 (화질 문제 해결)
   const renderPage = useCallback(async (doc, num) => {
     if (!doc || !canvasRef.current || !holderRef.current || renderedRef.current) return;
     
@@ -24,68 +161,64 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       
       const page = await doc.getPage(num);
       const canvas = canvasRef.current;
-      const ctx = canvas.getContext("2d", { 
-        alpha: false,
-        desynchronized: false,
-        colorSpace: 'srgb'
-      });
+      const ctx = canvas.getContext("2d", { alpha: false });
 
-      // 고화질 렌더링을 위한 정확한 스케일 계산
-      const viewport = page.getViewport({ scale: 1 });
-      const containerRect = holderRef.current.getBoundingClientRect();
+      const { width: containerWidth, height: containerHeight } = getContainerSize();
+      const baseViewport = page.getViewport({ scale: 1 });
       
-      const maxWidth = Math.min(containerRect.width - 40, 800); // 최대 800px
-      const maxHeight = containerRect.height - 40;
+      // 화면 맞춤 스케일 계산
+      const scaleX = containerWidth / baseViewport.width;
+      const scaleY = containerHeight / baseViewport.height;
+      const baseFitScale = Math.min(scaleX, scaleY);
       
-      const scaleX = maxWidth / viewport.width;
-      const scaleY = maxHeight / viewport.height;
-      const displayScale = Math.min(scaleX, scaleY, 1.5); // 최대 1.5배까지만
+      // 고해상도 렌더링을 위한 스케일
+      const isMobile = window.innerWidth <= 768;
+      const qualityMultiplier = isMobile ? 3.0 : 4.0;
+      const renderScale = baseFitScale * qualityMultiplier;
       
-      // 고해상도를 위한 픽셀 비율
-      const pixelRatio = Math.min(window.devicePixelRatio || 1, 3); // 최대 3배
-      const renderScale = displayScale * pixelRatio;
-      
+      // 렌더링 뷰포트
       const renderViewport = page.getViewport({ scale: renderScale });
       
-      // 캔버스 설정
-      canvas.width = Math.ceil(renderViewport.width);
-      canvas.height = Math.ceil(renderViewport.height);
-      canvas.style.width = Math.ceil(renderViewport.width / pixelRatio) + 'px';
-      canvas.style.height = Math.ceil(renderViewport.height / pixelRatio) + 'px';
+      // 캔버스 크기 설정 (고해상도)
+      canvas.width = Math.floor(renderViewport.width);
+      canvas.height = Math.floor(renderViewport.height);
       
-      // 고화질 렌더링을 위한 컨텍스트 설정
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.textRenderingOptimization = 'optimizeQuality';
+      // 표시 크기 설정 (화면에 맞춤)
+      const displayWidth = Math.floor(baseViewport.width * baseFitScale);
+      const displayHeight = Math.floor(baseViewport.height * baseFitScale);
+      canvas.style.width = `${displayWidth}px`;
+      canvas.style.height = `${displayHeight}px`;
       
-      // 캔버스 초기화
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.fillStyle = '#ffffff';
+      // 컨텍스트 초기화
+      ctx.fillStyle = "#fff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      // PDF 렌더링
-      await page.render({
-        canvasContext: ctx,
+      // 고해상도로 렌더링
+      await page.render({ 
+        canvasContext: ctx, 
         viewport: renderViewport,
         intent: 'display',
-        enableWebGL: false,
         renderInteractiveForms: false
       }).promise;
-      
-      console.log(`PDF 렌더링: 표시${Math.ceil(renderViewport.width / pixelRatio)}x${Math.ceil(renderViewport.height / pixelRatio)} 실제${canvas.width}x${canvas.height}`);
+
+      // 줌 상태 초기화 (페이지 변경 시)
+      resetZoom();
       
     } catch (error) {
       console.error("PDF 렌더링 오류:", error);
     } finally {
-      renderedRef.current = false;
+      setTimeout(() => {
+        renderedRef.current = false;
+      }, 100);
     }
-  }, []);
+  }, [resetZoom]);
 
   const renderFirstPage = useCallback(async (doc) => {
     if (!doc) return;
     await renderPage(doc, 1);
   }, [renderPage]);
 
+  // PDF 로딩
   useEffect(() => {
     let cancelled = false;
 
@@ -145,7 +278,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     };
   }, [open, filePath, sid, renderFirstPage, pdfDoc]);
 
-  // 키보드 단축키
+  // 키보드 이벤트
   useEffect(() => {
     if (!open) return;
     
@@ -164,51 +297,92 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     return () => window.removeEventListener("keydown", handler, { capture: true });
   }, [open, onClose, loading]);
 
-  // 즉시 뒤로가기 설정
+  // 뒤로가기 처리 (완전히 새로운 접근)
   useEffect(() => {
     if (!open) return;
 
-    try {
-      window.history.pushState({ modal: 'pdf-open' }, '', window.location.href);
-    } catch (e) {
-      console.warn('History setup failed:', e);
-    }
+    const history = historyRef.current;
+    
+    // 브라우저 히스토리 API 대신 커스텀 이벤트 사용
+    const setupBackHandler = () => {
+      // 로딩 완료까지 대기
+      if (loading) {
+        history.timeoutId = setTimeout(setupBackHandler, 50);
+        return;
+      }
+      
+      try {
+        const modalState = { 
+          modal: 'pdf-open', 
+          timestamp: Date.now(),
+          filePath,
+          sid 
+        };
+        
+        window.history.pushState(modalState, '', window.location.href);
+        history.isSetup = true;
+        
+        console.log('뒤로가기 핸들러 설정 완료');
+      } catch (error) {
+        console.warn('뒤로가기 설정 실패:', error);
+      }
+    };
+
+    setupBackHandler();
     
     const handlePopstate = (e) => {
-      if ((!e.state || e.state.modal !== 'pdf-open') && !loading) {
+      if (!history.isSetup || loading) return;
+      
+      console.log('뒤로가기 감지:', e.state);
+      
+      // PDF 모달 상태가 아니면 모달 닫기
+      if (!e.state || e.state.modal !== 'pdf-open') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
         onClose();
       }
     };
     
-    window.addEventListener('popstate', handlePopstate);
+    window.addEventListener('popstate', handlePopstate, { capture: true });
     
     return () => {
-      window.removeEventListener('popstate', handlePopstate);
+      if (history.timeoutId) {
+        clearTimeout(history.timeoutId);
+      }
+      window.removeEventListener('popstate', handlePopstate, { capture: true });
+      
+      // 히스토리 정리
+      if (history.isSetup) {
+        try {
+          const currentState = window.history.state;
+          if (currentState && currentState.modal === 'pdf-open') {
+            window.history.back();
+          }
+        } catch (error) {
+          console.warn('히스토리 정리 실패:', error);
+        }
+      }
+      
+      // 상태 초기화
+      history.isSetup = false;
+      history.timeoutId = null;
     };
-  }, [open, onClose, loading]);
+  }, [open, onClose, loading, filePath, sid]);
 
   if (!open) return null;
 
   return (
     <div style={backdropStyle} onClick={loading ? undefined : onClose}>
       <div
-        className="pdf-modal-root"
         style={modalStyle}
         onClick={(e) => e.stopPropagation()}
         onContextMenu={(e) => e.preventDefault()}
       >
-        <div style={headerStyle} onClick={(e) => e.stopPropagation()}>
+        <div style={headerStyle}>
           <div style={{ fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {title || "특별해설"}
           </div>
-          <button 
-            onClick={(e) => {
-              e.stopPropagation();
-              onClose();
-            }} 
-            style={closeBtnStyle} 
-            aria-label="닫기"
-          >
+          <button onClick={onClose} style={closeBtnStyle} aria-label="닫기">
             ✕
           </button>
         </div>
@@ -229,7 +403,8 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
                   고화질 PDF를 준비하는 중...
                 </div>
                 <div style={{ fontSize: '14px', textAlign: 'center', lineHeight: '1.4' }}>
-                  로딩 중에는 모달이 자동으로 닫히지 않습니다.
+                  처음 접속 시 1-2분 정도 소요될 수 있습니다.<br/>
+                  잠시만 기다려주세요.
                 </div>
               </div>
             </div>
@@ -238,13 +413,20 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
           {!loading && !err && (
             <canvas
               ref={canvasRef}
-              style={{ 
-                display: "block", 
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onDoubleClick={handleDoubleClick}
+              style={{
+                display: "block",
                 margin: "0 auto",
+                userSelect: "none",
                 maxWidth: "100%",
                 maxHeight: "100%",
+                objectFit: "contain",
                 imageRendering: "high-quality",
-                userSelect: "none"
+                touchAction: "none",
+                cursor: isZoomed ? 'grab' : 'pointer'
               }}
             />
           )}
@@ -255,8 +437,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
             <button
               style={{...navBtnStyle, opacity: renderedRef.current || pageNum <= 1 ? 0.5 : 1}}
               disabled={renderedRef.current || pageNum <= 1}
-              onClick={async (e) => {
-                e.stopPropagation();
+              onClick={async () => {
                 if (renderedRef.current || !pdfDoc || pageNum <= 1) return;
                 const prev = pageNum - 1;
                 setPageNum(prev);
@@ -269,8 +450,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
             <button
               style={{...navBtnStyle, opacity: renderedRef.current || pageNum >= numPages ? 0.5 : 1}}
               disabled={renderedRef.current || pageNum >= numPages}
-              onClick={async (e) => {
-                e.stopPropagation();
+              onClick={async () => {
                 if (renderedRef.current || !pdfDoc || pageNum >= numPages) return;
                 const next = pageNum + 1;
                 setPageNum(next);
@@ -281,9 +461,48 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
             </button>
           </div>
         )}
+
+        {/* 확대 상태 표시 */}
+        {isZoomed && (
+          <div style={{
+            position: 'absolute',
+            top: '60px',
+            right: '12px',
+            background: 'rgba(0,0,0,0.8)',
+            color: 'white',
+            padding: '6px 12px',
+            borderRadius: '16px',
+            fontSize: '12px',
+            fontWeight: '600',
+            zIndex: 10,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}>
+            <span>확대 중</span>
+            <button
+              onClick={resetZoom}
+              style={{
+                background: 'rgba(255,255,255,0.3)',
+                border: 'none',
+                color: 'white',
+                borderRadius: '50%',
+                width: '18px',
+                height: '18px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '10px'
+              }}
+            >
+              ×
+            </button>
+          </div>
+        )}
       </div>
-      
-      <style>{`
+
+      <style jsx>{`
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
@@ -306,8 +525,8 @@ const backdropStyle = {
 };
 
 const modalStyle = {
-  width: "min(90vw, 900px)",
-  height: "min(90vh, 800px)",
+  width: "min(95vw, 900px)",
+  height: "min(95vh, 800px)",
   background: "#1c1f24",
   color: "#e5e7eb",
   border: "1px solid #2d333b",
@@ -316,6 +535,7 @@ const modalStyle = {
   flexDirection: "column",
   overflow: "hidden",
   boxShadow: "0 15px 50px rgba(0,0,0,.5)",
+  position: 'relative'
 };
 
 const headerStyle = {
@@ -338,20 +558,18 @@ const closeBtnStyle = {
   color: "#e5e7eb",
   fontSize: 16,
   lineHeight: 1,
-  transition: "background 0.2s ease",
 };
 
 const viewerStyle = {
   flex: 1,
   background: "#111",
   position: "relative",
-  overflow: "auto",
-  padding: "20px",
+  overflow: "hidden",
+  padding: "15px",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  // 브라우저 기본 줌 허용
-  touchAction: "manipulation"
+  touchAction: "none"
 };
 
 const centerStyle = {
@@ -379,6 +597,5 @@ const navBtnStyle = {
   borderRadius: 8,
   padding: "8px 12px",
   cursor: "pointer",
-  transition: "background 0.2s ease",
   fontWeight: 600,
 };
