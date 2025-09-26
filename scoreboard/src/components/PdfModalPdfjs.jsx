@@ -28,9 +28,13 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     isScaling: false,
     isDragging: false
   });
-
-  // 뒤로가기 상태 관리
-  const historyRef = useRef({ isSetup: false, timeoutId: null, isPopstateClosing: false });
+  
+  // 마우스 상태 관리 (웹 드래그용)
+  const mouseState = useRef({
+    isDragging: false,
+    lastMouseX: 0,
+    lastMouseY: 0
+  });
 
   const getContainerSize = () => {
     const el = holderRef.current;
@@ -59,7 +63,9 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     // CSS 규칙을 완전히 무시하고 직접 적용
     canvas.style.setProperty('transform', transform, 'important');
     canvas.style.setProperty('transform-origin', 'center center', 'important');
-    canvas.style.setProperty('transition', touchState.current.isScaling || touchState.current.isDragging ? 'none' : 'transform 0.3s ease', 'important');
+    // 드래그 중이 아닐 때만 transition 적용
+    const isInteracting = touchState.current.isScaling || touchState.current.isDragging || mouseState.current.isDragging;
+    canvas.style.setProperty('transition', isInteracting ? 'none' : 'transform 0.3s ease', 'important');
     
     setIsZoomed(scale > 1.1);
   }, []);
@@ -80,6 +86,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       state.isScaling = false;
       state.lastTouchX = touches[0].clientX;
       state.lastTouchY = touches[0].clientY;
+      if(canvasRef.current) canvasRef.current.style.transition = 'none';
     }
   }, []);
 
@@ -124,7 +131,48 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     state.isScaling = false;
     state.isDragging = false;
     state.initialDistance = 0;
+    if(canvasRef.current) canvasRef.current.style.transition = 'transform 0.3s ease';
   }, []);
+  
+  // 웹/노트북 마우스 드래그 핸들러
+  const handleMouseDown = useCallback((e) => {
+    if (e.button !== 0 || touchState.current.scale <= 1.1) return; 
+
+    e.preventDefault();
+    const state = mouseState.current;
+    state.isDragging = true;
+    state.lastMouseX = e.clientX;
+    state.lastMouseY = e.clientY;
+    
+    if(canvasRef.current) canvasRef.current.style.transition = 'none';
+  }, []);
+
+  const handleMouseMove = useCallback((e) => {
+    const mState = mouseState.current;
+    const tState = touchState.current;
+    
+    if (!mState.isDragging) return;
+    
+    const deltaX = e.clientX - mState.lastMouseX;
+    const deltaY = e.clientY - mState.lastMouseY;
+    
+    tState.translateX += deltaX;
+    tState.translateY += deltaY;
+    mState.lastMouseX = e.clientX;
+    mState.lastMouseY = e.clientY;
+    
+    applyCanvasTransform(tState.scale, tState.translateX, tState.translateY);
+  }, [applyCanvasTransform]);
+
+  const handleMouseUp = useCallback(() => {
+    const mState = mouseState.current;
+    if (!mState.isDragging) return;
+    
+    mState.isDragging = false;
+    
+    if(canvasRef.current) canvasRef.current.style.transition = 'transform 0.3s ease';
+  }, []);
+
 
   const handleDoubleClick = useCallback(() => {
     const state = touchState.current;
@@ -288,7 +336,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     };
   }, [open, filePath, sid, renderFirstPage, pdfDoc]);
 
-  // 키보드 이벤트
+  // 키보드 이벤트 (Esc 키 닫기 기능만 유지)
   useEffect(() => {
     if (!open) return;
     
@@ -303,83 +351,20 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       }
     };
     
+    // 마우스 이벤트를 전역에서 감지하여 드래그를 처리합니다.
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    
     window.addEventListener("keydown", handler, { capture: true });
-    return () => window.removeEventListener("keydown", handler, { capture: true });
-  }, [open, onClose, loading]);
-
-  // 뒤로가기 처리 (완전히 새로운 접근)
-  useEffect(() => {
-    if (!open) return;
-
-    const history = historyRef.current;
-    
-    // 브라우저 히스토리 API 대신 커스텀 이벤트 사용
-    const setupBackHandler = () => {
-      // 로딩 완료까지 대기
-      if (loading) {
-        history.timeoutId = setTimeout(setupBackHandler, 50);
-        return;
-      }
-      
-      try {
-        const modalState = { 
-          modal: 'pdf-open', 
-          timestamp: Date.now(),
-          filePath,
-          sid 
-        };
-        
-        window.history.pushState(modalState, '', window.location.href);
-        history.isSetup = true;
-        
-        console.log('뒤로가기 핸들러 설정 완료');
-      } catch (error) {
-        console.warn('뒤로가기 설정 실패:', error);
-      }
-    };
-
-    setupBackHandler();
-    
-    const handlePopstate = (e) => {
-      if (!history.isSetup || loading) return;
-      
-      console.log('뒤로가기 감지:', e.state);
-      
-      // PDF 모달 상태가 아니면 모달 닫기
-      if (!e.state || e.state.modal !== 'pdf-open') {
-        history.isPopstateClosing = true; // 뒤로가기 버튼으로 닫혔음을 표시
-        // e.preventDefault(); // popstate에서는 preventDefault를 사용하지 않음
-        // e.stopImmediatePropagation();
-        onClose();
-      }
-    };
-    
-    window.addEventListener('popstate', handlePopstate, { capture: true });
-    
     return () => {
-      if (history.timeoutId) {
-        clearTimeout(history.timeoutId);
-      }
-      window.removeEventListener('popstate', handlePopstate, { capture: true });
-      
-      // 히스토리 정리 - popstate로 닫힌 경우(이미 한 번 back 된 경우)는 history.back()을 호출하지 않음
-      if (history.isSetup && !history.isPopstateClosing) {
-        try {
-          const currentState = window.history.state;
-          if (currentState && currentState.modal === 'pdf-open') {
-            window.history.back();
-          }
-        } catch (error) {
-          console.warn('히스토리 정리 실패:', error);
-        }
-      }
-      
-      // 상태 초기화
-      history.isSetup = false;
-      history.timeoutId = null;
-      history.isPopstateClosing = false; // 플래그 초기화
-    };
-  }, [open, onClose, loading, filePath, sid]);
+      window.removeEventListener("keydown", handler, { capture: true });
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    }
+  }, [open, onClose, loading, handleMouseMove, handleMouseUp]);
+  
+  // 뒤로가기 히스토리 조작 로직은 완전히 제거됩니다.
+  // 이로 인해 모달이 늦게 꺼지는 문제가 해결됩니다.
 
   if (!open) return null;
 
@@ -428,6 +413,8 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
               onTouchStart={handleTouchStart}
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
+              onMouseDown={handleMouseDown} // <-- 마우스 드래그 시작
+              onMouseLeave={handleMouseUp}  // <-- 마우스가 영역을 벗어나면 드래그 해제
               onDoubleClick={handleDoubleClick}
               style={{
                 display: "block",
@@ -531,14 +518,14 @@ const backdropStyle = {
   inset: 0,
   background: "rgba(0,0,0,.65)",
   display: "flex",
-  alignItems: "center",
+  alignItems: "center", // 중앙 정렬 유지
   justifyContent: "center",
   zIndex: 9999,
 };
 
 const modalStyle = {
   width: "min(95vw, 900px)",
-  height: "min(80vh, 800px)",
+  height: "min(80vh, 800px)", // 80% 높이 제한 유지
   background: "#1c1f24",
   color: "#e5e7eb",
   border: "1px solid #2d333b",
