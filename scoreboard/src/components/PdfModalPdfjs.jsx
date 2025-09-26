@@ -386,15 +386,26 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
-        /* PDF 캔버스 줌 기능을 위한 CSS 우선순위 강화 */
+        /* CSS 격리 및 강제 우선순위로 PDF 캔버스 줌 활성화 */
         .pdf-canvas-zoom {
-          transform: ${canvasTransform || 'none'} !important;
+          transform: ${canvasTransform || 'translate(0, 0) scale(1)'} !important;
+          transform-origin: center center !important;
+          will-change: transform !important;
+        }
+        /* WrongPanel CSS 무력화 */
+        .pdf-modal-root .pdf-canvas-zoom {
+          transform: ${canvasTransform || 'translate(0, 0) scale(1)'} !important;
+          transform-style: preserve-3d !important;
+        }
+        /* 추가 보험 규칙 */
+        canvas.pdf-canvas-zoom[style*="transform"] {
+          transform: ${canvasTransform || 'translate(0, 0) scale(1)'} !important;
         }
       `}</style>
 
       <div
         className="pdf-modal-root"
-        style={modalStyle}
+        style={{...modalStyle, isolation: 'isolate'}} // CSS 격리 추가
         onClick={(e) => {
           e.stopPropagation();
         }}
@@ -462,6 +473,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
               onDoubleClick={handleDoubleClick}
+              className="pdf-canvas-zoom"
               style={{
                 display: "block",
                 margin: "0 auto",
@@ -471,12 +483,13 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
                 objectFit: "contain",
                 imageRendering: "high-quality",
                 touchAction: "none",
-                transform: canvasTransform,
+                // transform을 인라인에서 제거하고 CSS로만 처리
                 transformOrigin: "center center",
                 transition: touchRef.current.isScaling || touchRef.current.isDragging ? 'none' : 'transform 0.3s ease',
-                cursor: isZoomed ? 'grab' : 'pointer'
+                cursor: isZoomed ? 'grab' : 'pointer',
+                willChange: 'transform',
+                isolation: 'isolate' // CSS 격리
               }}
-              className="pdf-canvas-zoom" // 특별한 클래스 추가
             />
           )}
         </div>
