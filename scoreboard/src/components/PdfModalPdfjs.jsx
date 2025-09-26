@@ -74,29 +74,42 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       let newScale = touch.scale * scaleChange;
       newScale = Math.max(1, Math.min(4, newScale));
       
-      touch.scale = newScale;
-      const transform = `translate(${touch.translateX}px, ${touch.translateY}px) scale(${newScale})`;
-      setCanvasTransform(transform);
-      setIsZoomed(newScale > 1.1);
-      
-      touch.initialDistance = currentDistance;
+      // 스케일이 실제로 변경된 경우에만 업데이트
+      if (Math.abs(newScale - touch.scale) > 0.01) {
+        touch.scale = newScale;
+        const transform = `translate(${touch.translateX}px, ${touch.translateY}px) scale(${newScale})`;
+        console.log('스케일 변경:', newScale, transform); // 디버깅용
+        setCanvasTransform(transform);
+        setIsZoomed(newScale > 1.1);
+      }
       
     } else if (touches.length === 1 && touch.isDragging && touch.scale > 1) {
       const deltaX = touches[0].clientX - touch.lastTouchX;
       const deltaY = touches[0].clientY - touch.lastTouchY;
       
-      touch.translateX += deltaX;
-      touch.translateY += deltaY;
-      touch.lastTouchX = touches[0].clientX;
-      touch.lastTouchY = touches[0].clientY;
-      
-      const transform = `translate(${touch.translateX}px, ${touch.translateY}px) scale(${touch.scale})`;
-      setCanvasTransform(transform);
+      // 움직임이 있는 경우에만 업데이트
+      if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1) {
+        touch.translateX += deltaX;
+        touch.translateY += deltaY;
+        touch.lastTouchX = touches[0].clientX;
+        touch.lastTouchY = touches[0].clientY;
+        
+        const transform = `translate(${touch.translateX}px, ${touch.translateY}px) scale(${touch.scale})`;
+        console.log('위치 변경:', touch.translateX, touch.translateY, transform); // 디버깅용
+        setCanvasTransform(transform);
+      }
     }
   };
 
   const handleTouchEnd = () => {
     const touch = touchRef.current;
+    
+    if (touch.isScaling) {
+      // 스케일링 완료 시 거리 업데이트 누락 수정
+      touch.initialDistance = 0;
+      console.log('스케일링 종료, 최종 스케일:', touch.scale); // 디버깅용
+    }
+    
     touch.isScaling = false;
     touch.isDragging = false;
   };
@@ -373,6 +386,10 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
+        /* PDF 캔버스 줌 기능을 위한 CSS 우선순위 강화 */
+        .pdf-canvas-zoom {
+          transform: ${canvasTransform || 'none'} !important;
+        }
       `}</style>
 
       <div
@@ -445,8 +462,8 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
               onDoubleClick={handleDoubleClick}
-              style={{ 
-                display: "block", 
+              style={{
+                display: "block",
                 margin: "0 auto",
                 userSelect: "none",
                 maxWidth: "100%",
@@ -459,6 +476,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
                 transition: touchRef.current.isScaling || touchRef.current.isDragging ? 'none' : 'transform 0.3s ease',
                 cursor: isZoomed ? 'grab' : 'pointer'
               }}
+              className="pdf-canvas-zoom" // 특별한 클래스 추가
             />
           )}
         </div>
