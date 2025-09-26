@@ -290,59 +290,61 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     return () => window.removeEventListener("keydown", handler, { capture: true });
   }, [open, onClose, loading]);
 
-  // 안전한 뒤로가기 처리
+  // 안전한 뒤로가기 처리 - 모바일 안정성 우선
   useEffect(() => {
     if (!open) return;
 
     let isHistorySetup = false;
-    let rafId;
+    let setupTimeoutId;
     
-    // requestAnimationFrame으로 브라우저 렌더링 완료 후 실행
+    // 모바일 디바이스 감지
+    const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
     const setupHistory = () => {
-      rafId = requestAnimationFrame(() => {
-        requestAnimationFrame(() => { // 2프레임 후 실행하여 DOM 렌더링 완료 보장
-          try {
-            const modalState = { modal: 'pdf-open', timestamp: Date.now(), filePath, sid };
-            
-            // 현재 히스토리 상태 확인
-            const currentState = window.history.state;
-            
-            // PDF 모달 상태가 아닌 경우에만 새로운 히스토리 추가
-            if (!currentState || currentState.modal !== 'pdf-open') {
-              window.history.pushState(modalState, '', window.location.href);
-            }
-            
+      // 로딩이 완료된 후에만 히스토리 설정
+      if (loading) return;
+      
+      setupTimeoutId = setTimeout(() => {
+        try {
+          const modalState = { modal: 'pdf-open', timestamp: Date.now(), filePath, sid };
+          
+          // 현재 히스토리 상태 확인
+          const currentState = window.history.state;
+          
+          // PDF 모달 상태가 아닌 경우에만 새로운 히스토리 추가
+          if (!currentState || currentState.modal !== 'pdf-open') {
+            window.history.pushState(modalState, '', window.location.href);
             isHistorySetup = true;
-          } catch (error) {
-            console.warn('History setup failed:', error);
           }
-        });
-      });
+        } catch (error) {
+          console.warn('History setup failed:', error);
+        }
+      }, isMobile ? 500 : 200); // 모바일에서 더 긴 지연
     };
     
-    setupHistory();
+    // 로딩 완료 후 히스토리 설정
+    if (!loading) {
+      setupHistory();
+    }
     
     const handlePopstate = (e) => {
-      // 설정 완료 후에만 처리
-      if (!isHistorySetup) return;
+      // 로딩 중이거나 히스토리 설정이 안된 경우 무시
+      if (loading || !isHistorySetup) return;
       
-      // 로딩 중이 아닐 때만 처리
-      if (!loading) {
-        const state = e.state;
-        
-        // PDF 모달 상태가 아니면 닫기
-        if (!state || state.modal !== 'pdf-open') {
-          console.log('뒤로가기로 PDF 모달 닫기');
-          onClose();
-        }
+      const state = e.state;
+      
+      // PDF 모달 상태가 아니면 닫기
+      if (!state || state.modal !== 'pdf-open') {
+        console.log('뒤로가기로 PDF 모달 닫기');
+        onClose();
       }
     };
     
     window.addEventListener('popstate', handlePopstate);
     
     return () => {
-      if (rafId) {
-        cancelAnimationFrame(rafId);
+      if (setupTimeoutId) {
+        clearTimeout(setupTimeoutId);
       }
       window.removeEventListener('popstate', handlePopstate);
       
