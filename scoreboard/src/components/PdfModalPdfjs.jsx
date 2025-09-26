@@ -16,6 +16,20 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   const lastKeyRef = useRef(null);
   const renderedRef = useRef(false);
 
+  // 핀치줌 상태 관리
+  const [isZoomed, setIsZoomed] = useState(false);
+  const [canvasTransform, setCanvasTransform] = useState('');
+  const touchRef = useRef({
+    scale: 1,
+    translateX: 0,
+    translateY: 0,
+    initialDistance: 0,
+    lastTouchX: 0,
+    lastTouchY: 0,
+    isScaling: false,
+    isDragging: false
+  });
+
   const getContainerSize = () => {
     const el = holderRef.current;
     if (!el) return { width: 600, height: 400 };
@@ -24,6 +38,85 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       width: Math.max(320, Math.floor(rect.width - 20)), 
       height: Math.max(300, Math.floor(rect.height - 20))
     };
+  };
+
+  // 터치 헬퍼 함수들
+  const getTouchDistance = (touch1, touch2) => {
+    const dx = touch1.clientX - touch2.clientX;
+    const dy = touch1.clientY - touch2.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  const handleTouchStart = (e) => {
+    const touches = e.touches;
+    const touch = touchRef.current;
+    
+    if (touches.length === 2) {
+      touch.isScaling = true;
+      touch.isDragging = false;
+      touch.initialDistance = getTouchDistance(touches[0], touches[1]);
+    } else if (touches.length === 1 && touch.scale > 1) {
+      touch.isDragging = true;
+      touch.isScaling = false;
+      touch.lastTouchX = touches[0].clientX;
+      touch.lastTouchY = touches[0].clientY;
+    }
+  };
+
+  const handleTouchMove = (e) => {
+    e.preventDefault();
+    const touches = e.touches;
+    const touch = touchRef.current;
+    
+    if (touches.length === 2 && touch.isScaling) {
+      const currentDistance = getTouchDistance(touches[0], touches[1]);
+      const scaleChange = currentDistance / touch.initialDistance;
+      let newScale = touch.scale * scaleChange;
+      newScale = Math.max(1, Math.min(4, newScale));
+      
+      touch.scale = newScale;
+      const transform = `translate(${touch.translateX}px, ${touch.translateY}px) scale(${newScale})`;
+      setCanvasTransform(transform);
+      setIsZoomed(newScale > 1.1);
+      
+      touch.initialDistance = currentDistance;
+      
+    } else if (touches.length === 1 && touch.isDragging && touch.scale > 1) {
+      const deltaX = touches[0].clientX - touch.lastTouchX;
+      const deltaY = touches[0].clientY - touch.lastTouchY;
+      
+      touch.translateX += deltaX;
+      touch.translateY += deltaY;
+      touch.lastTouchX = touches[0].clientX;
+      touch.lastTouchY = touches[0].clientY;
+      
+      const transform = `translate(${touch.translateX}px, ${touch.translateY}px) scale(${touch.scale})`;
+      setCanvasTransform(transform);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    const touch = touchRef.current;
+    touch.isScaling = false;
+    touch.isDragging = false;
+  };
+
+  const handleDoubleClick = () => {
+    const touch = touchRef.current;
+    
+    if (touch.scale > 1.1) {
+      // 원래 크기로
+      touch.scale = 1;
+      touch.translateX = 0;
+      touch.translateY = 0;
+      setCanvasTransform('translate(0, 0) scale(1)');
+      setIsZoomed(false);
+    } else {
+      // 2배 확대
+      touch.scale = 2;
+      setCanvasTransform('translate(0, 0) scale(2)');
+      setIsZoomed(true);
+    }
   };
 
   const renderPage = useCallback(async (doc, num) => {
@@ -87,6 +180,20 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
           console.error("고해상도 렌더링 오류:", error);
         }
       }, 100);
+
+      // 페이지가 바뀔 때 줌 상태 초기화
+      touchRef.current = {
+        scale: 1,
+        translateX: 0,
+        translateY: 0,
+        initialDistance: 0,
+        lastTouchX: 0,
+        lastTouchY: 0,
+        isScaling: false,
+        isDragging: false
+      };
+      setCanvasTransform('');
+      setIsZoomed(false);
       
     } catch (error) {
       console.error("PDF 렌더링 오류:", error);
@@ -170,7 +277,6 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     
     const handler = (e) => {
       if (e.key === "Escape" && !loading) {
-        // 로딩 중일 때는 ESC로도 닫지 못하게 함
         onClose();
       }
       
@@ -184,100 +290,65 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     return () => window.removeEventListener("keydown", handler, { capture: true });
   }, [open, onClose, loading]);
 
-  // 기존 뒤로가기 useEffect를 이것으로 교체하세요
+  // 안전한 뒤로가기 처리
+  useEffect(() => {
+    if (!open) return;
 
-useEffect(() => {
-  if (!open) return;
-
-  let isHistorySetup = false;
-  
-  // 🔧 즉시 히스토리 설정 (지연 제거)
-  const setupHistory = () => {
-    try {
-      const modalState = { modal: 'pdf-open', timestamp: Date.now(), filePath, sid };
-      
-      // 현재 히스토리 상태 확인
-      const currentState = window.history.state;
-      
-      // PDF 모달 상태가 아닌 경우에만 새로운 히스토리 추가
-      if (!currentState || currentState.modal !== 'pdf-open') {
-        window.history.pushState(modalState, '', window.location.href);
-      }
-      
-      isHistorySetup = true;
-    } catch (error) {
-      console.warn('History setup failed:', error);
-    }
-  };
-  
-  // 🔧 즉시 실행 (지연 없음)
-  setupHistory();
-  
-  const handlePopstate = (e) => {
-    // 🔧 히스토리 설정 완료 여부와 관계없이 처리
-    if (!loading) {
-      const state = e.state;
-      
-      // PDF 모달 상태가 아니면 닫기
-      if (!state || state.modal !== 'pdf-open') {
-        console.log('뒤로가기로 PDF 모달 닫기');
-        onClose();
-      }
-    }
-  };
-  
-  window.addEventListener('popstate', handlePopstate);
-  
-  return () => {
-    window.removeEventListener('popstate', handlePopstate);
+    let isHistorySetup = false;
     
-    // 🔧 정리 시 히스토리 되돌리기
-    if (isHistorySetup) {
+    // 즉시 히스토리 설정 (지연 제거)
+    const setupHistory = () => {
       try {
+        const modalState = { modal: 'pdf-open', timestamp: Date.now(), filePath, sid };
+        
+        // 현재 히스토리 상태 확인
         const currentState = window.history.state;
-        if (currentState && currentState.modal === 'pdf-open') {
-          window.history.back();
+        
+        // PDF 모달 상태가 아닌 경우에만 새로운 히스토리 추가
+        if (!currentState || currentState.modal !== 'pdf-open') {
+          window.history.pushState(modalState, '', window.location.href);
         }
+        
+        isHistorySetup = true;
       } catch (error) {
-        console.warn('History cleanup failed:', error);
+        console.warn('History setup failed:', error);
       }
-    }
-  };
-}, [open, onClose, loading, filePath, sid]); // 🔧 filePath, sid 의존성 추가
+    };
+    
+    // 즉시 실행 (지연 없음)
+    setupHistory();
+    
+    const handlePopstate = (e) => {
+      // 히스토리 설정 완료 여부와 관계없이 처리
+      if (!loading) {
+        const state = e.state;
+        
+        // PDF 모달 상태가 아니면 닫기
+        if (!state || state.modal !== 'pdf-open') {
+          console.log('뒤로가기로 PDF 모달 닫기');
+          onClose();
+        }
+      }
+    };
     
     window.addEventListener('popstate', handlePopstate);
     
     return () => {
-      clearTimeout(setupTimer);
       window.removeEventListener('popstate', handlePopstate);
       
-      // 정상적으로 설정된 경우에만 히스토리 정리
-      if (isSetup && window.history.state?.modal === 'pdf-open') {
-        window.history.back();
+      // 정리 시 히스토리 되돌리기
+      if (isHistorySetup) {
+        try {
+          const currentState = window.history.state;
+          if (currentState && currentState.modal === 'pdf-open') {
+            window.history.back();
+          }
+        } catch (error) {
+          console.warn('History cleanup failed:', error);
+        }
       }
     };
-  }, [open, onClose, loading]);
-
-  // ❌ 문제가 되는 리사이즈 핸들러 제거
-  // useEffect(() => {
-  //   if (!open || !pdfDoc) return;
-  //   
-  //   let timeoutId;
-  //   const handleResize = () => {
-  //     clearTimeout(timeoutId);
-  //     timeoutId = setTimeout(async () => {
-  //       if (!renderedRef.current) {
-  //         await renderPage(pdfDoc, pageNum);
-  //       }
-  //     }, 300);
-  //   };
-  //   
-  //   window.addEventListener('resize', handleResize);
-  //   return () => {
-  //     window.removeEventListener('resize', handleResize);
-  //     clearTimeout(timeoutId);
-  //   };
-  // }, [open, pdfDoc, pageNum, renderPage]);
+  }, [open, onClose, loading, filePath, sid]);
 
   if (!open) return null;
 
@@ -296,7 +367,7 @@ useEffect(() => {
         className="pdf-modal-root"
         style={modalStyle}
         onClick={(e) => {
-          e.stopPropagation(); // 🔧 모달 내부 클릭 시 버블링 완전 차단
+          e.stopPropagation();
         }}
         onContextMenu={(e) => e.preventDefault()}
       >
@@ -306,7 +377,7 @@ useEffect(() => {
           </div>
           <button 
             onClick={(e) => {
-              e.stopPropagation(); // 🔧 이벤트 버블링 방지
+              e.stopPropagation();
               onClose();
             }} 
             style={closeBtnStyle} 
@@ -357,7 +428,11 @@ useEffect(() => {
           {!loading && !err && (
             <canvas
               ref={canvasRef}
-              onClick={(e) => e.stopPropagation()} // 🔧 캔버스 클릭도 버블링 방지
+              onClick={(e) => e.stopPropagation()}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onDoubleClick={handleDoubleClick}
               style={{ 
                 display: "block", 
                 margin: "0 auto",
@@ -365,7 +440,12 @@ useEffect(() => {
                 maxWidth: "100%",
                 maxHeight: "100%",
                 objectFit: "contain",
-                imageRendering: "high-quality"
+                imageRendering: "high-quality",
+                touchAction: "none",
+                transform: canvasTransform,
+                transformOrigin: "center center",
+                transition: touchRef.current.isScaling || touchRef.current.isDragging ? 'none' : 'transform 0.3s ease',
+                cursor: isZoomed ? 'grab' : 'pointer'
               }}
             />
           )}
@@ -377,7 +457,7 @@ useEffect(() => {
               style={{...navBtnStyle, opacity: renderedRef.current || pageNum <= 1 ? 0.5 : 1}}
               disabled={renderedRef.current || pageNum <= 1}
               onClick={async (e) => {
-                e.stopPropagation(); // 🔧 이벤트 버블링 방지
+                e.stopPropagation();
                 if (renderedRef.current || !pdfDoc || pageNum <= 1) return;
                 const prev = pageNum - 1;
                 setPageNum(prev);
@@ -391,7 +471,7 @@ useEffect(() => {
               style={{...navBtnStyle, opacity: renderedRef.current || pageNum >= numPages ? 0.5 : 1}}
               disabled={renderedRef.current || pageNum >= numPages}
               onClick={async (e) => {
-                e.stopPropagation(); // 🔧 이벤트 버블링 방지
+                e.stopPropagation();
                 if (renderedRef.current || !pdfDoc || pageNum >= numPages) return;
                 const next = pageNum + 1;
                 setPageNum(next);
@@ -399,6 +479,52 @@ useEffect(() => {
               }}
             >
               다음 →
+            </button>
+          </div>
+        )}
+
+        {/* 확대 상태 표시 (모바일에서만) */}
+        {isZoomed && window.innerWidth <= 768 && (
+          <div style={{
+            position: 'absolute',
+            top: '60px',
+            right: '12px',
+            background: 'rgba(0,0,0,0.8)',
+            color: 'white',
+            padding: '6px 12px',
+            borderRadius: '16px',
+            fontSize: '12px',
+            fontWeight: '600',
+            zIndex: 10,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}>
+            <span>확대 중</span>
+            <button
+              onClick={() => {
+                const touch = touchRef.current;
+                touch.scale = 1;
+                touch.translateX = 0;
+                touch.translateY = 0;
+                setCanvasTransform('translate(0, 0) scale(1)');
+                setIsZoomed(false);
+              }}
+              style={{
+                background: 'rgba(255,255,255,0.3)',
+                border: 'none',
+                color: 'white',
+                borderRadius: '50%',
+                width: '18px',
+                height: '18px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '10px'
+              }}
+            >
+              ×
             </button>
           </div>
         )}
@@ -428,6 +554,7 @@ const modalStyle = {
   flexDirection: "column",
   overflow: "hidden",
   boxShadow: "0 15px 50px rgba(0,0,0,.5)",
+  position: 'relative'
 };
 
 const headerStyle = {
@@ -459,11 +586,12 @@ const viewerStyle = {
   flex: 1,
   background: "#111",
   position: "relative",
-  overflow: "auto",
+  overflow: "hidden",
   padding: "15px",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
+  touchAction: "none"
 };
 
 const centerStyle = {
