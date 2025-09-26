@@ -295,31 +295,38 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     if (!open) return;
 
     let isHistorySetup = false;
+    let rafId;
     
-    // 즉시 히스토리 설정 (지연 제거)
+    // requestAnimationFrame으로 브라우저 렌더링 완료 후 실행
     const setupHistory = () => {
-      try {
-        const modalState = { modal: 'pdf-open', timestamp: Date.now(), filePath, sid };
-        
-        // 현재 히스토리 상태 확인
-        const currentState = window.history.state;
-        
-        // PDF 모달 상태가 아닌 경우에만 새로운 히스토리 추가
-        if (!currentState || currentState.modal !== 'pdf-open') {
-          window.history.pushState(modalState, '', window.location.href);
-        }
-        
-        isHistorySetup = true;
-      } catch (error) {
-        console.warn('History setup failed:', error);
-      }
+      rafId = requestAnimationFrame(() => {
+        requestAnimationFrame(() => { // 2프레임 후 실행하여 DOM 렌더링 완료 보장
+          try {
+            const modalState = { modal: 'pdf-open', timestamp: Date.now(), filePath, sid };
+            
+            // 현재 히스토리 상태 확인
+            const currentState = window.history.state;
+            
+            // PDF 모달 상태가 아닌 경우에만 새로운 히스토리 추가
+            if (!currentState || currentState.modal !== 'pdf-open') {
+              window.history.pushState(modalState, '', window.location.href);
+            }
+            
+            isHistorySetup = true;
+          } catch (error) {
+            console.warn('History setup failed:', error);
+          }
+        });
+      });
     };
     
-    // 즉시 실행 (지연 없음)
     setupHistory();
     
     const handlePopstate = (e) => {
-      // 히스토리 설정 완료 여부와 관계없이 처리
+      // 설정 완료 후에만 처리
+      if (!isHistorySetup) return;
+      
+      // 로딩 중이 아닐 때만 처리
       if (!loading) {
         const state = e.state;
         
@@ -334,6 +341,9 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     window.addEventListener('popstate', handlePopstate);
     
     return () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+      }
       window.removeEventListener('popstate', handlePopstate);
       
       // 정리 시 히스토리 되돌리기
