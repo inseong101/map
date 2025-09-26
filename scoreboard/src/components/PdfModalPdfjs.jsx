@@ -184,28 +184,66 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     return () => window.removeEventListener("keydown", handler, { capture: true });
   }, [open, onClose, loading]);
 
-  // 안전한 뒤로가기 처리
-  useEffect(() => {
-    if (!open) return;
+  // 기존 뒤로가기 useEffect를 이것으로 교체하세요
 
-    let isSetup = false;
-    
-    // 모달 완전히 열린 후 히스토리 설정 (지연 실행)
-    const setupTimer = setTimeout(() => {
-      const modalState = { modal: 'pdf-open', timestamp: Date.now() };
-      window.history.pushState(modalState, '', window.location.href);
-      isSetup = true;
-    }, 300); // 300ms 지연
-    
-    const handlePopstate = (e) => {
-      // 설정이 완료된 후에만 처리
-      if (!isSetup) return;
+useEffect(() => {
+  if (!open) return;
+
+  let isHistorySetup = false;
+  
+  // 🔧 즉시 히스토리 설정 (지연 제거)
+  const setupHistory = () => {
+    try {
+      const modalState = { modal: 'pdf-open', timestamp: Date.now(), filePath, sid };
       
-      // 모달 상태가 아니고 로딩 중이 아닐 때만 닫기
-      if (e.state?.modal !== 'pdf-open' && !loading) {
+      // 현재 히스토리 상태 확인
+      const currentState = window.history.state;
+      
+      // PDF 모달 상태가 아닌 경우에만 새로운 히스토리 추가
+      if (!currentState || currentState.modal !== 'pdf-open') {
+        window.history.pushState(modalState, '', window.location.href);
+      }
+      
+      isHistorySetup = true;
+    } catch (error) {
+      console.warn('History setup failed:', error);
+    }
+  };
+  
+  // 🔧 즉시 실행 (지연 없음)
+  setupHistory();
+  
+  const handlePopstate = (e) => {
+    // 🔧 히스토리 설정 완료 여부와 관계없이 처리
+    if (!loading) {
+      const state = e.state;
+      
+      // PDF 모달 상태가 아니면 닫기
+      if (!state || state.modal !== 'pdf-open') {
+        console.log('뒤로가기로 PDF 모달 닫기');
         onClose();
       }
-    };
+    }
+  };
+  
+  window.addEventListener('popstate', handlePopstate);
+  
+  return () => {
+    window.removeEventListener('popstate', handlePopstate);
+    
+    // 🔧 정리 시 히스토리 되돌리기
+    if (isHistorySetup) {
+      try {
+        const currentState = window.history.state;
+        if (currentState && currentState.modal === 'pdf-open') {
+          window.history.back();
+        }
+      } catch (error) {
+        console.warn('History cleanup failed:', error);
+      }
+    }
+  };
+}, [open, onClose, loading, filePath, sid]); // 🔧 filePath, sid 의존성 추가
     
     window.addEventListener('popstate', handlePopstate);
     
