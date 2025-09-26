@@ -538,7 +538,7 @@ const backdropStyle = {
 
 const modalStyle = {
   width: "min(95vw, 900px)",
-  height: "min(95vh, 800px)",
+  height: "min(80vh, 800px)",
   background: "#1c1f24",
   color: "#e5e7eb",
   border: "1px solid #2d333b",
