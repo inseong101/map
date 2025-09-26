@@ -24,39 +24,60 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       
       const page = await doc.getPage(num);
       const canvas = canvasRef.current;
-      const ctx = canvas.getContext("2d", { alpha: false });
+      const ctx = canvas.getContext("2d", { 
+        alpha: false,
+        desynchronized: false,
+        colorSpace: 'srgb'
+      });
 
-      // 단순화된 스케일 계산 - 화질 우선
+      // 고화질 렌더링을 위한 정확한 스케일 계산
       const viewport = page.getViewport({ scale: 1 });
       const containerRect = holderRef.current.getBoundingClientRect();
-      const containerWidth = containerRect.width - 40; // 패딩 고려
       
-      // 컨테이너에 맞는 기본 스케일
-      let scale = Math.min(containerWidth / viewport.width, 2.0); // 최대 2배
+      const maxWidth = Math.min(containerRect.width - 40, 800); // 최대 800px
+      const maxHeight = containerRect.height - 40;
       
-      // 모바일에서도 고화질 유지
-      const pixelRatio = window.devicePixelRatio || 1;
-      const finalViewport = page.getViewport({ scale: scale * pixelRatio });
+      const scaleX = maxWidth / viewport.width;
+      const scaleY = maxHeight / viewport.height;
+      const displayScale = Math.min(scaleX, scaleY, 1.5); // 최대 1.5배까지만
       
-      // 캔버스 크기 설정
-      canvas.width = finalViewport.width;
-      canvas.height = finalViewport.height;
-      canvas.style.width = `${Math.floor(finalViewport.width / pixelRatio)}px`;
-      canvas.style.height = `${Math.floor(finalViewport.height / pixelRatio)}px`;
+      // 고해상도를 위한 픽셀 비율
+      const pixelRatio = Math.min(window.devicePixelRatio || 1, 3); // 최대 3배
+      const renderScale = displayScale * pixelRatio;
       
-      // 고해상도 렌더링
-      ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-      ctx.fillStyle = "#fff";
+      const renderViewport = page.getViewport({ scale: renderScale });
+      
+      // 캔버스 설정
+      canvas.width = Math.ceil(renderViewport.width);
+      canvas.height = Math.ceil(renderViewport.height);
+      canvas.style.width = Math.ceil(renderViewport.width / pixelRatio) + 'px';
+      canvas.style.height = Math.ceil(renderViewport.height / pixelRatio) + 'px';
+      
+      // 고화질 렌더링을 위한 컨텍스트 설정
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.textRenderingOptimization = 'optimizeQuality';
+      
+      // 캔버스 초기화
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      await page.render({ canvasContext: ctx, viewport: finalViewport }).promise;
+      // PDF 렌더링
+      await page.render({
+        canvasContext: ctx,
+        viewport: renderViewport,
+        intent: 'display',
+        enableWebGL: false,
+        renderInteractiveForms: false
+      }).promise;
+      
+      console.log(`PDF 렌더링: 표시${Math.ceil(renderViewport.width / pixelRatio)}x${Math.ceil(renderViewport.height / pixelRatio)} 실제${canvas.width}x${canvas.height}`);
       
     } catch (error) {
       console.error("PDF 렌더링 오류:", error);
     } finally {
-      setTimeout(() => {
-        renderedRef.current = false;
-      }, 100);
+      renderedRef.current = false;
     }
   }, []);
 
@@ -143,23 +164,18 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     return () => window.removeEventListener("keydown", handler, { capture: true });
   }, [open, onClose, loading]);
 
-  // 단순화된 뒤로가기 처리
+  // 즉시 뒤로가기 설정
   useEffect(() => {
     if (!open) return;
 
-    let setupDone = false;
-    
-    const setupTimer = setTimeout(() => {
-      try {
-        window.history.pushState({ modal: 'pdf-open' }, '', window.location.href);
-        setupDone = true;
-      } catch (e) {
-        console.warn('History setup failed:', e);
-      }
-    }, 300);
+    try {
+      window.history.pushState({ modal: 'pdf-open' }, '', window.location.href);
+    } catch (e) {
+      console.warn('History setup failed:', e);
+    }
     
     const handlePopstate = (e) => {
-      if (setupDone && (!e.state || e.state.modal !== 'pdf-open') && !loading) {
+      if ((!e.state || e.state.modal !== 'pdf-open') && !loading) {
         onClose();
       }
     };
@@ -167,15 +183,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     window.addEventListener('popstate', handlePopstate);
     
     return () => {
-      clearTimeout(setupTimer);
       window.removeEventListener('popstate', handlePopstate);
-      if (setupDone) {
-        try {
-          window.history.back();
-        } catch (e) {
-          console.warn('History cleanup failed:', e);
-        }
-      }
     };
   }, [open, onClose, loading]);
 
