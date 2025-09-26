@@ -30,7 +30,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   });
 
   // 뒤로가기 상태 관리
-  const historyRef = useRef({ isSetup: false, timeoutId: null });
+  const historyRef = useRef({ isSetup: false, timeoutId: null, isPopstateClosing: false });
 
   const getContainerSize = () => {
     const el = holderRef.current;
@@ -237,7 +237,12 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         
         if (pdfDoc && lastKeyRef.current === key) {
           setLoading(false);
-          await renderFirstPage(pdfDoc);
+          // DOM에 PDF Modal이 완전히 렌더링되도록 잠시 대기 후 고화질 렌더링
+          setTimeout(async () => {
+            if (!cancelled) {
+              await renderFirstPage(pdfDoc);
+            }
+          }, 50);
           return;
         }
 
@@ -264,7 +269,12 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         setPageNum(1);
         lastKeyRef.current = key;
 
-        await renderFirstPage(doc);
+        // DOM에 PDF Modal이 완전히 렌더링되도록 잠시 대기 후 고화질 렌더링
+        setTimeout(async () => {
+          if (!cancelled) {
+            await renderFirstPage(doc);
+          }
+        }, 50); // 50ms 지연
       } catch (e) {
         if (!cancelled) setErr(e?.message || "PDF 로드 실패");
       } finally {
@@ -337,8 +347,9 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       
       // PDF 모달 상태가 아니면 모달 닫기
       if (!e.state || e.state.modal !== 'pdf-open') {
-        e.preventDefault();
-        e.stopImmediatePropagation();
+        history.isPopstateClosing = true; // 뒤로가기 버튼으로 닫혔음을 표시
+        // e.preventDefault(); // popstate에서는 preventDefault를 사용하지 않음
+        // e.stopImmediatePropagation();
         onClose();
       }
     };
@@ -351,8 +362,8 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       }
       window.removeEventListener('popstate', handlePopstate, { capture: true });
       
-      // 히스토리 정리
-      if (history.isSetup) {
+      // 히스토리 정리 - popstate로 닫힌 경우(이미 한 번 back 된 경우)는 history.back()을 호출하지 않음
+      if (history.isSetup && !history.isPopstateClosing) {
         try {
           const currentState = window.history.state;
           if (currentState && currentState.modal === 'pdf-open') {
@@ -366,6 +377,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       // 상태 초기화
       history.isSetup = false;
       history.timeoutId = null;
+      history.isPopstateClosing = false; // 플래그 초기화
     };
   }, [open, onClose, loading, filePath, sid]);
 
