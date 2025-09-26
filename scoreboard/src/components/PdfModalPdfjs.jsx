@@ -184,25 +184,31 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     return () => window.removeEventListener("keydown", handler, { capture: true });
   }, [open, onClose, loading]);
 
-  // 안전한 뒤로가기 처리
+  // 안전한 뒤로가기 처리 (모바일 대응)
   useEffect(() => {
     if (!open) return;
 
     let isSetup = false;
+    const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     
-    // 모달 완전히 열린 후 히스토리 설정 (지연 실행)
+    // 모바일에서는 더 오래 지연
+    const delay = isMobile ? 500 : 300;
+    
     const setupTimer = setTimeout(() => {
-      const modalState = { modal: 'pdf-open', timestamp: Date.now() };
+      const modalState = { modal: 'pdf-open', timestamp: Date.now(), isMobile };
       window.history.pushState(modalState, '', window.location.href);
       isSetup = true;
-    }, 300); // 300ms 지연
+    }, delay);
     
     const handlePopstate = (e) => {
-      // 설정이 완료된 후에만 처리
       if (!isSetup) return;
       
-      // 모달 상태가 아니고 로딩 중이 아닐 때만 닫기
-      if (e.state?.modal !== 'pdf-open' && !loading) {
+      // 모바일에서는 더 엄격한 조건
+      const shouldClose = isMobile 
+        ? (e.state === null || e.state?.modal !== 'pdf-open') && !loading
+        : (e.state?.modal !== 'pdf-open') && !loading;
+        
+      if (shouldClose) {
         onClose();
       }
     };
@@ -213,33 +219,11 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       clearTimeout(setupTimer);
       window.removeEventListener('popstate', handlePopstate);
       
-      // 정상적으로 설정된 경우에만 히스토리 정리
       if (isSetup && window.history.state?.modal === 'pdf-open') {
         window.history.back();
       }
     };
   }, [open, onClose, loading]);
-
-  // ❌ 문제가 되는 리사이즈 핸들러 제거
-  // useEffect(() => {
-  //   if (!open || !pdfDoc) return;
-  //   
-  //   let timeoutId;
-  //   const handleResize = () => {
-  //     clearTimeout(timeoutId);
-  //     timeoutId = setTimeout(async () => {
-  //       if (!renderedRef.current) {
-  //         await renderPage(pdfDoc, pageNum);
-  //       }
-  //     }, 300);
-  //   };
-  //   
-  //   window.addEventListener('resize', handleResize);
-  //   return () => {
-  //     window.removeEventListener('resize', handleResize);
-  //     clearTimeout(timeoutId);
-  //   };
-  // }, [open, pdfDoc, pageNum, renderPage]);
 
   if (!open) return null;
 
@@ -258,7 +242,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         className="pdf-modal-root"
         style={modalStyle}
         onClick={(e) => {
-          e.stopPropagation(); // 🔧 모달 내부 클릭 시 버블링 완전 차단
+          e.stopPropagation(); // 모달 내부 클릭 시 버블링 완전 차단
         }}
         onContextMenu={(e) => e.preventDefault()}
       >
@@ -268,7 +252,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
           </div>
           <button 
             onClick={(e) => {
-              e.stopPropagation(); // 🔧 이벤트 버블링 방지
+              e.stopPropagation(); // 이벤트 버블링 방지
               onClose();
             }} 
             style={closeBtnStyle} 
@@ -319,7 +303,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
           {!loading && !err && (
             <canvas
               ref={canvasRef}
-              onClick={(e) => e.stopPropagation()} // 🔧 캔버스 클릭도 버블링 방지
+              onClick={(e) => e.stopPropagation()} // 캔버스 클릭도 버블링 방지
               style={{ 
                 display: "block", 
                 margin: "0 auto",
@@ -327,7 +311,8 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
                 maxWidth: "100%",
                 maxHeight: "100%",
                 objectFit: "contain",
-                imageRendering: "high-quality"
+                imageRendering: "high-quality",
+                touchAction: "pinch-zoom" // 모바일 줌 허용
               }}
             />
           )}
@@ -339,7 +324,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
               style={{...navBtnStyle, opacity: renderedRef.current || pageNum <= 1 ? 0.5 : 1}}
               disabled={renderedRef.current || pageNum <= 1}
               onClick={async (e) => {
-                e.stopPropagation(); // 🔧 이벤트 버블링 방지
+                e.stopPropagation(); // 이벤트 버블링 방지
                 if (renderedRef.current || !pdfDoc || pageNum <= 1) return;
                 const prev = pageNum - 1;
                 setPageNum(prev);
@@ -353,7 +338,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
               style={{...navBtnStyle, opacity: renderedRef.current || pageNum >= numPages ? 0.5 : 1}}
               disabled={renderedRef.current || pageNum >= numPages}
               onClick={async (e) => {
-                e.stopPropagation(); // 🔧 이벤트 버블링 방지
+                e.stopPropagation(); // 이벤트 버블링 방지
                 if (renderedRef.current || !pdfDoc || pageNum >= numPages) return;
                 const next = pageNum + 1;
                 setPageNum(next);
@@ -426,6 +411,8 @@ const viewerStyle = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
+  touchAction: "pinch-zoom",  // 핀치 줌만 허용
+  WebkitOverflowScrolling: "touch" // 모바일 스크롤 개선
 };
 
 const centerStyle = {
