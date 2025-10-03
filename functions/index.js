@@ -110,6 +110,35 @@ exports.onPhonesFileUploaded = functions
   }
 });
 
+// ✅ [새로 추가된 함수]: SMS 발송 전 전화번호/학수번호의 DB 등록 여부만 확인
+exports.checkPhoneSidExists = functions
+  .region('asia-northeast3') // ✅ 지역 설정
+  .https.onCall(async (data, context) => {
+  const { phone, sid } = data || {};
+  const e164 = toKRE164(phone);
+  
+  // 유효하지 않은 입력은 Firebase SDK에서 대부분 걸러지나, 여기서 최종 확인
+  if (!e164 || !/^\d{6}$/.test(String(sid || '').trim())) {
+    return { ok: false };
+  }
+
+  // 1. 전화번호가 DB에 있는지 확인
+  const snap = await db.collection('phones').doc(e164).get();
+  if (!snap.exists) {
+    return { ok: false }; // 등록되지 않은 번호
+  }
+  
+  // 2. 해당 학수번호가 전화번호에 바인딩되어 있는지 확인
+  const sids = snap.data()?.sids || [];
+  const cleanSid = String(sid).trim();
+
+  if (!sids.includes(cleanSid)) {
+    return { ok: false }; // 학수번호 불일치
+  }
+
+  return { ok: true };
+});
+
 exports.serveWatermarkedPdf = functions
   .region('asia-northeast3')
   .runWith({ memory: '8GB', timeoutSeconds: 180 })
