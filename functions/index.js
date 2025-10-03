@@ -140,10 +140,9 @@ exports.serveWatermarkedPdf = functions
     const { width, height } = page.getSize();
     const textWidth = font.widthOfTextAtSize(text, fontSize);
     
-    // ✅ FIX 2: 45도 회전된 워터마크 패턴이 페이지 중앙 대각선을 지나가도록 X축 시작점 조정
-    // 페이지 너비 전체만큼 왼쪽(음수)으로 시작점을 이동하여 시각적으로 중앙에 오도록 함
-    // (이전 시도: -width / 2는 잘린 PDF에서 치우침 발생)
-    const watermarkX = -width; // 새로운 X 시작점
+    // ✅ FIX: 워터마크 텍스트의 시각적 정중앙이 PDF X축 정중앙과 일치하도록 배치
+    // 텍스트 시작점 = (페이지 너비 / 2) - (텍스트 너비 / 2)
+    const watermarkX = (width / 2) - (textWidth / 2); // 새로운 X 시작점
     
     const textHeight = fontSize;
     const stepY = textHeight * 3.5; // Y축 반복 간격 (띄엄띄엄 배치)
@@ -327,7 +326,7 @@ exports.verifyAndBindPhoneSid = functions
   }
   const cleanSid = String(sid || '').trim();
   if (!/^\d{6}$/.test(cleanSid)) {
-    throw new new functions.https.HttpsError("invalid-argument", "학수번호는 6자리 숫자여야 합니다.");
+    throw new functions.https.HttpsError("invalid-argument", "학수번호는 6자리 숫자여야 합니다.");
   }
 
   const snap = await db.collection('phones').doc(e164).get();
