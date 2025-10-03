@@ -337,7 +337,10 @@ function App() {
 
           return (
             <div className="container">
-              <h1>학수번호 인증</h1>
+              <h1>
+                전국한의과대학 졸업준비협의체<br />
+                2025 전국모의고사
+              </h1>
               <div className="card narrow">
                 <form onSubmit={handleSubmit} className="flex-column">
                   <label style={{ fontWeight: 800 }}>학수번호</label>
