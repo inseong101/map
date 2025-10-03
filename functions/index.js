@@ -138,7 +138,9 @@ exports.checkPhoneSidExists = functions
   return { ok: true };
 });
 
-exports.serveWatermarkedPdf = functions.https.onCall(async (data, context) => {
+exports.serveWatermarkedPdf = functions
+  .region('asia-northeast3')
+  .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
   }
