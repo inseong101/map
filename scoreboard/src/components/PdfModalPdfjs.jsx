@@ -107,7 +107,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       let newScale = prevScale * scaleChange;
       
       // ✅ [MODIFICATION 2]: 최소 비율을 1로 제한하고 최대 비율은 100으로 유지 (수정)
-      newScale = Math.max(1, newScale); 
+      newScale = Math.max(0.5, newScale); 
       newScale = Math.min(100, newScale); 
       
       if (Math.abs(newScale - prevScale) > 0.01) {
