@@ -111,7 +111,7 @@ exports.onPhonesFileUploaded = functions
 
 exports.serveWatermarkedPdf = functions
   .region('asia-northeast3')
-  .runWith({ memory: '8GB', timeoutSeconds: 180 }) // 🌟 메모리 8GB로 증설, 타임아웃 180초(3분)
+  .runWith({ memory: '8GB', timeoutSeconds: 180 })
   .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -121,8 +121,20 @@ exports.serveWatermarkedPdf = functions
   if (!filePath || !sid) {
     throw new functions.https.HttpsError("invalid-argument", "filePath, sid가 필요합니다.");
   }
+  
+  // 🚨 [보안 강화]: 요청된 SID가 현재 로그인된 UID에 바인딩되어 있는지 확인
+  const uid = context.auth.uid;
+  const bindSnap = await db.collection('bindings').doc(uid).get();
+  const allowedSids = bindSnap.data()?.sids || [];
+
+  if (!allowedSids.includes(sid)) {
+      // 바인딩되지 않은 학수번호로 요청 시도 시 거부
+      throw new functions.https.HttpsError("permission-denied", "요청된 학수번호는 현재 사용자에게 바인딩되지 않았습니다.");
+  }
+  // 🚨 [보안 강화] 끝
 
   const bucket = admin.storage().bucket();
+// ... (이하 PDF 생성 로직은 이전과 동일)
   const [bytes] = await bucket.file(filePath).download();
 
   const pdfDoc = await PDFDocument.load(bytes);
