@@ -19,8 +19,6 @@ function mapAuthError(err) {
     case 'auth/invalid-phone-number':
       return '전화번호 형식이 올바르지 않습니다. (예: +821012345678)';
     case 'auth/missing-phone-number':
-      return '전화번호를 입력해주세요.';
-    case 'auth/invalid-verification-code':
     case 'auth/code-expired':
       return '인증번호가 만료되었습니다. 다시 요청해주세요.'; 
     case 'functions/internal':
@@ -32,10 +30,11 @@ function mapAuthError(err) {
 }
 
 // ✅ [통일된 로고 + 이름 + 로그인 정보 헤더 정의]
-const SiteIdentifier = ({ selectedSid, handleLogout }) => {
+// [MODIFICATION 1] currentView를 prop으로 받도록 수정
+const SiteIdentifier = ({ selectedSid, handleLogout, currentView }) => {
     
-    // 로그인 정보가 있을 때만 우측 정보 표시
-    const isLoggedIn = !!selectedSid;
+    // [MODIFICATION 2] 학수번호가 설정되어 있고, 현재 뷰가 'home'이 아닐 때만 우측 정보를 표시합니다.
+    const isRightSideVisible = !!selectedSid && currentView !== 'home';
     
     return (
         <div style={{ 
@@ -70,7 +69,7 @@ const SiteIdentifier = ({ selectedSid, handleLogout }) => {
             </div>
             
             {/* 우측: 학수번호 + 로그아웃 버튼 (줄바꿈 없이 한 줄로) */}
-            {isLoggedIn && (
+            {isRightSideVisible && (
                 <div style={{ 
                     display: 'flex', 
                     alignItems: 'center',
@@ -495,7 +494,14 @@ function App() {
       
       <div className="container">
           {/* SiteIdentifier는 로딩 뷰를 제외하고 항상 상단 왼쪽에 표시 */}
-          {currentView !== 'loading' && <SiteIdentifier selectedSid={studentId} handleLogout={handleLogout} />}
+          {/* [MODIFICATION 3] currentView prop을 추가하여 SiteIdentifier로 전달 */}
+          {currentView !== 'loading' && (
+            <SiteIdentifier 
+                selectedSid={studentId} 
+                handleLogout={handleLogout} 
+                currentView={currentView}
+            />
+          )}
           {renderContent()}
       </div>
     </div>
