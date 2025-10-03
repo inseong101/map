@@ -33,7 +33,7 @@ async function writeAudit({ uid, sid, filePath, action, meta = {}, req }) {
 
 // Storage에 phones_seed.xlsx 업로드 시 자동 실행
 exports.onPhonesFileUploaded = functions
-  .region('asia-northeast3') // ✅ 8GB가 적용되지 않는 Storage 트리거지만, 지역은 통일
+  .region('asia-northeast3')
   .storage.object().onFinalize(async (object) => {
   const filePath = object.name;
   
@@ -111,17 +111,28 @@ exports.onPhonesFileUploaded = functions
 });
 
 exports.serveWatermarkedPdf = functions
-  .region('asia-northeast3')
-  .runWith({ memory: '8GB', timeoutSeconds: 180 })
+  .region('asia-northeast3') // ✅ 지역 설정
+  .runWith({ memory: '8GB', timeoutSeconds: 180 }) // ✅ 8GB 메모리 설정
   .https.onCall(async (data, context) => {
-  // ... (권한 및 에러 체크 생략) ...
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
+  }
+
+  const { filePath, sid } = data || {};
+  if (!filePath || !sid) {
+    throw new functions.https.HttpsError("invalid-argument", "filePath, sid가 필요합니다.");
+  }
+
+  const bucket = admin.storage().bucket();
+  const [bytes] = await bucket.file(filePath).download();
 
   const pdfDoc = await PDFDocument.load(bytes);
   const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
   const text = String(sid);
   const fontSize = 64; 
-  const angle = degrees(45); // 45도 기울임
+  const angle = degrees(45); // ✅ 45도 기울임
+  const color = rgb(0.6, 0.6, 0.6);
   const opacity = 0.12;
 
   const pages = pdfDoc.getPages();
@@ -129,7 +140,7 @@ exports.serveWatermarkedPdf = functions
     const { width, height } = page.getSize();
     const textWidth = font.widthOfTextAtSize(text, fontSize);
     
-    // ✅ [FIXED]: X축 정중앙 시작점 계산: (페이지 너비 - 텍스트 너비) / 2
+    // ✅ X축 정중앙 시작점 계산: (페이지 너비 - 텍스트 너비) / 2
     const centerX = (width - textWidth) / 2; 
     
     const textHeight = fontSize;
@@ -142,15 +153,15 @@ exports.serveWatermarkedPdf = functions
         y: y, 
         size: fontSize,
         font,
-        color: rgb(0.6, 0.6, 0.6),
-        opacity: opacity,
+        color,
+        opacity,
         rotate: angle, // 45도
       });
     }
   }
+
   const out = await pdfDoc.save();
 
-    
   await writeAudit({
     uid: context.auth.uid,
     sid,
