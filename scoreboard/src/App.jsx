@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useState, useEffect, useRef, useCallback } from 'react'; // ✅ useCallback 추가
+import React, { useState, useEffect, useRef, useCallback } from 'react'; 
 import ControversialPanel from './components/ControversialPanel';
 import './App.css';
 
@@ -31,6 +31,19 @@ function mapAuthError(err) {
   }
 }
 
+// ✅ [통일된 헤딩 컴포넌트]
+const MainHeader = () => (
+    <header style={{ textAlign: 'center', marginBottom: '20px' }}>
+        <h1 style={{ margin: '0 0 4px 0', fontSize: '24px', fontWeight: 800 }}>
+            전국한의과대학<br />
+            졸업준비협의체
+        </h1>
+        <h2 style={{ fontSize: '18px', margin: '4px 0 0', color: 'var(--muted)', fontWeight: 700 }}>
+            2025 전국모의고사 지원 사이트
+        </h2>
+    </header>
+);
+
 // ----------------------
 // 메인 앱 컴포넌트 시작
 // ----------------------
@@ -54,57 +67,41 @@ function App() {
   const [selectedRoundLabel, setSelectedRoundLabel] = useState(ALL_ROUND_LABELS[0]);
   const [availableRounds, setAvailableRounds] = useState(ALL_ROUND_LABELS);
 
-  // ✅ [수정]: History API를 사용하는 새로운 뷰 전환 함수 정의
   const navigateToView = useCallback((viewName) => {
     if (viewName === 'controversial') {
-        // 메인에서 컨텐츠로 갈 때만 히스토리를 push
         window.history.pushState({ view: 'controversial' }, '', '#controversial');
     } else if (viewName === 'main') {
-        // 메인으로 돌아오거나 메인으로 처음 갈 때는 히스토리를 교체 (깔끔하게)
         window.history.replaceState({ view: 'main' }, '', '#main');
     } else if (viewName === 'home' || viewName === 'loading') {
-        // 홈이나 로딩은 히스토리 교체
         window.history.replaceState({ view: viewName }, '', '#');
     }
     setCurrentView(viewName);
   }, []);
   
-  // ✅ 1. Firebase Auth 상태 변화 감지 및 SID 로드
   useEffect(() => {
-    // Recaptcha 초기화 (컨테이너가 DOM에 항상 존재하도록 보장)
     if (!window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier(
-        auth,
-        'recaptcha-container', 
-        { size: 'invisible' }
-      );
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', { size: 'invisible' });
     }
     
-    // Auth 상태 변경 리스너
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       if (user) {
-        navigateToView('loading'); // ✅ navigateToView 사용
+        navigateToView('loading');
         await fetchBoundSids(user);
       } else {
-        navigateToView('home'); // ✅ navigateToView 사용
+        navigateToView('home');
         setBoundSids([]);
         setStudentId('');
         setBoundPhone('');
       }
     });
 
-    // 🚨 [핵심 수정]: Popstate 이벤트 리스너 추가 (뒤로가기 처리)
     const handlePopState = (event) => {
         const targetView = event.state?.view;
-        // 히스토리 항목이 'main'이나 'home'으로 설정되어 있었다면 해당 뷰로 복귀
         if (targetView === 'main' || targetView === 'home') {
             setCurrentView(targetView);
         } else if (currentView === 'controversial') {
-            // 컨텐츠 페이지에서 뒤로가기 시도 시, 명시적으로 메인으로 복귀
             setCurrentView('main');
-            // history.replaceState를 사용하지 않으면 브라우저가 다시 뒤로가기를 시도할 수 있으므로
-            // 이 처리는 단순하게 view를 변경하는 것으로 충분
         }
     };
 
@@ -120,7 +117,6 @@ function App() {
     };
   }, [navigateToView]);
   
-  // ✅ 2. 바인딩된 SID를 서버에서 가져와 메인 뷰로 전환
   const fetchBoundSids = async (user) => {
     try {
       setLoading(true);
@@ -131,30 +127,38 @@ function App() {
       setBoundSids(sids);
       setBoundPhone(fetchedPhone || ''); 
 
-      // 🚨 단일 SID 모델 적용: SID가 1개일 때만 정상으로 간주하고 메인으로 전환
       if (sids.length === 1) { 
         setStudentId(sids[0]);
-        navigateToView('main'); // ✅ navigateToView 사용
+        navigateToView('main');
       } else {
-        navigateToView('home'); // ✅ navigateToView 사용
+        navigateToView('home');
       }
     } catch (err) {
       console.error('바인딩 SID 로드 오류:', err);
       setError('로그인 상태를 확인할 수 없습니다. 다시 시도해주세요.');
-      navigateToView('home'); // ✅ navigateToView 사용
+      navigateToView('home');
     } finally {
       setLoading(false);
     }
   };
 
+  const startCooldown = () => {
+    setResendLeft(RESEND_COOLDOWN);
+    if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
+    cooldownTimerRef.current = setInterval(() => {
+      setResendLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(cooldownTimerRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
 
-  const startCooldown = () => { /* ... (생략) ... */ };
-
-  // SMS 인증 번호 요청 함수
   const handleSendCode = async () => {
     if (sending || verifying || loading || resendLeft > 0) return;
     
-    // ✅ [강화]: 새로운 요청 시작 시 이전 상태 초기화
     setError('');
     setConfirmation(null); 
 
@@ -166,13 +170,11 @@ function App() {
       return;
     }
 
-    // 학수번호 유효성 검증
     if (!/^\d{6}$/.test(studentId)) {
       setError('학수번호는 숫자 6자리여야 합니다.');
       return;
     }
     
-    // 🚨 [핵심 보안 조치]: 1. SMS 발송 전에 서버에서 DB 존재 여부 확인
     try {
       setSending(true);
       
@@ -180,14 +182,12 @@ function App() {
       const checkRes = await checkFn({ phone: formattedPhone, sid: studentId });
       
       if (!checkRes.data?.ok) {
-          // 🚨 [보안]: DB 검증 실패 시, 구체적인 오류 대신 일반적인 오류 메시지를 표시하여 정보 유출/테러 방지
           setError('입력하신 정보가 등록되지 않았습니다. 정보를 확인해 주세요.');
-          return; // 검증 실패 시 SMS 발송을 중단
+          return;
       }
 
-      // 2. DB 검증 통과 후 Firebase SMS 발송
       const appVerifier = window.recaptchaVerifier;
-      await appVerifier.render(); // reCAPTCHA 위젯 렌더링 강제
+      await appVerifier.render();
       
       const conf = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
       setConfirmation(conf);
@@ -195,7 +195,6 @@ function App() {
       alert('인증번호가 전송되었습니다.');
     } catch (err) {
       console.error('SMS 전송/검증 오류:', err);
-      // Firebase SDK 오류 처리
       setError(mapAuthError(err)); 
       if (window.recaptchaVerifier) window.recaptchaVerifier.clear();
     } finally {
@@ -204,10 +203,20 @@ function App() {
   };
 
 
-  // 서버 학수번호 바인딩 검증 함수
-  const serverVerifyAndBind = async (phoneInput, sidInput) => { /* ... (생략) ... */ };
+  const serverVerifyAndBind = async (phoneInput, sidInput) => {
+    const verifyFn = httpsCallable(functions, 'verifyAndBindPhoneSid');
+    const res = await verifyFn({ phone: phoneInput, sid: sidInput });
+    const { ok, code, message } = res.data || {};
+    if (!ok) {
+      const msg =
+        code === 'PHONE_NOT_FOUND' ? '등록되지 않은 전화번호입니다.' :
+        code === 'SID_MISMATCH'    ? '전화번호와 학수번호가 일치하지 않습니다.' :
+        message || '검증에 실패했습니다.';
+      throw new Error(msg);
+    }
+    return true;
+  };
 
-  // 인증 코드 확인 및 바인딩 함수
   const handleVerifyCode = async () => {
     if (verifying) return false;
     setError('');
@@ -223,15 +232,14 @@ function App() {
       
       await serverVerifyAndBind(phone, studentId);
       
-      // 3. 최종 성공 후 상태 업데이트
       setUser(result.user);
-      await fetchBoundSids(result.user); // 메인 화면으로 전환
+      await fetchBoundSids(result.user); 
       
       return true;
     } catch (err) {
       console.error('코드/바인딩 검증 오류:', err);
       setError(mapAuthError(err));
-      setConfirmation(null); // 실패 시 confirmation 객체 초기화
+      setConfirmation(null); 
       if (window.recaptchaVerifier) window.recaptchaVerifier.clear();
       return false;
     } finally {
@@ -239,7 +247,6 @@ function App() {
     }
   };
 
-  // 폼 제출 함수
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!/^\d{6}$/.test(studentId)) {
@@ -249,11 +256,11 @@ function App() {
     await handleVerifyCode();
   };
 
-  // 로그아웃 함수
   const handleLogout = () => {
     auth.signOut();
-    navigateToView('loading'); // ✅ navigateToView 사용
+    navigateToView('loading'); 
   };
+
 
   // ----------------------
   // 뷰 렌더링
@@ -277,7 +284,7 @@ function App() {
               roundLabel={selectedRoundLabel}
               onRoundChange={setSelectedRoundLabel}
               sid={studentId}
-              onBack={() => navigateToView('main')} // ✅ navigateToView 사용
+              onBack={() => navigateToView('main')} // 해설에서 뒤로가기 시 다시 메인으로 복귀
             />
           </div>
         );
@@ -289,29 +296,85 @@ function App() {
           
           return (
               <div className="container">
-                  <h1 style={{ marginBottom: '16px' }}>환영합니다!</h1>
-                  <div className="card narrow">
-                      <h2 style={{ fontSize: '20px' }}>로그인 정보</h2>
+                  {/* 1. 로그인 정보 (작게 표시) */}
+                  <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center', 
+                      fontSize: '12px', 
+                      color: 'var(--muted)', 
+                      marginBottom: '20px',
+                      padding: '8px 0',
+                      borderBottom: '1px solid var(--line)'
+                  }}>
+                      <span>인증된 번호: <span style={{ color: 'var(--primary)', fontWeight: 700 }}>{displayPhone}</span></span>
+                      <span>학수번호: <span style={{ fontWeight: 700, color: 'var(--ink)' }}>{selectedSid}</span></span>
+                  </div>
+
+                  {/* 2. 사이트 설명 및 문항 현황 */}
+                  <div className="card narrow" style={{ padding: '24px' }}>
+                      <h2 style={{ marginTop: 0, fontSize: '20px', fontWeight: 800, color: 'var(--ink)', textAlign: 'center' }}>
+                          전국 모의고사 특별 해설 현황
+                      </h2>
+                      <hr className="sep" style={{ margin: '12px 0 20px 0' }} />
                       
-                      {/* 로그인 인증 정보 표시 */}
-                      <div className="group-grid" style={{ marginBottom: '20px' }}>
-                          <div className="group-box span-12">
-                              <p style={{ margin: 0, fontWeight: 800 }}>인증된 전화번호</p>
-                              <p style={{ margin: 0, fontSize: '18px', color: 'var(--primary)', fontWeight: 700 }}>{displayPhone}</p>
+                      {/* 교시별 문항 수 현황 표 */}
+                      <div className="group-box flex-column" style={{ background: 'var(--surface-2)', padding: '15px', gap: '10px' }}>
+                          <h3 style={{ marginTop: 0, marginBottom: '5px', fontSize: '16px', fontWeight: 700, color: 'var(--primary)' }}>교시별 특별 해설 문항 수 (총 38문제)</h3>
+                          <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 60px', gap: '5px', fontWeight: 700, borderBottom: '1px solid var(--line)', paddingBottom: '5px' }}>
+                              <p style={{ margin: 0 }}>교시</p>
+                              <p style={{ margin: 0 }}>과목</p>
+                              <p style={{ margin: 0, textAlign: 'right' }}>문항수</p>
                           </div>
-                          <div className="group-box span-12">
-                              <p style={{ margin: 0, fontWeight: 800 }}>현재 학수번호</p>
-                              <p className="kpi" style={{ margin: 0 }}>
-                                  <span className="num" style={{ fontSize: '28px' }}>{selectedSid || '오류'}</span>
-                              </p>
+                          {/* 1교시 (내과) */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 60px', gap: '5px' }}>
+                              <p style={{ margin: 0, fontWeight: 700 }}>1교시</p>
+                              <p style={{ margin: 0, fontSize: '13px' }}>간계, 심계, 비계, 폐계, 신계 내과학 (각 2문제)</p>
+                              <p style={{ margin: 0, textAlign: 'right', fontWeight: 800 }}>10</p>
+                          </div>
+                          {/* 2교시 (침구, 사상 등) */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 60px', gap: '5px', borderTop: '1px solid var(--surface)' }}>
+                              <p style={{ margin: 0, fontWeight: 700 }}>2교시</p>
+                              <p style={{ margin: 0, fontSize: '13px' }}>상한, 사상 (각 2), 침구 (5), 법규 (2)</p>
+                              <p style={{ margin: 0, textAlign: 'right', fontWeight: 800 }}>11</p>
+                          </div>
+                          {/* 3교시 (부인, 외과 등) */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 60px', gap: '5px', borderTop: '1px solid var(--surface)' }}>
+                              <p style={{ margin: 0, fontWeight: 700 }}>3교시</p>
+                              <p style={{ margin: 0, fontSize: '13px' }}>외과, 신정, 안이비 (각 2), 부인 (3)</p>
+                              <p style={{ margin: 0, textAlign: 'right', fontWeight: 800 }}>9</p>
+                          </div>
+                          {/* 4교시 (기초) */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 60px', gap: '5px', borderTop: '1px solid var(--surface)' }}>
+                              <p style={{ margin: 0, fontWeight: 700 }}>4교시</p>
+                              <p style={{ margin: 0, fontSize: '13px' }}>소아, 예방, 생리, 본초 (각 2문제)</p>
+                              <p style={{ margin: 0, textAlign: 'right', fontWeight: 800 }}>8</p>
                           </div>
                       </div>
 
-                      <hr className="sep" />
+                      {/* 해설 제공 목적 및 기준 */}
+                      <div className="group-box" style={{ background: 'var(--surface-2)', marginTop: '20px', padding: '12px 16px' }}>
+                          <h3 style={{ marginTop: 0, fontSize: '15px', color: 'var(--warn)', fontWeight: 700 }}>해설 제공의 목적과 기준</h3>
+                          <p style={{ color: 'var(--muted)', lineHeight: '1.5', margin: '8px 0' }}>
+                              본 특별 해설은 응시자 전체의 **오답률 상위 문항**에 대한 심층 분석을 제공하여, 응시자의 복습 효율을 증대시키고 고난도 내용을 최종 점검하는 것을 목표로 합니다.
+                          </p>
+                          <ul style={{ paddingLeft: '20px', margin: '8px 0 0', lineHeight: '1.6', fontSize: '13px', color: 'var(--muted)' }}>
+                              <li>**제공 기준:** 과목별 오답률 상위 10% 문항</li>
+                              <li>**제공 내용:** 정답률, 5개 선지 선택 비율, **'왜 매력적인 오답이 되었는지'**에 대한 간략한 설명 포함</li>
+                          </ul>
+                      </div>
+                      
+                      {/* 보안 유의사항 */}
+                      <p style={{ color: 'var(--bad)', fontSize: '12px', fontWeight: 700, textAlign: 'center', marginTop: '20px' }}>
+                          * 본 해설은 응시자 전용이며, **무단 캡처 및 외부 유출을 엄격히 금지합니다.** (개인 정보 워터마크 처리됨)
+                      </p>
+                      
+                      <hr className="sep" style={{ margin: '24px 0 16px 0' }} />
 
+                      {/* 액션 버튼 */}
                       <button
                           className="btn primary wide"
-                          onClick={() => navigateToView('controversial')} // ✅ navigateToView 사용
+                          onClick={() => navigateToView('controversial')}
                           disabled={!selectedSid}
                           style={{ height: '48px', fontSize: '16px' }}
                       >
@@ -330,17 +393,14 @@ function App() {
       case 'home':
       default:
         {
+// ... (home view 로직은 동일) ...
           const isInteracting = sending || verifying || loading;
-          // ✅ [강화]: 학수번호와 전화번호 유효성 검사 통과 시에만 버튼 활성화
           const sendDisabled = isInteracting || resendLeft > 0 || !phone.trim() || !/^\d{6}$/.test(studentId); 
           const submitDisabled = isInteracting || !studentId || !smsCode;
 
           return (
             <div className="container">
-              <h1>
-                전국한의과대학 졸업준비협의체<br />
-                2025 전국모의고사
-              </h1>
+              
               <div className="card narrow">
                 <form onSubmit={handleSubmit} className="flex-column">
                   <label style={{ fontWeight: 800 }}>학수번호</label>
@@ -411,7 +471,10 @@ function App() {
         id="recaptcha-container" 
         style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }} 
       />
-      {renderContent()}
+      <div className="container">
+          <MainHeader />
+          {renderContent()}
+      </div>
     </div>
   );
 }
