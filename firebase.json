@@ -4,25 +4,9 @@
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
       {
-        "source": "/api/prebinned",
-        "function": { "functionId": "getPrebinnedDistribution", "region": "us-central1" }
-      },
-      {
         "source": "/api/highError",
-        "function": { "functionId": "getHighErrorRateQuestions", "region": "us-central1" }
-      },
-      {
-        "source": "/api/questionStats",
-        "function": { "functionId": "getQuestionChoiceStats", "region": "us-central1" }
-      },
-      {
-        "source": "/api/overallStatus",
-        "function": { "functionId": "getOverallStatus", "region": "us-central1" }
-      },
-      {
-        "source": "/api/manualUpdate",
-        "function": { "functionId": "manualUpdateAnalytics", "region": "us-central1" }
-      },
+        "function": { "functionId": "getHighErrorRateQuestions", "region": "asia-northeast3" }
+      }, // 지역이 us-central1에서 asia-northeast3로 수정됨
       { "source": "**", "destination": "/index.html" }
     ]
   },
