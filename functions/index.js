@@ -111,8 +111,8 @@ exports.onPhonesFileUploaded = functions
 });
 
 exports.serveWatermarkedPdf = functions
-  .region('asia-northeast3') // ✅ 지역 설정
-  .runWith({ memory: '8GB', timeoutSeconds: 180 }) // ✅ 8GB 메모리 설정
+  .region('asia-northeast3') // 지역 설정
+  .runWith({ memory: '8GB', timeoutSeconds: 180 }) // 8GB 메모리 설정
   .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -131,7 +131,7 @@ exports.serveWatermarkedPdf = functions
 
   const text = String(sid);
   const fontSize = 64; 
-  const angle = degrees(45); // ✅ 45도 기울임
+  const angle = degrees(45); // 45도 기울임
   const color = rgb(0.6, 0.6, 0.6);
   const opacity = 0.12;
 
@@ -140,7 +140,7 @@ exports.serveWatermarkedPdf = functions
     const { width, height } = page.getSize();
     const textWidth = font.widthOfTextAtSize(text, fontSize);
     
-    // ✅ X축 정중앙 시작점 계산: (페이지 너비 - 텍스트 너비) / 2
+    // X축 정중앙 시작점 계산: (페이지 너비 - 텍스트 너비) / 2
     const centerX = (width - textWidth) / 2; 
     
     const textHeight = fontSize;
@@ -149,7 +149,7 @@ exports.serveWatermarkedPdf = functions
     // Y축 중앙을 기준으로 위아래로 반복 배치
     for (let y = -height * 0.5; y < height * 2.5; y += stepY) { 
       page.drawText(text, {
-        x: centerX, // ✅ X축 정중앙 시작점에 고정
+        x: centerX, // X축 정중앙 시작점에 고정
         y: y, 
         size: fontSize,
         font,
@@ -275,6 +275,41 @@ exports.getHighErrorRateQuestions = functions
 
   return { data: dummyData };
 });
+
+
+// 🔥 누락되었던 함수: 전화번호와 학수번호가 DB에 등록되어 있는지 확인 (로그인 시도 전 호출)
+exports.checkPhoneSidExists = functions
+  .region('asia-northeast3') // 지역 통일
+  .runWith({ memory: '256MB', timeoutSeconds: 30 }) // 간단한 조회이므로 메모리를 낮춤
+  .https.onCall(async (data, context) => {
+    // 이 함수는 인증(context.auth) 없이 전화번호와 학수번호의 존재 여부만 확인합니다.
+    const { phone, sid } = data || {};
+    const e164 = toKRE164(phone);
+    
+    if (!e164 || !/^\d{6}$/.test(String(sid).trim())) {
+      // 클라이언트에서 이 에러를 처리하여 친절한 메시지를 표시해야 합니다.
+      throw new functions.https.HttpsError("invalid-argument", "전화번호 또는 학수번호 형식이 올바르지 않습니다.");
+    }
+    
+    const cleanSid = String(sid).trim();
+
+    // 1. 전화번호로 문서 조회
+    const snap = await db.collection('phones').doc(e164).get();
+    
+    // 2. 문서가 존재하고, 해당 학수번호를 포함하는지 확인
+    if (!snap.exists) {
+      return { ok: false, message: '등록되지 않은 전화번호입니다.' };
+    }
+    
+    const sids = snap.data()?.sids || [];
+    if (!sids.includes(cleanSid)) {
+      return { ok: false, message: '전화번호와 학수번호가 일치하지 않습니다.' };
+    }
+
+    // 3. 일치함
+    return { ok: true };
+  });
+
 
 exports.verifyAndBindPhoneSid = functions
   .region('asia-northeast3')
