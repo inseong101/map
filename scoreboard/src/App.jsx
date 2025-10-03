@@ -33,6 +33,7 @@ function mapAuthError(err) {
 
 // ✅ [통일된 로고 + 이름 + 로그인 정보 헤더 정의]
 const SiteIdentifier = ({ selectedSid, handleLogout }) => {
+    
     // 로그인 정보가 있을 때만 우측 정보 표시
     const isLoggedIn = !!selectedSid;
     
@@ -338,28 +339,40 @@ function App() {
                       <div style={{ display: 'grid', gap: '15px' }}>
                           <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--primary)' }}>교시별 특별 해설 문항 수 (총 38문제)</h3>
                           
-                          {/* 1교시: 내과 (과목 순서 및 이름 준수) */}
+                          {/* 1교시: 내과 (간심비폐신 순서 및 상세 문제 수) */}
                           <div className="group-box" style={{ background: 'var(--surface-2)', padding: '12px 16px' }}>
-                              <p style={{ margin: 0, fontWeight: 800, color: 'var(--ink)' }}>1교시</p>
-                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>간계내과학 (2문제), 심계내과학 (2문제), 비계내과학 (2문제), 폐계내과학 (2문제), 신계내과학 (2문제) &nbsp;&nbsp;<span style={{ color: 'var(--ink)', fontWeight: 800 }}>총 10문제</span></p>
+                              <p style={{ margin: 0, fontWeight: 800, color: 'var(--ink)', display: 'flex', justifyContent: 'space-between' }}>
+                                  <span>1교시</span>
+                                  <span style={{ color: 'var(--primary)', fontWeight: 800 }}>총 10문제</span>
+                              </p>
+                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>간계내과학 (2문제), 심계내과학 (2문제), 비계내과학 (2문제), 폐계내과학 (2문제), 신계내과학 (2문제)</p>
                           </div>
                           
-                          {/* 2교시: 순서: 상한론, 사상의학, 침구의학, 보건의약관계법규 */}
+                          {/* 2교시: 상한론, 사상의학, 침구의학, 보건의약관계법규 */}
                           <div className="group-box" style={{ background: 'var(--surface-2)', padding: '12px 16px' }}>
-                              <p style={{ margin: 0, fontWeight: 800, color: 'var(--ink)' }}>2교시</p>
-                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>상한론 (2문제), 사상의학 (2문제), 침구의학 (5문제), 보건의약관계법규 (2문제) &nbsp;&nbsp;<span style={{ color: 'var(--ink)', fontWeight: 800 }}>총 11문제</span></p>
+                              <p style={{ margin: 0, fontWeight: 800, color: 'var(--ink)', display: 'flex', justifyContent: 'space-between' }}>
+                                  <span>2교시</span>
+                                  <span style={{ color: 'var(--primary)', fontWeight: 800 }}>총 11문제</span>
+                              </p>
+                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>상한론 (2문제), 사상의학 (2문제), 침구의학 (5문제), 보건의약관계법규 (2문제)</p>
                           </div>
                           
-                          {/* 3교시: 순서: 외과학, 신경정신과학, 안이비인후과학, 부인과학 */}
+                          {/* 3교시: 외과학, 신경정신과학, 안이비인후과학, 부인과학 */}
                           <div className="group-box" style={{ background: 'var(--surface-2)', padding: '12px 16px' }}>
-                              <p style={{ margin: 0, fontWeight: 800, color: 'var(--ink)' }}>3교시</p>
-                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>외과학 (2문제), 신경정신과학 (2문제), 안이비인후과학 (2문제), 부인과학 (3문제) &nbsp;&nbsp;<span style={{ color: 'var(--ink)', fontWeight: 800 }}>총 9문제</span></p>
+                              <p style={{ margin: 0, fontWeight: 800, color: 'var(--ink)', display: 'flex', justifyContent: 'space-between' }}>
+                                  <span>3교시</span>
+                                  <span style={{ color: 'var(--primary)', fontWeight: 800 }}>총 9문제</span>
+                              </p>
+                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>외과학 (2문제), 신경정신과학 (2문제), 안이비인후과학 (2문제), 부인과학 (3문제)</p>
                           </div>
                           
-                          {/* 4교시: 순서: 소아과학, 예방의학, 한방생리학, 본초학 */}
+                          {/* 4교시: 소아과학, 예방의학, 한방생리학, 본초학 */}
                           <div className="group-box" style={{ background: 'var(--surface-2)', padding: '12px 16px' }}>
-                              <p style={{ margin: 0, fontWeight: 800, color: 'var(--ink)' }}>4교시</p>
-                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>소아과학 (2문제), 예방의학 (2문제), 한방생리학 (2문제), 본초학 (2문제) &nbsp;&nbsp;<span style={{ color: 'var(--ink)', fontWeight: 800 }}>총 8문제</span></p>
+                              <p style={{ margin: 0, fontWeight: 800, color: 'var(--ink)', display: 'flex', justifyContent: 'space-between' }}>
+                                  <span>4교시</span>
+                                  <span style={{ color: 'var(--primary)', fontWeight: 800 }}>총 8문제</span>
+                              </p>
+                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>소아과학 (2문제), 예방의학 (2문제), 한방생리학 (2문제), 본초학 (2문제)</p>
                           </div>
 
                       </div>
