@@ -1,3 +1,4 @@
+// functions/index.js
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const { PDFDocument, rgb, degrees, StandardFonts } = require("pdf-lib");
@@ -122,7 +123,7 @@ exports.serveWatermarkedPdf = functions
     throw new functions.https.HttpsError("invalid-argument", "filePath, sid가 필요합니다.");
   }
   
-  // 🚨 [보안 강화]: 요청된 SID가 현재 로그인된 UID에 바인딩되어 있는지 확인
+  // [보안 강화]: 요청된 SID가 현재 로그인된 UID에 바인딩되어 있는지 확인
   const uid = context.auth.uid;
   const bindSnap = await db.collection('bindings').doc(uid).get();
   const allowedSids = bindSnap.data()?.sids || [];
@@ -131,10 +132,9 @@ exports.serveWatermarkedPdf = functions
       // 바인딩되지 않은 학수번호로 요청 시도 시 거부
       throw new functions.https.HttpsError("permission-denied", "요청된 학수번호는 현재 사용자에게 바인딩되지 않았습니다.");
   }
-  // 🚨 [보안 강화] 끝
+  // [보안 강화] 끝
 
   const bucket = admin.storage().bucket();
-// ... (이하 PDF 생성 로직은 이전과 동일)
   const [bytes] = await bucket.file(filePath).download();
 
   const pdfDoc = await PDFDocument.load(bytes);
@@ -255,39 +255,20 @@ exports.getHighErrorRateQuestions = functions
   
   // 단순한 더미 데이터 반환 - 실제 과목 매핑은 프론트엔드에서 처리
   const dummyData = {
-    "간": [],
-    "심": [],
-    "비": [],
-    "폐": [],
-    "신": [],
-    "상한": [],
-    "사상": [],
-    "침구": [],
-    "법규": [],
-    "외과": [],
-    "신정": [],
-    "안이비": [],
-    "부인": [],
-    "소아": [],
-    "예방": [],
-    "생리": [],
-    "본초": []
+    "간": [], "심": [], "비": [], "폐": [], "신": [],
+    "상한": [], "사상": [], "침구": [], "법규": [],
+    "외과": [], "신정": [], "안이비": [], "부인": [],
+    "소아": [], "예방": [], "생리": [], "본초": []
   };
   
-  // 각 과목마다 랜덤하게 문제들 생성 (프론트엔드에서 과목별로 필터링됨)
+  // ... (랜덤 데이터 생성 로직 생략) ...
   const sessions = ["1교시", "2교시", "3교시", "4교시"];
-  const sessionRanges = {
-    "1교시": 80,
-    "2교시": 100, 
-    "3교시": 80,
-    "4교시": 80
-  };
+  const sessionRanges = { "1교시": 80, "2교시": 100, "3교시": 80, "4교시": 80 };
   
   Object.keys(dummyData).forEach(subject => {
     sessions.forEach(session => {
       const maxQ = sessionRanges[session];
-      // 각 세션에서 랜덤하게 문제들 생성
-      const questionCount = Math.floor(Math.random() * 10) + 5; // 5-14개 문제
+      const questionCount = Math.floor(Math.random() * 10) + 5;
       for (let i = 0; i < questionCount; i++) {
         const qNum = Math.floor(Math.random() * maxQ) + 1;
         dummyData[subject].push({
@@ -298,7 +279,6 @@ exports.getHighErrorRateQuestions = functions
       }
     });
     
-    // 중복 제거 및 정렬
     const uniqueQuestions = Array.from(
       new Map(dummyData[subject].map(q => [q.questionNum + q.session, q])).values()
     );
@@ -324,6 +304,7 @@ exports.verifyAndBindPhoneSid = functions
     throw new functions.https.HttpsError("invalid-argument", "학수번호는 6자리 숫자여야 합니다.");
   }
 
+  // ✅ [보안 검증]: DB에 등록된 번호인지 확인
   const snap = await db.collection('phones').doc(e164).get();
   if (!snap.exists) {
     return { ok: false, code: 'PHONE_NOT_FOUND', message: '등록되지 않은 전화번호입니다.' };
@@ -332,11 +313,13 @@ exports.verifyAndBindPhoneSid = functions
   if (!sids.includes(cleanSid)) {
     return { ok: false, code: 'SID_MISMATCH', message: '전화번호와 학수번호가 일치하지 않습니다.' };
   }
+  // ✅ [보안 검증] 끝: DB에 등록된 번호이며, 학수번호와 일치함.
 
   const uid = context.auth.uid;
   const bindRef = db.collection('bindings').doc(uid);
+  // 단일 SID 모델이므로 기존 배열을 덮어씁니다.
   await bindRef.set({
-    sids: admin.firestore.FieldValue.arrayUnion(cleanSid),
+    sids: [cleanSid], 
     phone: e164,
     updatedAt: admin.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
