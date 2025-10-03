@@ -1,200 +1,196 @@
 /* ==== WrongAnswerPanel (탭 전환형, 반응형 최적화) ==== */
 .wrong-panel-root {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  min-height: 400px; /* 최소 높이 보장 */
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 400px; /* 최소 높이 보장 */
 }
 
 /* 제목 가운데 정렬 */
 .wrong-panel-root h2 {
-  text-align: center;
-  margin-bottom: 16px;
+  text-align: center;
+  margin-bottom: 16px;
 }
 
 /* 설명 줄 */
 .legend-line {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: center; /* 가운데 정렬 */
-  opacity: .9;
-  margin-bottom: 12px;
-  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center; /* 가운데 정렬 */
+  opacity: .9;
+  margin-bottom: 12px;
+  font-size: 13px;
 }
 .legend-red { color: #ffd8d8; }
 .legend-example {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* 상단 탭 - 가운데 정렬 및 반응형 */
 .session-tabs, .round-tabs, .subject-tabs {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin: 8px 0 12px;
-  justify-content: center;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 8px 0 12px;
+  justify-content: center;
 }
 
 .tab-btn {
-  appearance: none;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink); /* 밝은 텍스트 색상 유지 */
-  border-radius: 999px;
-  padding: 8px 14px;
-  font-weight: 700;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
 }
 
 .tab-btn:hover:not(:disabled) {
-  background: var(--surface-2);
-  border-color: var(--primary);
+  background: var(--surface-2);
+  border-color: var(--primary);
 }
 
 .tab-btn.active {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(126,162,255,.3);
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(126,162,255,.3);
 }
 
 /* 비활성화된 탭 */
 .tab-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  background: var(--surface);
-  border-color: var(--line);
-  color: var(--muted);
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--muted);
 }
 
 /* 탭 콘텐츠 래퍼 — 남은 공간만 차지, 스크롤 방지 */
 .tab-content {
-  flex: 1;
-  overflow: hidden;
-  position: relative;
-  min-height: 250px;
-  padding: 8px;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  min-height: 250px;
+  padding: 8px;
 }
 
 /* 번호 버튼 그리드: 완전 반응형 그리드 */
 .btn-grid {
-  width: 100%;
-  height: 100%;
-  display: grid;
-  justify-content: center;
-  align-content: start;
-  padding: 4px;
-  box-sizing: border-box;
-  overflow: visible;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  justify-content: center;
+  align-content: start;
+  padding: 4px;
+  box-sizing: border-box;
+  overflow: visible;
 }
 
 /* 기본 번호 버튼 - 개선된 스타일링 */
 .qbtn {
-  position: relative;
-  appearance: none;
-  border: 1.5px solid var(--line);
-  background: rgba(255,255,255,0.04);
-  color: var(--ink);
-  border-radius: 8px;
-  font-weight: 800;
-  line-height: 1; /* ✅ [FIX]: 라인 높이를 1로 고정하여 수직 중앙 정렬 보장 */
-  cursor: default;
-  
-  display: flex; 
-  align-items: center;  /* 수직 중앙 */
-  justify-content: center; /* 수평 중앙 */
-  
-  padding: 0;
-  margin: 0;
-  min-width: 0;
-  min-height: 0;
-  box-sizing: border-box;
-  
-  transition: all 0.2s ease;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
+  position: relative;
+  appearance: none;
+  border: 1.5px solid var(--line);
+  background: rgba(255,255,255,0.04);
+  color: var(--ink);
+  border-radius: 8px;
+  font-weight: 800;
+  line-height: 1; /* ✅ 중앙 정렬 보장 */
+  cursor: default;
+  
+  display: flex; 
+  align-items: center; 
+  justify-content: center;
+  
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  
+  transition: all 0.2s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* 해설 있는 문제 - 불타는 효과 */
 .qbtn.fire {
-  /* red 속성 제거, fire 속성만 유지 */
-  background: linear-gradient(135deg, rgba(126,162,255,0.2), rgba(126,162,255,0.16)); /* Primary 계열로 변경 */
-  border-color: var(--primary); /* 밝은 테두리 */
-  color: var(--ink); /* 텍스트 흰색/밝은색 유지 */
-  cursor: pointer;
-  
-  animation: blazing 1.2s ease-in-out infinite alternate;
-  box-shadow: 
-    0 0 12px rgba(126,162,255,0.4), /* 파란 계열로 변경 */
-    0 0 24px rgba(126,162,255,0.2),
-    0 2px 8px rgba(0,0,0,0.2);
+  background: linear-gradient(135deg, rgba(126,162,255,0.2), rgba(126,162,255,0.16)); 
+  border-color: var(--primary);
+  color: var(--ink); 
+  cursor: pointer;
+  
+  animation: blazing 1.2s ease-in-out infinite alternate;
+  box-shadow: 
+    0 0 12px rgba(126,162,255,0.4), 
+    0 0 24px rgba(126,162,255,0.2),
+    0 2px 8px rgba(0,0,0,0.2);
 }
 
 .qbtn.fire:hover {
-  transform: translateY(-1px) scale(1.02);
-  box-shadow: 
-    0 0 16px rgba(126,162,255,0.6),
-    0 0 32px rgba(126,162,255,0.3),
-    0 4px 12px rgba(0,0,0,0.3);
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: 
+    0 0 16px rgba(126,162,255,0.6),
+    0 0 32px rgba(126,162,255,0.3),
+    0 4px 12px rgba(0,0,0,0.3);
 }
 
 .qbtn.fire:active {
-  transform: translateY(0) scale(0.98);
+  transform: translateY(0) scale(0.98);
 }
 
 /* 해설 없는 문제는 회색 톤 */
 .qbtn.no-explanation {
-  background: rgba(255,255,255,0.02);
-  border-color: rgba(255,255,255,0.1);
-  color: var(--muted);
-  opacity: 0.7;
+  background: rgba(255,255,255,0.02);
+  border-color: rgba(255,255,255,0.1);
+  color: var(--muted);
+  opacity: 0.7;
 }
 
 .qbtn.no-explanation:hover {
-  opacity: 0.9;
-  background: rgba(255,255,255,0.04);
+  opacity: 0.9;
+  background: rgba(255,255,255,0.04);
 }
 
 /* 🔥 불타는 버튼 애니메이션 */
 @keyframes blazing {
-  0% {
-    box-shadow: 
-      0 0 12px rgba(126,162,255,0.4),
-      0 0 24px rgba(126,162,255,0.2),
-      0 2px 8px rgba(0,0,0,0.2);
-    transform: scale(1);
-  }
-  100% {
-    box-shadow: 
-      0 0 18px rgba(126,162,255,0.6),
-      0 0 36px rgba(126,162,255,0.3),
-      0 3px 12px rgba(0,0,0,0.25);
-    transform: scale(1.02);
-  }
+  0% {
+    box-shadow: 
+      0 0 12px rgba(126,162,255,0.4),
+      0 0 24px rgba(126,162,255,0.2),
+      0 2px 8px rgba(0,0,0,0.2);
+    transform: scale(1);
+  }
+  100% {
+    box-shadow: 
+      0 0 18px rgba(126,162,255,0.6),
+      0 0 36px rgba(126,162,255,0.3),
+      0 3px 12px rgba(0,0,0,0.25);
+    transform: scale(1.02);
+  }
 }
 
 /* 🔥 이모지 위치 및 애니메이션 */
 .qbtn.fire .flame-emoji {
-  position: absolute;
-  top: -4px;
-  right: -3px;
-  font-size: 0.9em;
-  transform-origin: center;
-  animation: flame-wiggle 1.5s ease-in-out infinite;
-  pointer-events: none;
-  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));
+  position: absolute;
+  top: -4px;
+  right: -3px;
+  font-size: 0.9em;
+  transform-origin: center;
+  animation: flame-wiggle 1.5s ease-in-out infinite;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));
 }
-
-
-
 
 @keyframes flame-wiggle {
   0%, 100% { 
