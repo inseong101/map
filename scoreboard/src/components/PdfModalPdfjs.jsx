@@ -403,11 +403,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
                   animation: 'spin 1s linear infinite' 
                 }}></div>
                 <div style={{ fontSize: '16px', fontWeight: '700', color: '#7ea2ff' }}>
-                  고화질 PDF를 준비하는 중...
-                </div>
-                <div style={{ fontSize: '14px', textAlign: 'center', lineHeight: '1.4' }}>
-                  처음 접속 시 1-2분 정도 소요될 수 있습니다.<br/>
-                  잠시만 기다려주세요.
+                  불러오는 중...
                 </div>
               </div>
             </div>
