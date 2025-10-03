@@ -63,8 +63,8 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     
     // CSS 규칙을 완전히 무시하고 직접 적용
     canvas.style.setProperty('transform', transform, 'important');
-    // transform-origin을 'top center'로 변경하여 스크롤/줌 시 상단 기준으로 이동
-    canvas.style.setProperty('transform-origin', 'top center', 'important'); 
+    // [MODIFICATION 1]: transform-origin을 '0% 0%'로 변경하여 계산된 translateX/Y를 기반으로 줌이 적용되도록 수정
+    canvas.style.setProperty('transform-origin', '0% 0%', 'important'); 
     // 드래그 중이 아닐 때만 transition 적용
     const isInteracting = touchState.current.isScaling || touchState.current.isDragging || mouseState.current.isDragging;
     canvas.style.setProperty('transition', isInteracting ? 'none' : 'transform 0.3s ease', 'important');
@@ -103,11 +103,38 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       // 핀치 줌
       const currentDistance = getTouchDistance(touches[0], touches[1]);
       const scaleChange = currentDistance / state.initialDistance;
-      let newScale = state.scale * scaleChange;
-      // ✅ [FIX]: 최대 확대 제한을 100배로 설정하여 사실상 제거
-      newScale = Math.max(1, Math.min(100, newScale)); 
+      const prevScale = state.scale; // 이전 스케일 저장
+      let newScale = prevScale * scaleChange;
       
-      if (Math.abs(newScale - state.scale) > 0.01) {
+      // ✅ [MODIFICATION 2]: 최소 비율을 1로 제한하고 최대 비율은 100으로 유지 (사실상 무제한)
+      newScale = Math.max(1, newScale); 
+      newScale = Math.min(100, newScale); 
+      
+      if (Math.abs(newScale - prevScale) > 0.01) {
+        
+        const canvas = canvasRef.current;
+        const rect = canvas.getBoundingClientRect();
+
+        // 줌 중심 (캔버스 좌표계, 현재 변환/스케일 적용 후) 계산
+        const centerClientX = (touches[0].clientX + touches[1].clientX) / 2;
+        const centerClientY = (touches[0].clientY + touches[1].clientY) / 2;
+
+        // 핀치 중심이 캔버스 내부의 언스케일드 좌표 (0,0 기준)에서 얼마나 떨어져 있는지 계산
+        // (Client Position - Canvas Top-Left) - Current Translation / Current Scale
+        const pointX = (centerClientX - rect.left - state.translateX) / prevScale;
+        const pointY = (centerClientY - rect.top - state.translateY) / prevScale;
+        
+        // [MODIFICATION 3]: 변환 값 업데이트 (줌 중심 고정)
+        // 새 위치 = 이전 위치 - (새 스케일 - 이전 스케일) * 중심점
+        state.translateX -= (newScale - prevScale) * pointX;
+        state.translateY -= (newScale - prevScale) * pointY;
+
+        // ✅ [MODIFICATION 4]: 1배로 축소될 경우, 위치를 (0,0)으로 재설정하여 중앙 정렬 유지
+        if (newScale === 1) {
+            state.translateX = 0;
+            state.translateY = 0;
+        } 
+        
         state.scale = newScale;
         applyCanvasTransform(state.scale, state.translateX, state.translateY);
         state.initialDistance = currentDistance;
@@ -181,7 +208,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     const state = touchState.current;
     
     if (state.scale > 1.1) {
-      // 줌 아웃
+      // 줌 아웃 (리셋)
       state.scale = 1;
       state.translateX = 0;
       state.translateY = 0;
@@ -214,7 +241,8 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         const state = touchState.current;
         const zoomSpeed = 0.05; // 줌 속도 설정
         
-        let newScale = state.scale;
+        const prevScale = state.scale;
+        let newScale = prevScale;
         
         // 휠 방향에 따라 확대/축소
         if (e.deltaY < 0) {
@@ -223,12 +251,32 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
             newScale -= zoomSpeed; // 축소
         }
         
-        // ✅ [FIX]: 최대 확대 제한을 100배로 설정하여 사실상 제거
-        newScale = Math.max(1, Math.min(100, newScale)); 
+        // ✅ [MODIFICATION 5]: 최소 비율을 1로 제한
+        newScale = Math.max(1, newScale); 
+        // 최대 확대 제한은 100배로 유지 (사실상 무제한)
+        newScale = Math.min(100, newScale); 
         
-        if (newScale !== state.scale) {
+        if (newScale !== prevScale) {
+            const canvas = canvasRef.current;
+            const rect = canvas.getBoundingClientRect();
+            
+            // 줌 중심 (캔버스 좌표계, 현재 변환/스케일 적용 후) 계산
+            // 마우스 커서 위치를 캔버스 내부의 언스케일드 좌표 (0,0 기준)에서 얼마나 떨어져 있는지 계산
+            const pointX = (e.clientX - rect.left - state.translateX) / prevScale;
+            const pointY = (e.clientY - rect.top - state.translateY) / prevScale;
+            
+            // [MODIFICATION 6]: 변환 값 업데이트 (줌 중심 고정)
+            // 새 위치 = 이전 위치 - (새 스케일 - 이전 스케일) * 중심점
+            state.translateX -= (newScale - prevScale) * pointX;
+            state.translateY -= (newScale - prevScale) * pointY;
+            
+            // ✅ [MODIFICATION 7]: 1배로 축소될 경우, 위치를 (0,0)으로 재설정하여 중앙 정렬 유지
+            if (newScale === 1) {
+                state.translateX = 0;
+                state.translateY = 0;
+            }
+            
             state.scale = newScale;
-            // 줌 변경 시 translateX/Y는 유지하여 현재 보고 있는 영역 중심으로 줌
             applyCanvasTransform(state.scale, state.translateX, state.translateY);
         }
     }
@@ -326,7 +374,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
           return;
         }
 
-        const functions = getFunctions(undefined, "asia-northeast3"); // ✅ FIX: 지역 통일
+        const functions = getFunctions(undefined, "asia-northeast3"); // FIX: 지역 통일
         const serve = httpsCallable(functions, "serveWatermarkedPdf");
         const res = await serve({ filePath, sid });
         const base64 = res?.data;
@@ -453,7 +501,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
                 imageRendering: "high-quality",
                 touchAction: "none",
                 cursor: isZoomed ? 'grab' : 'pointer',
-                transformOrigin: 'top center', // ✅ 스크롤 시 상단을 기준으로 줌
+                // transformOrigin: 'top center', // (제거됨)
               }}
             />
           )}
