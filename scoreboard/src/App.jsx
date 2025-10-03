@@ -130,7 +130,7 @@ function App() {
     }, 1000);
   };
 
-  // ✅ 3. SMS 인증 번호 요청 함수 (DB 사전 검증 제거)
+  // ✅ 3. SMS 인증 번호 요청 함수 (DB 사전 검증 재도입)
   const handleSendCode = async () => {
     if (sending || verifying || loading || resendLeft > 0) return;
     
@@ -151,11 +151,21 @@ function App() {
       setError('학수번호는 숫자 6자리여야 합니다.');
       return;
     }
-
+    
+    // 🚨 [핵심 보안 조치]: 1. SMS 발송 전에 서버에서 DB 존재 여부 확인
     try {
       setSending(true);
       
-      // 🚨 [보안] DB 사전 검증 없이 Firebase SMS 발송 요청
+      const checkFn = httpsCallable(functions, 'checkPhoneSidExists');
+      const checkRes = await checkFn({ phone: formattedPhone, sid: studentId });
+      
+      if (!checkRes.data?.ok) {
+          // 🚨 [보안]: DB 검증 실패 시, 구체적인 오류 대신 일반적인 오류 메시지를 표시하여 정보 유출/테러 방지
+          setError('입력하신 정보가 등록되지 않았습니다. 정보를 확인해 주세요.');
+          return; // 검증 실패 시 SMS 발송을 중단
+      }
+
+      // 2. DB 검증 통과 후 Firebase SMS 발송
       const appVerifier = window.recaptchaVerifier;
       await appVerifier.render(); // reCAPTCHA 위젯 렌더링 강제
       
@@ -164,9 +174,10 @@ function App() {
       startCooldown();
       alert('인증번호가 전송되었습니다.');
     } catch (err) {
-      console.error('SMS 전송 오류:', err);
-      setError(mapAuthError(err));
-      window.recaptchaVerifier.clear(); // 오류 시 reCAPTCHA 초기화
+      console.error('SMS 전송/검증 오류:', err);
+      // Firebase SDK 오류 처리
+      setError(mapAuthError(err)); 
+      if (window.recaptchaVerifier) window.recaptchaVerifier.clear();
     } finally {
       setSending(false);
     }
@@ -256,7 +267,7 @@ function App() {
         return (
           <div className="container">
             <ControversialPanel
-              allRoundLabels={availableRounds}
+              allRoundLabels={ALL_ROUND_LABELS}
               roundLabel={selectedRoundLabel}
               onRoundChange={setSelectedRoundLabel}
               sid={studentId}
@@ -314,7 +325,8 @@ function App() {
       default:
         {
           const isInteracting = sending || verifying || loading;
-          const sendDisabled = isInteracting || resendLeft > 0 || !phone.trim() || !/^\d{6}$/.test(studentId); // ✅ 학수번호 유효성 검사 추가
+          // ✅ [강화]: 학수번호와 전화번호 유효성 검사 통과 시에만 버튼 활성화
+          const sendDisabled = isInteracting || resendLeft > 0 || !phone.trim() || !/^\d{6}$/.test(studentId); 
           const submitDisabled = isInteracting || !studentId || !smsCode;
 
           return (
