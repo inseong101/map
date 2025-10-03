@@ -397,7 +397,7 @@ function App() {
             <div className="container" style={{ paddingTop: '0px' }}>
               <div className="card narrow">
                 <h2 style={{ textAlign: 'center', marginBottom: '24px', fontSize: '20px', fontWeight: 800 }}>
-                    2025 전국모의고사 인증
+                    2025 전국모의고사
                 </h2>
                 <form onSubmit={handleSubmit} className="flex-column">
                   <label style={{ fontWeight: 800 }}>학수번호</label>
