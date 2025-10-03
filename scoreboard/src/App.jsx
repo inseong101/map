@@ -4,7 +4,7 @@ import ControversialPanel from './components/ControversialPanel';
 import './App.css';
 
 import { auth, functions } from './firebase';
-import { RecaptchaVerifier, signInWithPhoneNumber, onAuthStateChanged } from 'firebase/auth'; // onAuthStateChanged 추가
+import { RecaptchaVerifier, signInWithPhoneNumber, onAuthStateChanged } from 'firebase/auth'; 
 import { httpsCallable } from 'firebase/functions';
 
 // ✅ 회차 목록을 앱 내에서 직접 정의
@@ -33,12 +33,12 @@ function mapAuthError(err) {
 // ----------------------
 function App() {
   const [currentView, setCurrentView] = useState('loading');
-  const [user, setUser] = useState(null); // Firebase User 객체 상태
-  const [studentId, setStudentId] = useState(''); // 현재 선택/바인딩된 학수번호
-  const [boundSids, setBoundSids] = useState([]); // 바인딩된 모든 학수번호 목록
-  const [boundPhone, setBoundPhone] = useState(''); // 바인딩된 전화번호 (로그인 정보 표시용)
+  const [user, setUser] = useState(null); 
+  const [studentId, setStudentId] = useState(''); 
+  const [boundSids, setBoundSids] = useState([]); 
+  const [boundPhone, setBoundPhone] = useState(''); 
 
-  const [phone, setPhone] = useState(''); // 입력 필드 상태
+  const [phone, setPhone] = useState(''); 
   const [smsCode, setSmsCode] = useState('');
   const [confirmation, setConfirmation] = useState(null);
   const [error, setError] = useState('');
@@ -53,11 +53,11 @@ function App() {
   
   // ✅ 1. Firebase Auth 상태 변화 감지 및 SID 로드
   useEffect(() => {
-    // Recaptcha 초기화
+    // Recaptcha 초기화: 컨테이너가 DOM에 존재할 때만 실행됨 (아래 최종 return 확인)
     if (!window.recaptchaVerifier) {
       window.recaptchaVerifier = new RecaptchaVerifier(
         auth,
-        'recaptcha-container',
+        'recaptcha-container', 
         { size: 'invisible' }
       );
     }
@@ -66,11 +66,9 @@ function App() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       if (user) {
-        // 로그인 상태인 경우, 바인딩된 SID 목록을 가져옴
         setCurrentView('loading');
         await fetchBoundSids(user);
       } else {
-        // 로그아웃 상태인 경우, 홈 화면으로 이동
         setCurrentView('home');
         setBoundSids([]);
         setStudentId('');
@@ -96,7 +94,7 @@ function App() {
       const { sids = [], phone: fetchedPhone } = res.data || {};
       
       setBoundSids(sids);
-      setBoundPhone(fetchedPhone || ''); // 바인딩된 전화번호 저장
+      setBoundPhone(fetchedPhone || ''); 
 
       if (sids.length > 0) {
         setStudentId(sids[0]);
@@ -128,7 +126,7 @@ function App() {
     }, 1000);
   };
 
-  // ✅ 3. 중복 제거: SMS 인증 번호 요청 함수
+  // SMS 인증 번호 요청 함수
   const handleSendCode = async () => {
     if (sending || verifying || loading || resendLeft > 0) return;
     setError('');
@@ -157,7 +155,7 @@ function App() {
   };
 
 
-  // ✅ 4. 서버 학수번호 바인딩 검증 함수
+  // 서버 학수번호 바인딩 검증 함수
   const serverVerifyAndBind = async (phoneInput, sidInput) => {
     const verifyFn = httpsCallable(functions, 'verifyAndBindPhoneSid');
     const res = await verifyFn({ phone: phoneInput, sid: sidInput });
@@ -172,7 +170,7 @@ function App() {
     return true;
   };
 
-  // ✅ 5. 인증 코드 확인 및 바인딩 함수
+  // 인증 코드 확인 및 바인딩 함수
   const handleVerifyCode = async () => {
     if (verifying) return false;
     setError('');
@@ -183,14 +181,12 @@ function App() {
     }
     try {
       setVerifying(true);
-      const result = await confirmation.confirm(smsCode); // Firebase Auth 로그인 완료
+      const result = await confirmation.confirm(smsCode); 
       
-      // 서버에서 바인딩 및 SID 확인
       await serverVerifyAndBind(phone, studentId);
       
-      // 로그인 및 바인딩 성공 후 상태 업데이트
       setUser(result.user);
-      await fetchBoundSids(result.user); // 바인딩된 SID 목록을 다시 가져와서 'main'으로 전환
+      await fetchBoundSids(result.user); 
       
       return true;
     } catch (err) {
@@ -202,7 +198,7 @@ function App() {
     }
   };
 
-  // ✅ 6. 폼 제출 함수
+  // 폼 제출 함수
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!/^\d{6}$/.test(studentId)) {
@@ -212,170 +208,182 @@ function App() {
     await handleVerifyCode();
   };
 
-  // ✅ 7. 로그아웃 함수
+  // 로그아웃 함수
   const handleLogout = () => {
     auth.signOut();
     setCurrentView('loading'); 
   };
 
   // ----------------------
-  // 뷰 렌더링
+  // 뷰 렌더링 (단일 블록으로 통합)
   // ----------------------
 
-  // 로딩 뷰
-  if (currentView === 'loading') {
-    return (
-      <div className="container" style={{ textAlign: 'center', padding: '100px 0' }}>
-        <div className="spinner" />
-        <p className="small">로그인 상태 확인 및 데이터 로드 중...</p>
-      </div>
-    );
-  }
-
-
-  // 컨텐츠 뷰 (ControversialPanel)
-  if (currentView === 'controversial') {
-    return (
-      <div className="container">
-        <ControversialPanel
-          allRoundLabels={availableRounds}
-          roundLabel={selectedRoundLabel}
-          onRoundChange={setSelectedRoundLabel}
-          sid={studentId}
-          onBack={() => setCurrentView('main')} // 컨텐츠 페이지에서 뒤로가기 시 메인으로 이동
-        />
-      </div>
-    );
-  }
-  
-  // ✅ 메인 뷰 (로그인 정보 표시 및 SID 선택)
-  if (currentView === 'main') {
-      const selectedSid = studentId || (boundSids.length > 0 ? boundSids[0] : '');
-      const displayPhone = boundPhone || user?.phoneNumber || '알 수 없음';
-      
-      return (
-          <div className="container">
-              <h1 style={{ marginBottom: '16px' }}>환영합니다!</h1>
-              <div className="card narrow">
-                  <h2 style={{ fontSize: '20px' }}>로그인 정보</h2>
-                  
-                  {/* 로그인 인증 정보 표시 */}
-                  <div className="group-grid" style={{ marginBottom: '20px' }}>
-                      <div className="group-box span-12">
-                          <p style={{ margin: 0, fontWeight: 800 }}>인증된 전화번호</p>
-                          <p style={{ margin: 0, fontSize: '18px', color: 'var(--primary)', fontWeight: 700 }}>{displayPhone}</p>
-                      </div>
-                      <div className="group-box span-12">
-                          <p style={{ margin: 0, fontWeight: 800 }}>현재 학수번호</p>
-                          <p className="kpi" style={{ margin: 0 }}>
-                              <span className="num" style={{ fontSize: '28px' }}>{selectedSid || '선택 필요'}</span>
-                          </p>
-                      </div>
-                  </div>
-
-                  <hr className="sep" />
-
-                  {/* 학수번호 선택 (2개 이상일 때만) */}
-                  {boundSids.length > 1 && (
-                      <div className="flex-column" style={{ marginBottom: '20px' }}>
-                          <label style={{ fontWeight: 800 }}>다른 학수번호 선택</label>
-                          <select
-                              className="input big"
-                              value={selectedSid}
-                              onChange={(e) => setStudentId(e.target.value)}
-                          >
-                              {boundSids.map(sid => (
-                                  <option key={sid} value={sid}>
-                                      {sid}
-                                  </option>
-                              ))}
-                          </select>
-                      </div>
-                  )}
-
-                  <button
-                      className="btn primary wide"
-                      onClick={() => setCurrentView('controversial')}
-                      disabled={!selectedSid}
-                      style={{ height: '48px', fontSize: '16px' }}
-                  >
-                      선택된 학수번호 해설 페이지로 이동
-                  </button>
-
-                  <hr className="sep" />
-                  <button onClick={handleLogout} className="btn secondary wide">
-                      로그아웃
-                  </button>
-              </div>
+  const renderContent = () => {
+    switch (currentView) {
+      case 'loading':
+        return (
+          <div style={{ textAlign: 'center', padding: '100px 0' }}>
+            <div className="spinner" />
+            <p className="small">로그인 상태 확인 및 데이터 로드 중...</p>
           </div>
-      );
-  }
+        );
+        
+      case 'controversial':
+        return (
+          <div className="container">
+            <ControversialPanel
+              allRoundLabels={ALL_ROUND_LABELS}
+              roundLabel={selectedRoundLabel}
+              onRoundChange={setSelectedRoundLabel}
+              sid={studentId}
+              onBack={() => setCurrentView('main')}
+            />
+          </div>
+        );
+        
+      case 'main':
+        {
+          const selectedSid = studentId || (boundSids.length > 0 ? boundSids[0] : '');
+          const displayPhone = boundPhone || user?.phoneNumber || '알 수 없음';
+          
+          return (
+              <div className="container">
+                  <h1 style={{ marginBottom: '16px' }}>환영합니다!</h1>
+                  <div className="card narrow">
+                      <h2 style={{ fontSize: '20px' }}>로그인 정보</h2>
+                      
+                      {/* 로그인 인증 정보 표시 */}
+                      <div className="group-grid" style={{ marginBottom: '20px' }}>
+                          <div className="group-box span-12">
+                              <p style={{ margin: 0, fontWeight: 800 }}>인증된 전화번호</p>
+                              <p style={{ margin: 0, fontSize: '18px', color: 'var(--primary)', fontWeight: 700 }}>{displayPhone}</p>
+                          </div>
+                          <div className="group-box span-12">
+                              <p style={{ margin: 0, fontWeight: 800 }}>현재 학수번호</p>
+                              <p className="kpi" style={{ margin: 0 }}>
+                                  <span className="num" style={{ fontSize: '28px' }}>{selectedSid || '선택 필요'}</span>
+                              </p>
+                          </div>
+                      </div>
 
+                      <hr className="sep" />
 
-  // currentView === 'home' (로그인/인증 화면)
-  const sendDisabled = sending || verifying || loading || resendLeft > 0 || !phone.trim();
-  const submitDisabled = sending || verifying || loading || !studentId || !smsCode;
+                      {/* 학수번호 선택 (2개 이상일 때만) */}
+                      {boundSids.length > 1 && (
+                          <div className="flex-column" style={{ marginBottom: '20px' }}>
+                              <label style={{ fontWeight: 800 }}>다른 학수번호 선택</label>
+                              <select
+                                  className="input big"
+                                  value={selectedSid}
+                                  onChange={(e) => setStudentId(e.target.value)}
+                              >
+                                  {boundSids.map(sid => (
+                                      <option key={sid} value={sid}>
+                                          {sid}
+                                      </option>
+                                  ))}
+                              </select>
+                          </div>
+                      )}
+
+                      <button
+                          className="btn primary wide"
+                          onClick={() => setCurrentView('controversial')}
+                          disabled={!selectedSid}
+                          style={{ height: '48px', fontSize: '16px' }}
+                      >
+                          선택된 학수번호 해설 페이지로 이동
+                      </button>
+
+                      <hr className="sep" />
+                      <button onClick={handleLogout} className="btn secondary wide">
+                          로그아웃
+                      </button>
+                  </div>
+              </div>
+          );
+        }
+
+      case 'home':
+      default:
+        {
+          const sendDisabled = sending || verifying || loading || resendLeft > 0 || !phone.trim();
+          const submitDisabled = sending || verifying || loading || !studentId || !smsCode;
+
+          return (
+            <div className="container">
+              <h1>학수번호 인증</h1>
+              <div className="card narrow">
+                <form onSubmit={handleSubmit} className="flex-column">
+                  <label style={{ fontWeight: 800 }}>학수번호</label>
+                  <input
+                    className="input"
+                    type="text"
+                    value={studentId}
+                    onChange={(e) => setStudentId(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="예) 015001"
+                    disabled={sending || verifying || loading}
+                  />
+                  <label style={{ fontWeight: 800, marginTop: 6 }}>전화번호</label>
+                  <div className="flex" style={{ gap: 8 }}>
+                    <input
+                      className="input"
+                      style={{ flex: 1 }}
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="010-1234-5678"
+                      disabled={sending || verifying}
+                    />
+                    <button
+                      type="button"
+                      className="btn secondary"
+                      onClick={handleSendCode}
+                      disabled={sendDisabled}
+                      title={resendLeft > 0 ? `재전송까지 ${resendLeft}초` : ''}
+                    >
+                      {sending
+                        ? '전송 중...'
+                        : resendLeft > 0
+                          ? `재전송(${resendLeft}s)`
+                          : '인증번호 받기'}
+                    </button>
+                  </div>
+                  <label style={{ fontWeight: 800, marginTop: 6 }}>인증번호</label>
+                  <input
+                    className="input"
+                    type="text"
+                    value={smsCode}
+                    onChange={(e) => setSmsCode(e.target.value)}
+                    placeholder="예) 123456"
+                    disabled={sending || verifying}
+                  />
+                  <button
+                    type="submit"
+                    className="btn"
+                    disabled={submitDisabled}
+                    style={{ marginTop: 6 }}
+                  >
+                    {verifying ? '인증 확인 중...' : '인증 확인 후 해설 보기'}
+                  </button>
+                </form>
+                {error && <div className="alert" style={{ whiteSpace: 'pre-line' }}>{error}</div>}
+              </div>
+            </div>
+          );
+        }
+    }
+  };
+
 
   return (
-    <div className="container">
-      <div id="recaptcha-container" />
-      <h1>학수번호 인증</h1>
-      <div className="card narrow">
-        <form onSubmit={handleSubmit} className="flex-column">
-          <label style={{ fontWeight: 800 }}>학수번호</label>
-          <input
-            className="input"
-            type="text"
-            value={studentId}
-            onChange={(e) => setStudentId(e.target.value.replace(/\D/g, '').slice(0, 6))}
-            placeholder="예) 015001"
-            disabled={sending || verifying || loading}
-          />
-          <label style={{ fontWeight: 800, marginTop: 6 }}>전화번호</label>
-          <div className="flex" style={{ gap: 8 }}>
-            <input
-              className="input"
-              style={{ flex: 1 }}
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="010-1234-5678"
-              disabled={sending || verifying}
-            />
-            <button
-              type="button"
-              className="btn secondary"
-              onClick={handleSendCode}
-              disabled={sendDisabled}
-              title={resendLeft > 0 ? `재전송까지 ${resendLeft}초` : ''}
-            >
-              {sending
-                ? '전송 중...'
-                : resendLeft > 0
-                  ? `재전송(${resendLeft}s)`
-                  : '인증번호 받기'}
-            </button>
-          </div>
-          <label style={{ fontWeight: 800, marginTop: 6 }}>인증번호</label>
-          <input
-            className="input"
-            type="text"
-            value={smsCode}
-            onChange={(e) => setSmsCode(e.target.value)}
-            placeholder="예) 123456"
-            disabled={sending || verifying}
-          />
-          <button
-            type="submit"
-            className="btn"
-            disabled={submitDisabled}
-            style={{ marginTop: 6 }}
-          >
-            {verifying ? '인증 확인 중...' : '인증 확인 후 해설 보기'}
-          </button>
-        </form>
-        {error && <div className="alert" style={{ whiteSpace: 'pre-line' }}>{error}</div>}
-      </div>
+    // FIX: Recaptcha container를 최상단에 고정하여 DOM 존재를 보장합니다.
+    <div className="app-root-container">
+      <div 
+        id="recaptcha-container" 
+        style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }} 
+      />
+      {renderContent()}
     </div>
   );
 }
