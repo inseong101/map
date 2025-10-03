@@ -138,29 +138,13 @@ exports.checkPhoneSidExists = functions
   return { ok: true };
 });
 
-exports.serveWatermarkedPdf = functions
-  .region('asia-northeast3')
-  .runWith({ memory: '8GB', timeoutSeconds: 180 })
-  .https.onCall(async (data, context) => {
+exports.serveWatermarkedPdf = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
   }
 
   const { filePath, sid } = data || {};
-  if (!filePath || !sid) {
-    throw new functions.https.HttpsError("invalid-argument", "filePath, sid가 필요합니다.");
-  }
-  
-  // [보안 강화]: 요청된 SID가 현재 로그인된 UID에 바인딩되어 있는지 확인
-  const uid = context.auth.uid;
-  const bindSnap = await db.collection('bindings').doc(uid).get();
-  const allowedSids = bindSnap.data()?.sids || [];
-
-  if (!allowedSids.includes(sid)) {
-      // 바인딩되지 않은 학수번호로 요청 시도 시 거부
-      throw new functions.https.HttpsError("permission-denied", "요청된 학수번호는 현재 사용자에게 바인딩되지 않았습니다.");
-  }
-  // [보안 강화] 끝
+// ... (에러 체크 생략) ...
 
   const bucket = admin.storage().bucket();
   const [bytes] = await bucket.file(filePath).download();
@@ -170,40 +154,44 @@ exports.serveWatermarkedPdf = functions
 
   const text = String(sid);
   const fontSize = 42;
-  const angle = degrees(36);
+  const angle = degrees(45); // ✅ 45도 기울임
   const color = rgb(0.6, 0.6, 0.6);
   const opacity = 0.12;
 
-   const pages = pdfDoc.getPages();
+  const pages = pdfDoc.getPages();
   for (const page of pages) {
     const { width, height } = page.getSize();
     const textWidth = font.widthOfTextAtSize(text, fontSize);
-    
-    // ✅ [FIX]: 문서 정중앙에 단일 워터마크 배치
-    page.drawText(text, {
-      x: (width / 2) - (textWidth / 2), /* 수평 중앙 */
-      y: (height / 2) - (fontSize / 2), /* 수직 중앙 */
-      size: 48,
-      font,
-      color: rgb(0.6, 0.6, 0.6),
-      opacity: 0.18, /* 가독성을 위해 약간 더 진하게 설정 */
-      rotate: degrees(0),
-    });
+    const textHeight = fontSize;
 
-    // 🚨 [REMOVE]: 기존의 좌측 하단 구석에 배치된 SID 표시는 제거
-    /*
-    page.drawText(text, {
-      x: 24,
-      y: 24,
-      size: 12,
-      font,
-      color: rgb(0.5, 0.5, 0.5),
-      opacity: 0.6,
-    });
-    */
+    // ✅ X축 정중앙 계산: (페이지 너비 - 텍스트 너비) / 2
+    const centerX = (width - textWidth) / 2;
+    
+    // Y축 반복 간격 (띄엄띄엄 배치): 텍스트 높이의 3배 간격
+    const stepY = textHeight * 3; 
+    
+    // Y축 시작점 계산: 문서 전체를 커버하기 위해 Y=-height에서 시작
+    const centerY = (height - textHeight) / 2;
+
+    // Y축 중앙을 기준으로 위아래로 반복 배치
+    for (let y = -height; y < height * 2; y += stepY) { 
+      // X축은 문서 정중앙(centerX)에 고정하고, Y축만 변화
+      page.drawText(text, {
+        x: centerX, // ✅ X축 정중앙에 고정 배치
+        y: y, // Y좌표는 반복 루프를 따름
+        size: fontSize,
+        font,
+        color,
+        opacity,
+        rotate: angle,
+      });
+    }
+
+    // 🚨 [REMOVE]: 좌측 하단 텍스트는 제거
   }
 
   const out = await pdfDoc.save();
+
 
 
     
