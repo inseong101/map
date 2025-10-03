@@ -141,22 +141,12 @@ exports.checkPhoneSidExists = functions
 exports.serveWatermarkedPdf = functions
   .region('asia-northeast3')
   .https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
-  }
-
-  const { filePath, sid } = data || {};
-// ... (에러 체크 생략) ...
-
-  const bucket = admin.storage().bucket();
-  const [bytes] = await bucket.file(filePath).download();
-
   const pdfDoc = await PDFDocument.load(bytes);
   const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
   const text = String(sid);
-  const fontSize = 42;
-  const angle = degrees(45); // ✅ 45도 기울임
+  const fontSize = 64; // ✅ 크기를 64로 증가
+  const angle = degrees(45); // ✅ 45도 기울임 복원
   const color = rgb(0.6, 0.6, 0.6);
   const opacity = 0.12;
 
@@ -164,37 +154,29 @@ exports.serveWatermarkedPdf = functions
   for (const page of pages) {
     const { width, height } = page.getSize();
     const textWidth = font.widthOfTextAtSize(text, fontSize);
-    const textHeight = fontSize;
-
-    // ✅ X축 정중앙 계산: (페이지 너비 - 텍스트 너비) / 2
+    
+    // ✅ X축 정중앙 시작점 계산: (페이지 너비 - 텍스트 너비) / 2
+    // 텍스트 길이를 고려하여 X축의 정중앙에 텍스트가 시작되도록 보정합니다.
     const centerX = (width - textWidth) / 2;
     
-    // Y축 반복 간격 (띄엄띄엄 배치): 텍스트 높이의 3배 간격
-    const stepY = textHeight * 3; 
-    
-    // Y축 시작점 계산: 문서 전체를 커버하기 위해 Y=-height에서 시작
-    const centerY = (height - textHeight) / 2;
+    const textHeight = fontSize;
+    const stepY = textHeight * 3.5; // Y축 반복 간격 (띄엄띄엄 배치)
 
     // Y축 중앙을 기준으로 위아래로 반복 배치
-    for (let y = -height; y < height * 2; y += stepY) { 
-      // X축은 문서 정중앙(centerX)에 고정하고, Y축만 변화
+    for (let y = -height * 0.5; y < height * 1.5; y += stepY) { 
       page.drawText(text, {
-        x: centerX, // ✅ X축 정중앙에 고정 배치
-        y: y, // Y좌표는 반복 루프를 따름
+        x: centerX, // ✅ X축 정중앙 시작점에 고정
+        y: y, 
         size: fontSize,
         font,
         color,
         opacity,
-        rotate: angle,
+        rotate: angle, // 45도
       });
     }
-
-    // 🚨 [REMOVE]: 좌측 하단 텍스트는 제거
   }
 
   const out = await pdfDoc.save();
-
-
 
     
   await writeAudit({
