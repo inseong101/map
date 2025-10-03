@@ -174,27 +174,24 @@ exports.serveWatermarkedPdf = functions
   const color = rgb(0.6, 0.6, 0.6);
   const opacity = 0.12;
 
-  const pages = pdfDoc.getPages();
+   const pages = pdfDoc.getPages();
   for (const page of pages) {
     const { width, height } = page.getSize();
     const textWidth = font.widthOfTextAtSize(text, fontSize);
-    const textHeight = fontSize;
+    
+    // ✅ [FIX]: 문서 정중앙에 단일 워터마크 배치
+    page.drawText(text, {
+      x: (width / 2) - (textWidth / 2), /* 수평 중앙 */
+      y: (height / 2) - (fontSize / 2), /* 수직 중앙 */
+      size: 48,
+      font,
+      color: rgb(0.6, 0.6, 0.6),
+      opacity: 0.18, /* 가독성을 위해 약간 더 진하게 설정 */
+      rotate: degrees(0),
+    });
 
-    for (let y = -textHeight; y < height + textHeight; y += textHeight * 1.5) {
-      const xOffset = (y / (textHeight * 1.5)) % 2 === 0 ? 0 : textWidth * 0.9;
-      for (let x = -textWidth; x < width + textWidth; x += textWidth * 1.8) {
-        page.drawText(text, {
-          x: x + xOffset,
-          y,
-          size: fontSize,
-          font,
-          color,
-          opacity,
-          rotate: angle,
-        });
-      }
-    }
-    // 하단 좌측 SID 표시
+    // 🚨 [REMOVE]: 기존의 좌측 하단 구석에 배치된 SID 표시는 제거
+    /*
     page.drawText(text, {
       x: 24,
       y: 24,
@@ -203,10 +200,13 @@ exports.serveWatermarkedPdf = functions
       color: rgb(0.5, 0.5, 0.5),
       opacity: 0.6,
     });
+    */
   }
 
   const out = await pdfDoc.save();
 
+
+    
   await writeAudit({
     uid: context.auth.uid,
     sid,
