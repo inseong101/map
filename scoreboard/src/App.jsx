@@ -45,7 +45,7 @@ const SiteIdentifier = () => (
             src="/logo.png" 
             alt="전졸협 로고" 
             style={{ 
-                height: '32px', 
+                height: '32px', // 로고 크기 조정
                 flexShrink: 0
             }} 
         />
@@ -134,7 +134,7 @@ function App() {
         cooldownTimerRef.current = null;
       }
     };
-  }, [navigateToView]);
+  }, [navigateToView, currentView]);
   
   const fetchBoundSids = async (user) => {
     try {
