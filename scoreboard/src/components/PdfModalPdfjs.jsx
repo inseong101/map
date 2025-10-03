@@ -294,7 +294,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
           return;
         }
 
-        const functions = getFunctions(undefined, "us-central1");
+        const functions = getFunctions(undefined, "asia-northeast3");
         const serve = httpsCallable(functions, "serveWatermarkedPdf");
         const res = await serve({ filePath, sid });
         const base64 = res?.data;
