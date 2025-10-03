@@ -1,3 +1,4 @@
+// src/components/PdfModalPdfjs.jsx (Full Code)
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/build/pdf";
@@ -105,7 +106,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       const prevScale = state.scale; // 이전 스케일 저장
       let newScale = prevScale * scaleChange;
       
-      // ✅ [MODIFICATION 2]: 최소 비율을 1로 제한하고 최대 비율은 100으로 유지 (사실상 무제한)
+      // ✅ [MODIFICATION 2]: 최소 비율을 1로 제한하고 최대 비율은 100으로 유지 (수정)
       newScale = Math.max(1, newScale); 
       newScale = Math.min(100, newScale); 
       
@@ -252,7 +253,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         
         // ✅ [MODIFICATION 5]: 최소 비율을 1로 제한
         newScale = Math.max(1, newScale); 
-        // 최대 확대 제한은 100배로 유지 (사실상 무제한)
+        // 최대 확대 제한은 100배로 유지 (수정)
         newScale = Math.min(100, newScale); 
         
         if (newScale !== prevScale) {
