@@ -1,4 +1,4 @@
-// src/components/PdfModalPdfjs.jsx (Final Code)
+// src/components/PdfModalPdfjs.jsx (Full Code)
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/build/pdf";
@@ -104,8 +104,8 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       const currentDistance = getTouchDistance(touches[0], touches[1]);
       const scaleChange = currentDistance / state.initialDistance;
       let newScale = state.scale * scaleChange;
-      // ✅ [FIX]: 최대 확대 제한을 20배로 설정하여 사실상 제거
-      newScale = Math.max(1, Math.min(20, newScale)); 
+      // ✅ [FIX]: 최대 확대 제한을 100배로 설정하여 사실상 제거
+      newScale = Math.max(1, Math.min(100, newScale)); 
       
       if (Math.abs(newScale - state.scale) > 0.01) {
         state.scale = newScale;
@@ -223,8 +223,8 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
             newScale -= zoomSpeed; // 축소
         }
         
-        // ✅ [FIX]: 최대 확대 제한을 20배로 설정하여 사실상 제거
-        newScale = Math.max(1, Math.min(20, newScale)); 
+        // ✅ [FIX]: 최대 확대 제한을 100배로 설정하여 사실상 제거
+        newScale = Math.max(1, Math.min(100, newScale)); 
         
         if (newScale !== state.scale) {
             state.scale = newScale;
