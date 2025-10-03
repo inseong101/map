@@ -6,6 +6,14 @@ import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/build/pdf";
 GlobalWorkerOptions.workerSrc = "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
 
 export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
+  // 줌 속도 및 범위 상수 정의
+  const MAX_ZOOM = 100;
+  const MIN_ZOOM = 0.1; 
+  const NORMAL_ZOOM_SPEED = 0.05; 
+  const SLOW_ZOOM_SPEED = 0.005; // 매우 느린 속도 (0.05의 1/10)
+  const ZOOM_IN_THRESHOLD = 5; 
+  const ZOOM_OUT_THRESHOLD = 0.5;
+  
   const holderRef = useRef(null);
   const canvasRef = useRef(null);
   const [loading, setLoading] = useState(false);
@@ -106,9 +114,9 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       const prevScale = state.scale; // 이전 스케일 저장
       let newScale = prevScale * scaleChange;
       
-      // ✅ [MODIFICATION 2]: 최소 비율을 1로 제한하고 최대 비율은 100으로 유지 (수정)
-      newScale = Math.max(0.5, newScale); 
-      newScale = Math.min(100, newScale); 
+      // ✅ [MODIFICATION 2]: 최소 비율을 0.1로 제한하고 최대 비율은 100으로 설정
+      newScale = Math.max(MIN_ZOOM, newScale); 
+      newScale = Math.min(MAX_ZOOM, newScale); 
       
       if (Math.abs(newScale - prevScale) > 0.01) {
         
@@ -154,7 +162,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         applyCanvasTransform(state.scale, state.translateX, state.translateY);
       }
     }
-  }, [applyCanvasTransform]);
+  }, [applyCanvasTransform, MIN_ZOOM, MAX_ZOOM]);
 
   const handleTouchEnd = useCallback(() => {
     const state = touchState.current;
@@ -239,22 +247,25 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         e.stopPropagation();
         
         const state = touchState.current;
-        const zoomSpeed = 0.05; // 줌 속도 설정
+        let zoomSpeed; // 줌 속도 선언
         
         const prevScale = state.scale;
         let newScale = prevScale;
         
         // 휠 방향에 따라 확대/축소
         if (e.deltaY < 0) {
-            newScale += zoomSpeed; // 확대
+            // 확대 (Zoom-in): 5배 미만이면 정상 속도(0.05), 5배 이상이면 느린 속도(0.005)
+            zoomSpeed = prevScale < ZOOM_IN_THRESHOLD ? NORMAL_ZOOM_SPEED : SLOW_ZOOM_SPEED;
+            newScale += zoomSpeed; 
         } else if (e.deltaY > 0) {
-            newScale -= zoomSpeed; // 축소
+            // 축소 (Zoom-out): 0.5배 초과이면 정상 속도(0.05), 0.5배 이하(0.1배까지)이면 느린 속도(0.005)
+            zoomSpeed = prevScale > ZOOM_OUT_THRESHOLD ? NORMAL_ZOOM_SPEED : SLOW_ZOOM_SPEED;
+            newScale -= zoomSpeed; 
         }
         
-        // ✅ [MODIFICATION 5]: 최소 비율을 1로 제한
-        newScale = Math.max(1, newScale); 
-        // 최대 확대 제한은 100배로 유지 (수정)
-        newScale = Math.min(100, newScale); 
+        // 최종 클램핑: 0.1배 ~ 100배
+        newScale = Math.max(MIN_ZOOM, newScale); 
+        newScale = Math.min(MAX_ZOOM, newScale); 
         
         if (newScale !== prevScale) {
             const canvas = canvasRef.current;
@@ -280,7 +291,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
             applyCanvasTransform(state.scale, state.translateX, state.translateY);
         }
     }
-  }, [applyCanvasTransform]);
+  }, [applyCanvasTransform, MIN_ZOOM, MAX_ZOOM, NORMAL_ZOOM_SPEED, SLOW_ZOOM_SPEED, ZOOM_IN_THRESHOLD, ZOOM_OUT_THRESHOLD]);
 
   // 고화질 렌더링 (화질 문제 해결)
   const renderPage = useCallback(async (doc, num) => {
@@ -675,7 +686,7 @@ const footerStyle = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  background: "#15181c",
+  background: "rgb(21, 29, 54)",
   fontSize: 14,
   flexShrink: 0
 };
