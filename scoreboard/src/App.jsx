@@ -36,7 +36,7 @@ function App() {
   const [user, setUser] = useState(null); // Firebase User 객체 상태
   const [studentId, setStudentId] = useState(''); // 현재 선택/바인딩된 학수번호
   const [boundSids, setBoundSids] = useState([]); // 바인딩된 모든 학수번호 목록
-  const [boundPhone, setBoundPhone] = useState(''); // ✅ 바인딩된 전화번호 (로그인 정보 표시용)
+  const [boundPhone, setBoundPhone] = useState(''); // 바인딩된 전화번호 (로그인 정보 표시용)
 
   const [phone, setPhone] = useState(''); // 입력 필드 상태
   const [smsCode, setSmsCode] = useState('');
@@ -96,14 +96,12 @@ function App() {
       const { sids = [], phone: fetchedPhone } = res.data || {};
       
       setBoundSids(sids);
-      setBoundPhone(fetchedPhone || ''); // ✅ 바인딩된 전화번호 저장
+      setBoundPhone(fetchedPhone || ''); // 바인딩된 전화번호 저장
 
       if (sids.length > 0) {
-        // 바인딩된 학수번호가 있으면 첫 번째 것을 선택하고 메인으로 이동
         setStudentId(sids[0]);
         setCurrentView('main');
       } else {
-        // 바인딩이 없으면 다시 홈 화면으로 (재인증 필요)
         setCurrentView('home');
       }
     } catch (err) {
@@ -116,11 +114,65 @@ function App() {
   };
 
 
-  const startCooldown = () => { /* ... (로직은 이전과 동일) ... */ };
-  const handleSendCode = async () => { /* ... (로직은 이전과 동일) ... */ };
-  const serverVerifyAndBind = async (phoneInput, sidInput) => { /* ... (로직은 이전과 동일) ... */ };
+  const startCooldown = () => {
+    setResendLeft(RESEND_COOLDOWN);
+    if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
+    cooldownTimerRef.current = setInterval(() => {
+      setResendLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(cooldownTimerRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  // ✅ 3. 중복 제거: SMS 인증 번호 요청 함수
+  const handleSendCode = async () => {
+    if (sending || verifying || loading || resendLeft > 0) return;
+    setError('');
+
+    const cleanPhone = String(phone).trim().replace(/-/g, '');
+    const formattedPhone = cleanPhone.startsWith('010') ? `+82${cleanPhone.substring(1)}` : cleanPhone;
+
+    if (!formattedPhone) {
+      setError('전화번호를 입력해주세요.');
+      return;
+    }
+
+    try {
+      setSending(true);
+      const appVerifier = window.recaptchaVerifier;
+      const conf = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
+      setConfirmation(conf);
+      startCooldown();
+      alert('인증번호가 전송되었습니다.');
+    } catch (err) {
+      console.error('SMS 전송 오류:', err);
+      setError(mapAuthError(err));
+    } finally {
+      setSending(false);
+    }
+  };
 
 
+  // ✅ 4. 서버 학수번호 바인딩 검증 함수
+  const serverVerifyAndBind = async (phoneInput, sidInput) => {
+    const verifyFn = httpsCallable(functions, 'verifyAndBindPhoneSid');
+    const res = await verifyFn({ phone: phoneInput, sid: sidInput });
+    const { ok, code, message } = res.data || {};
+    if (!ok) {
+      const msg =
+        code === 'PHONE_NOT_FOUND' ? '등록되지 않은 전화번호입니다.' :
+        code === 'SID_MISMATCH'    ? '전화번호와 학수번호가 일치하지 않습니다.' :
+        message || '검증에 실패했습니다.';
+      throw new Error(msg);
+    }
+    return true;
+  };
+
+  // ✅ 5. 인증 코드 확인 및 바인딩 함수
   const handleVerifyCode = async () => {
     if (verifying) return false;
     setError('');
@@ -150,33 +202,7 @@ function App() {
     }
   };
 
-  const handleSendCode = async () => {
-    if (sending || verifying || loading || resendLeft > 0) return;
-    setError('');
-
-    const cleanPhone = String(phone).trim().replace(/-/g, '');
-    const formattedPhone = cleanPhone.startsWith('010') ? `+82${cleanPhone.substring(1)}` : cleanPhone;
-
-    if (!formattedPhone) {
-      setError('전화번호를 입력해주세요.');
-      return;
-    }
-
-    try {
-      setSending(true);
-      const appVerifier = window.recaptchaVerifier;
-      const conf = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
-      setConfirmation(conf);
-      startCooldown();
-      alert('인증번호가 전송되었습니다.');
-    } catch (err) {
-      console.error('SMS 전송 오류:', err);
-      setError(mapAuthError(err));
-    } finally {
-      setSending(false);
-    }
-  };
-
+  // ✅ 6. 폼 제출 함수
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!/^\d{6}$/.test(studentId)) {
@@ -186,9 +212,10 @@ function App() {
     await handleVerifyCode();
   };
 
+  // ✅ 7. 로그아웃 함수
   const handleLogout = () => {
     auth.signOut();
-    setCurrentView('loading'); // 로그아웃 후 다시 로딩 상태로 변경
+    setCurrentView('loading'); 
   };
 
   // ----------------------
@@ -211,7 +238,7 @@ function App() {
     return (
       <div className="container">
         <ControversialPanel
-          allRoundLabels={ALL_ROUND_LABELS}
+          allRoundLabels={availableRounds}
           roundLabel={selectedRoundLabel}
           onRoundChange={setSelectedRoundLabel}
           sid={studentId}
