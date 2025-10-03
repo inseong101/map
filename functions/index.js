@@ -32,7 +32,9 @@ async function writeAudit({ uid, sid, filePath, action, meta = {}, req }) {
 }
 
 // Storage에 phones_seed.xlsx 업로드 시 자동 실행
-exports.onPhonesFileUploaded = functions.storage.object().onFinalize(async (object) => {
+exports.onPhonesFileUploaded = functions
+  .region('asia-northeast3')
+  .storage.object().onFinalize(async (object) => {
   const filePath = object.name;
   
   console.log('=== Storage 트리거 실행 ===');
@@ -108,7 +110,10 @@ exports.onPhonesFileUploaded = functions.storage.object().onFinalize(async (obje
   }
 });
 
-exports.serveWatermarkedPdf = functions.https.onCall(async (data, context) => {
+exports.serveWatermarkedPdf = functions
+  .region('asia-northeast3')
+  .runWith({ memory: '8GB', timeoutSeconds: 180 }) // 🌟 메모리 8GB로 증설, 타임아웃 180초(3분)
+  .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
   }
@@ -136,12 +141,9 @@ exports.serveWatermarkedPdf = functions.https.onCall(async (data, context) => {
     const textWidth = font.widthOfTextAtSize(text, fontSize);
     const textHeight = fontSize;
 
-    const stepX = textWidth * 1.8;
-    const stepY = textHeight * 1.0;
-
-    for (let y = -stepY; y < height + stepY; y += stepY) {
-      const xOffset = (y / stepY) % 2 === 0 ? 0 : stepX / 2;
-      for (let x = -stepX; x < width + stepX; x += stepX) {
+    for (let y = -textHeight; y < height + textHeight; y += textHeight * 1.5) {
+      const xOffset = (y / (textHeight * 1.5)) % 2 === 0 ? 0 : textWidth * 0.9;
+      for (let x = -textWidth; x < width + textWidth; x += textWidth * 1.8) {
         page.drawText(text, {
           x: x + xOffset,
           y,
@@ -153,6 +155,7 @@ exports.serveWatermarkedPdf = functions.https.onCall(async (data, context) => {
         });
       }
     }
+    // 하단 좌측 SID 표시
     page.drawText(text, {
       x: 24,
       y: 24,
@@ -176,7 +179,9 @@ exports.serveWatermarkedPdf = functions.https.onCall(async (data, context) => {
   return Buffer.from(out).toString("base64");
 });
 
-exports.logPdfAction = functions.https.onCall(async (data, context) => {
+exports.logPdfAction = functions
+  .region('asia-northeast3')
+  .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
   }
@@ -196,7 +201,9 @@ exports.logPdfAction = functions.https.onCall(async (data, context) => {
 });
 
 // 해설 인덱스 조회 (Storage 기반)
-exports.getExplanationIndex = functions.https.onCall(async (data, context) => {
+exports.getExplanationIndex = functions
+  .region('asia-northeast3')
+  .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
   }
@@ -226,7 +233,9 @@ exports.getExplanationIndex = functions.https.onCall(async (data, context) => {
 });
 
 // 많이 틀린 문항 조회 - 단순화된 더미 데이터
-exports.getHighErrorRateQuestions = functions.https.onCall(async (data, context) => {
+exports.getHighErrorRateQuestions = functions
+  .region('asia-northeast3')
+  .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
   }
@@ -288,7 +297,9 @@ exports.getHighErrorRateQuestions = functions.https.onCall(async (data, context)
   return { data: dummyData };
 });
 
-exports.verifyAndBindPhoneSid = functions.https.onCall(async (data, context) => {
+exports.verifyAndBindPhoneSid = functions
+  .region('asia-northeast3')
+  .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
   }
@@ -322,7 +333,9 @@ exports.verifyAndBindPhoneSid = functions.https.onCall(async (data, context) => 
   return { ok: true, message: '검증 및 바인딩 완료', phone: e164, sid: cleanSid };
 });
 
-exports.getMyBindings = functions.https.onCall(async (data, context) => {
+exports.getMyBindings = functions
+  .region('asia-northeast3')
+  .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
   }
@@ -335,8 +348,8 @@ exports.getMyBindings = functions.https.onCall(async (data, context) => {
 
 
 exports.warmupPdfService = functions
-  .region('us-central1')
-  .runWith({ memory: '256MB', timeoutSeconds: 10 })
+  .region('asia-northeast3')
+  .runWith({ memory: '512MB', timeoutSeconds: 10 })
   .https.onCall(async (data, context) => {
     console.log('PDF 서비스 워밍업');
     try {
