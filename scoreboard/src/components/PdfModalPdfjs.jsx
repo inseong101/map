@@ -1,4 +1,4 @@
-// src/components/PdfModalPdfjs.jsx
+// src/components/PdfModalPdfjs.jsx (Final Code)
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/build/pdf";
@@ -40,9 +40,10 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     const el = holderRef.current;
     if (!el) return { width: 600, height: 400 };
     const rect = el.getBoundingClientRect();
+    // 모달 패딩(15px)을 고려하여 컨테이너 너비를 계산
     return { 
-      width: Math.max(320, Math.floor(rect.width - 20)), 
-      height: Math.max(300, Math.floor(rect.height - 20))
+      width: Math.max(320, Math.floor(rect.width - 30)), // 15px * 2 (패딩)
+      height: Math.max(300, Math.floor(rect.height - 30))
     };
   };
 
@@ -62,7 +63,8 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     
     // CSS 규칙을 완전히 무시하고 직접 적용
     canvas.style.setProperty('transform', transform, 'important');
-    canvas.style.setProperty('transform-origin', 'center center', 'important');
+    // transform-origin을 'top center'로 변경하여 스크롤/줌 시 상단 기준으로 이동
+    canvas.style.setProperty('transform-origin', 'top center', 'important'); 
     // 드래그 중이 아닐 때만 transition 적용
     const isInteracting = touchState.current.isScaling || touchState.current.isDragging || mouseState.current.isDragging;
     canvas.style.setProperty('transition', isInteracting ? 'none' : 'transform 0.3s ease', 'important');
@@ -102,7 +104,8 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       const currentDistance = getTouchDistance(touches[0], touches[1]);
       const scaleChange = currentDistance / state.initialDistance;
       let newScale = state.scale * scaleChange;
-      newScale = Math.max(1, Math.min(4, newScale));
+      // ✅ [FIX]: 최대 확대 제한을 20배로 설정하여 사실상 제거
+      newScale = Math.max(1, Math.min(20, newScale)); 
       
       if (Math.abs(newScale - state.scale) > 0.01) {
         state.scale = newScale;
@@ -220,7 +223,8 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
             newScale -= zoomSpeed; // 축소
         }
         
-        newScale = Math.max(1, Math.min(4, newScale));
+        // ✅ [FIX]: 최대 확대 제한을 20배로 설정하여 사실상 제거
+        newScale = Math.max(1, Math.min(20, newScale)); 
         
         if (newScale !== state.scale) {
             state.scale = newScale;
