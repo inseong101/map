@@ -31,35 +31,68 @@ function mapAuthError(err) {
   }
 }
 
-// ✅ [통일된 로고 + 이름 헤더 정의]
-const SiteIdentifier = () => (
-    <div style={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        gap: '12px', 
-        marginBottom: '0px', 
-        paddingTop: '8px'
-    }}>
-        <img 
-            src="/logo.png" 
-            alt="전졸협 로고" 
-            style={{ 
-                height: '32px', // 로고 크기 조정
-                flexShrink: 0
-            }} 
-        />
-        <h1 style={{ 
-            margin: 0, 
-            fontSize: '16px', 
-            fontWeight: 800, 
-            lineHeight: 1.2,
-            color: 'var(--ink)',
-            whiteSpace: 'nowrap' /* 줄바꿈 방지 */
+// ✅ [통일된 로고 + 이름 + 로그인 정보 헤더 정의]
+const SiteIdentifier = ({ displayPhone, selectedSid, handleLogout }) => {
+    
+    // 로그인 정보가 있을 때만 우측 정보 표시
+    const isLoggedIn = !!displayPhone;
+    
+    return (
+        <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', /* 좌우 끝으로 배치 */
+            alignItems: 'center', 
+            gap: '20px', 
+            marginBottom: '0px', 
+            paddingTop: '8px',
+            width: '100%',
         }}>
-            전국한의과대학 졸업준비협의체
-        </h1>
-    </div>
-);
+            {/* 좌측: 로고 + 이름 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <img 
+                    src="/logo.png" 
+                    alt="전졸협 로고" 
+                    style={{ 
+                        height: '32px', // 로고 크기 조정
+                        flexShrink: 0
+                    }} 
+                />
+                <h1 style={{ 
+                    margin: 0, 
+                    fontSize: '16px', 
+                    fontWeight: 800, 
+                    lineHeight: 1.2,
+                    color: 'var(--ink)',
+                    whiteSpace: 'nowrap' /* 줄바꿈 방지 */
+                }}>
+                    전국한의과대학 졸업준비협의체
+                </h1>
+            </div>
+            
+            {/* 우측: 로그인 정보 + 로그아웃 버튼 */}
+            {isLoggedIn && (
+                <div style={{ 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'flex-end', /* 오른쪽 정렬 */
+                    fontSize: '12px', 
+                    color: 'var(--muted)', 
+                    textAlign: 'right'
+                }}>
+                    <p style={{ margin: '0 0 2px 0', fontWeight: 600 }}>
+                        <span style={{ color: 'var(--primary)' }}>{displayPhone}</span>
+                    </p>
+                    <p style={{ margin: '0 0 8px 0', fontWeight: 600 }}>
+                        학수번호: <span style={{ color: 'var(--ink)' }}>{selectedSid}</span>
+                    </p>
+                    <button onClick={handleLogout} className="btn secondary" style={{ fontSize: '11px', padding: '3px 6px', height: 'auto' }}>
+                        로그아웃
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
 
 
 // ----------------------
@@ -133,7 +166,7 @@ function App() {
         cooldownTimerRef.current = null;
       }
     };
-  }, [navigateToView, currentView]);
+  }, [navigateToView]);
   
   const fetchBoundSids = async (user) => {
     try {
@@ -241,9 +274,7 @@ function App() {
       setConfirmation(null); 
       if (window.recaptchaVerifier) window.recaptchaVerifier.clear();
       return false;
-    } finally {
-      setVerifying(false);
-    }
+    } finally { setVerifying(false); }
   };
   
   const handleSubmit = async (e) => {
@@ -296,33 +327,11 @@ function App() {
           return (
               <div className="container" style={{ paddingTop: '0px' }}>
                   
-                  {/* 🚨 [FIXED]: 중앙 제목 복원 */}
+                  {/* 중앙 제목 복원 */}
                   <h1 style={{ textAlign: 'center', margin: '0 0 20px', fontSize: '24px', fontWeight: 800 }}>
                       2025 전국모의고사
                   </h1>
                   
-                  {/* 1. 로그인 정보 (왼쪽 몰아서 배치) */}
-                  <div style={{ 
-                      display: 'flex', 
-                      flexDirection: 'column', 
-                      alignItems: 'flex-start', /* 왼쪽 정렬 */
-                      fontSize: '14px', 
-                      color: 'var(--muted)', 
-                      marginBottom: '20px',
-                      padding: '8px 0',
-                      borderBottom: '1px solid var(--line)'
-                  }}>
-                      <p style={{ margin: '0 0 4px 0', fontWeight: 700 }}>
-                          인증된 번호: <span style={{ color: 'var(--primary)', fontWeight: 700 }}>{displayPhone}</span>
-                      </p>
-                      <p style={{ margin: '0 0 12px 0', fontWeight: 700 }}>
-                          학수번호: <span style={{ fontWeight: 700, color: 'var(--ink)' }}>{selectedSid}</span>
-                      </p>
-                      <button onClick={handleLogout} className="btn secondary" style={{ fontSize: '12px', padding: '4px 8px' }}>
-                          로그아웃
-                      </button>
-                  </div>
-
                   {/* 2. 사이트 설명 및 문항 현황 */}
                   <div className="card narrow" style={{ padding: '24px' }}>
                       <h2 style={{ marginTop: 0, fontSize: '20px', fontWeight: 800, color: 'var(--ink)', textAlign: 'center' }}>
@@ -334,42 +343,46 @@ function App() {
                       <div style={{ display: 'grid', gap: '15px' }}>
                           <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--primary)' }}>교시별 특별 해설 문항 수 (총 38문제)</h3>
                           
-                          {/* 1교시: 내과 */}
+                          {/* 1교시: 내과 (과목 순서 및 이름 준수) */}
                           <div className="group-box" style={{ background: 'var(--surface-2)', padding: '12px 16px' }}>
                               <p style={{ margin: 0, fontWeight: 800, color: 'var(--ink)' }}>1교시</p>
-                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>간계내과학(2문제), 심계내과학(2문제), 비계내과학(2문제), 폐계내과학(2문제), 신계내과학(2문제) &nbsp;&nbsp;<span style={{ color: 'var(--warn)', fontWeight: 800 }}>총 10문제</span></p>
+                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>간계내과학, 심계내과학, 비계내과학, 폐계내과학, 신계내과학 (각 2문제) &nbsp;&nbsp;<span style={{ color: 'var(--ink)', fontWeight: 800 }}>총 10문제</span></p>
                           </div>
                           
-                          {/* 2교시: 침구/상한 등 */}
+                          {/* 2교시: 순서: 상한론, 사상의학, 침구의학, 보건의약관계법규 */}
                           <div className="group-box" style={{ background: 'var(--surface-2)', padding: '12px 16px' }}>
                               <p style={{ margin: 0, fontWeight: 800, color: 'var(--ink)' }}>2교시</p>
-                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>상한론(2문제), 사상의학(2문제), 침구의학(5문제), 보건의약관계법규(2문제) &nbsp;&nbsp;<span style={{ color: 'var(--warn)', fontWeight: 800 }}>총 11문제</span></p>
+                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>상한론 (2문제), 사상의학 (2문제), 침구의학 (5문제), 보건의약관계법규 (2문제) &nbsp;&nbsp;<span style={{ color: 'var(--ink)', fontWeight: 800 }}>총 11문제</span></p>
                           </div>
                           
-                          {/* 3교시: 부인/외과 등 */}
+                          {/* 3교시: 순서: 외과학, 신경정신과학, 안이비인후과학, 부인과학 */}
                           <div className="group-box" style={{ background: 'var(--surface-2)', padding: '12px 16px' }}>
                               <p style={{ margin: 0, fontWeight: 800, color: 'var(--ink)' }}>3교시</p>
-                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>외과학(2문제), 신경정신과학(2문제), 안이비인후과학(2문제), 부인과학(3문제)  &nbsp;&nbsp;<span style={{ color: 'var(--warn)', fontWeight: 800 }}>총 9문제</span></p>
+                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>외과학 (2문제), 신경정신과학 (2문제), 안이비인후과학 (2문제), 부인과학 (3문제) &nbsp;&nbsp;<span style={{ color: 'var(--ink)', fontWeight: 800 }}>총 9문제</span></p>
                           </div>
                           
-                          {/* 4교시: 기초/기타 */}
+                          {/* 4교시: 순서: 소아과학, 예방의학, 한방생리학, 본초학 */}
                           <div className="group-box" style={{ background: 'var(--surface-2)', padding: '12px 16px' }}>
                               <p style={{ margin: 0, fontWeight: 800, color: 'var(--ink)' }}>4교시</p>
-                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>소아과학(2문제), 예방의학(2문제), 한방생리학(2문제), 본초학(2문제) &nbsp;&nbsp;<span style={{ color: 'var(--warn)', fontWeight: 800 }}>총 8문제</span></p>
+                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>소아과학, 예방의학, 한방생리학, 본초학 (각 2문제) &nbsp;&nbsp;<span style={{ color: 'var(--ink)', fontWeight: 800 }}>총 8문제</span></p>
                           </div>
 
                       </div>
                       
                       {/* 해설 제공 목적 및 기준 */}
                       <div className="group-box" style={{ background: 'var(--surface-2)', marginTop: '20px', padding: '12px 16px' }}>
-                          <h3 style={{ marginTop: 0, fontSize: '15px', color: 'var(--warn)', fontWeight: 700 }}>해설 제공의 목적과 기준</h3>
+                          <h3 style={{ marginTop: 0, fontSize: '15px', color: 'var(--ink)', fontWeight: 700 }}>해설 제공의 목적과 기준</h3>
                           <p style={{ color: 'var(--muted)', lineHeight: '1.5', margin: '8px 0' }}>
                               본 특별 해설은 응시자 전체의 오답률 상위 문항에 대한 심층 분석을 제공하여, 응시자의 복습 효율을 증대시키고 고난도 내용을 최종 점검하는 것을 목표로 합니다.
                           </p>
+                          <ul style={{ paddingLeft: '20px', margin: '8px 0 0', lineHeight: '1.6', fontSize: '13px', color: 'var(--muted)' }}>
+                              <li>제공 기준: 과목별 오답률 상위 10% 문항</li>
+                              <li>제공 내용: 정답률, 5개 선지 선택 비율, '왜 매력적인 오답이 되었는지'에 대한 간략한 설명 포함</li>
+                          </ul>
                       </div>
                       
                       {/* 보안 유의사항 (법적 경고문구) */}
-                      <p style={{ color: 'var(--bad)', fontSize: '13px', fontWeight: 700, textAlign: 'center', marginTop: '20px', lineHeight: '1.6' }}>
+                      <p style={{ color: 'var(--muted)', fontSize: '13px', fontWeight: 700, textAlign: 'center', marginTop: '20px', lineHeight: '1.6' }}>
                           이 콘텐츠의 무단 사용은 저작권법에 위배되며, 이를 위반할 경우 민사 및 형사상의 법적 처벌을 받을 수 있습니다. 무단 복제, 배포를 금지합니다.
                       </p>
                       
@@ -474,7 +487,7 @@ function App() {
       
       <div className="container">
           {/* SiteIdentifier는 로딩 뷰를 제외하고 항상 상단 왼쪽에 표시 */}
-          {currentView !== 'loading' && <SiteIdentifier />}
+          {currentView !== 'loading' && <SiteIdentifier displayPhone={boundPhone || user?.phoneNumber} selectedSid={studentId} handleLogout={handleLogout} />}
           {renderContent()}
       </div>
     </div>
