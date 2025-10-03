@@ -244,301 +244,298 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     return () => { cancelled = true; };
   }, [roundLabel, getExplanationIndex]);
 
-  // ... (나머지 로직은 동일) ...
-}
+  // 단순화된 그리드 크기 계산 (한 번만 계산)
+  useEffect(() => {
+    const el = gridWrapRef.current;
+    if (!el) return;
+    
+    let timeoutId = null;
+    
+    const computeGrid = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        const currentQuestions = activeSubject ? (highErrorQuestions[activeSubject] || []) : [];
+        const questionCount = currentQuestions.length;
+        
+        if (questionCount === 0) {
+          setGridStyle({ cols: 8, cellW: 50, cellH: 50 });
+          return;
+        }
+        
+        const rect = el.getBoundingClientRect();
+        const { width } = rect;
+        
+        if (width > 0) {
+          const simpleGrid = calculateSimpleGrid(questionCount, width);
+          console.log(`단순 그리드: ${questionCount}개 문제 → ${simpleGrid.cols}x${simpleGrid.rows} (${simpleGrid.cellW}px)`);
+          setGridStyle(simpleGrid);
+        }
+      }, 200);
+    };
+    
+    // 초기 계산만 실행
+    computeGrid();
+    
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [activeSubject, highErrorQuestions]); // ResizeObserver 제거
 
-  // 단순화된 그리드 크기 계산 (한 번만 계산)
-  useEffect(() => {
-    const el = gridWrapRef.current;
-    if (!el) return;
-    
-    let timeoutId = null;
-    
-    const computeGrid = () => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        const currentQuestions = activeSubject ? (highErrorQuestions[activeSubject] || []) : [];
-        const questionCount = currentQuestions.length;
-        
-        if (questionCount === 0) {
-          setGridStyle({ cols: 8, cellW: 50, cellH: 50 });
-          return;
-        }
-        
-        const rect = el.getBoundingClientRect();
-        const { width } = rect;
-        
-        if (width > 0) {
-          const simpleGrid = calculateSimpleGrid(questionCount, width);
-          console.log(`단순 그리드: ${questionCount}개 문제 → ${simpleGrid.cols}x${simpleGrid.rows} (${simpleGrid.cellW}px)`);
-          setGridStyle(simpleGrid);
-        }
-      }, 200);
-    };
-    
-    // 초기 계산만 실행
-    computeGrid();
-    
-    return () => {
-      clearTimeout(timeoutId);
-    };
-  }, [activeSubject, highErrorQuestions]); // ResizeObserver 제거
+  // 윈도우 리사이즈는 방향 전환시에만 처리
+  useEffect(() => {
+    let timeoutId = null;
+    let lastOrientation = window.orientation;
+    
+    const handleOrientationChange = () => {
+      if (window.orientation !== undefined && window.orientation !== lastOrientation) {
+        lastOrientation = window.orientation;
+        
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          const el = gridWrapRef.current;
+          if (!el) return;
+          
+          const currentQuestions = activeSubject ? (highErrorQuestions[activeSubject] || []) : [];
+          const questionCount = currentQuestions.length;
+          
+          if (questionCount > 0) {
+            const rect = el.getBoundingClientRect();
+            const { width } = rect;
+            
+            if (width > 0) {
+              const simpleGrid = calculateSimpleGrid(questionCount, width);
+              setGridStyle(simpleGrid);
+            }
+          }
+        }, 500);
+      }
+    };
+    
+    window.addEventListener('orientationchange', handleOrientationChange);
+    
+    return () => {
+      window.removeEventListener('orientationchange', handleOrientationChange);
+      clearTimeout(timeoutId);
+    };
+  }, [activeSubject, highErrorQuestions]);
 
-  // 윈도우 리사이즈는 방향 전환시에만 처리
-  useEffect(() => {
-    let timeoutId = null;
-    let lastOrientation = window.orientation;
-    
-    const handleOrientationChange = () => {
-      if (window.orientation !== undefined && window.orientation !== lastOrientation) {
-        lastOrientation = window.orientation;
-        
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => {
-          const el = gridWrapRef.current;
-          if (!el) return;
-          
-          const currentQuestions = activeSubject ? (highErrorQuestions[activeSubject] || []) : [];
-          const questionCount = currentQuestions.length;
-          
-          if (questionCount > 0) {
-            const rect = el.getBoundingClientRect();
-            const { width } = rect;
-            
-            if (width > 0) {
-              const simpleGrid = calculateSimpleGrid(questionCount, width);
-              setGridStyle(simpleGrid);
-            }
-          }
-        }, 500);
-      }
-    };
-    
-    window.addEventListener('orientationchange', handleOrientationChange);
-    
-    return () => {
-      window.removeEventListener('orientationchange', handleOrientationChange);
-      clearTimeout(timeoutId);
-    };
-  }, [activeSubject, highErrorQuestions]);
-
-  const openExplanation = (session, qNum) => {
-  const rNum = parseInt(String(roundLabel).replace(/\D/g, ""), 10) || 1;
-  const sNum = parseInt(String(session).replace(/\D/g, ""), 10) || 1;
-  const path = `explanation/${rNum}-${sNum}-${qNum}.pdf`;
-  
-  console.log("PDF 열기:", path);
-  
-  // 모달을 먼저 열고 잠시 기다린 후 PDF 경로 설정
-  setPdfOpen(true);
-  setTimeout(() => {
-    setPdfPath(path);
-  }, 100); // 100ms 지연
+  const openExplanation = (session, qNum) => {
+  const rNum = parseInt(String(roundLabel).replace(/\D/g, ""), 10) || 1;
+  const sNum = parseInt(String(session).replace(/\D/g, ""), 10) || 1;
+  const path = `explanation/${rNum}-${sNum}-${qNum}.pdf`;
+  
+  console.log("PDF 열기:", path);
+  
+  // 모달을 먼저 열고 잠시 기다린 후 PDF 경로 설정
+  setPdfOpen(true);
+  setTimeout(() => {
+    setPdfPath(path);
+  }, 100); // 100ms 지연
 };
 
-  const renderButtons = () => {
-    if (!activeSubject || !highErrorQuestions[activeSubject]) {
-      console.log("버튼 렌더링 불가:", { activeSubject, hasData: !!highErrorQuestions[activeSubject] });
-      return null;
-    }
-    
-    const questions = highErrorQuestions[activeSubject];
-    console.log("버튼 렌더링:", { activeSubject, questions: questions.length, gridStyle });
-    
-    // 문제 번호 순으로 정렬 (작은 번호부터 왼쪽에서 오른쪽으로)
-    const sortedQuestions = [...questions].sort((a, b) => a.questionNum - b.questionNum);
-    
-    const { cols, rows, cellW, cellH } = gridStyle;
-    
-    return (
-      <div
-        className="btn-grid"
-        style={{
-          display: 'grid',
-          gridTemplateColumns: `repeat(${cols}, ${cellW}px)`,
-          gridTemplateRows: `repeat(${rows}, ${cellH}px)`,
-          gap: `${window.innerWidth < 600 ? 2 : 3}px`,
-          justifyContent: 'center',
-          alignContent: 'start',
-          width: '100%',
-          maxWidth: '100%',
-          overflow: 'visible'
-        }}
-      >
-        {sortedQuestions.map((q) => {
-          const qNum = q.questionNum;
-          const session = q.session;
-          const hasExp = fireBySession[session]?.has(qNum);
-          
-          const cls = hasExp 
-            ? `qbtn red fire` 
-            : `qbtn no-explanation`;
-          
-          const label = hasExp 
-            ? `문항 ${qNum} · 특별 해설`
-            : `문항 ${qNum}`;
+  const renderButtons = () => {
+    if (!activeSubject || !highErrorQuestions[activeSubject]) {
+      console.log("버튼 렌더링 불가:", { activeSubject, hasData: !!highErrorQuestions[activeSubject] });
+      return null;
+    }
+    
+    const questions = highErrorQuestions[activeSubject];
+    console.log("버튼 렌더링:", { activeSubject, questions: questions.length, gridStyle });
+    
+    // 문제 번호 순으로 정렬 (작은 번호부터 왼쪽에서 오른쪽으로)
+    const sortedQuestions = [...questions].sort((a, b) => a.questionNum - b.questionNum);
+    
+    const { cols, rows, cellW, cellH } = gridStyle;
+    
+    return (
+      <div
+        className="btn-grid"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${cols}, ${cellW}px)`,
+          gridTemplateRows: `repeat(${rows}, ${cellH}px)`,
+          gap: `${window.innerWidth < 600 ? 2 : 3}px`,
+          justifyContent: 'center',
+          alignContent: 'start',
+          width: '100%',
+          maxWidth: '100%',
+          overflow: 'visible'
+        }}
+      >
+        {sortedQuestions.map((q) => {
+          const qNum = q.questionNum;
+          const session = q.session;
+          const hasExp = fireBySession[session]?.has(qNum);
+          
+          const cls = hasExp 
+            ? `qbtn red fire` 
+            : `qbtn no-explanation`;
+          
+          const label = hasExp 
+            ? `문항 ${qNum} · 특별 해설`
+            : `문항 ${qNum}`;
 
-          return (
-            <button
-              key={qNum}
-              type="button"
-              className={cls}
-              title={label}
-              aria-label={label}
-              onClick={
-                hasExp
-                  ? (e) => { 
-                      e.stopPropagation(); 
-                      openExplanation(session, qNum); 
-                    }
-                  : undefined
-              }
-              style={{
-                width: `${cellW}px`,
-                height: `${cellH}px`,
-                cursor: hasExp ? "pointer" : "default",
-                fontSize: `${Math.max(8, Math.min(12, cellW / 5))}px`, // 버튼 크기에 따른 폰트 조절
-                minWidth: 0,
-                minHeight: 0,
-                boxSizing: 'border-box'
-              }}
-            >
-              {qNum}
-              {hasExp && <span className="flame-emoji" aria-hidden>🔥</span>}
-            </button>
-          );
-        })}
-      </div>
-    );
-  };
+          return (
+            <button
+              key={qNum}
+              type="button"
+              className={cls}
+              title={label}
+              aria-label={label}
+              onClick={
+                hasExp
+                  ? (e) => { 
+                      e.stopPropagation(); 
+                      openExplanation(session, qNum); 
+                    }
+                  : undefined
+              }
+              style={{
+                width: `${cellW}px`,
+                height: `${cellH}px`,
+                cursor: hasExp ? "pointer" : "default",
+                fontSize: `${Math.max(8, Math.min(12, cellW / 5))}px`, // 버튼 크기에 따른 폰트 조절
+                minWidth: 0,
+                minHeight: 0,
+                boxSizing: 'border-box'
+              }}
+            >
+              {qNum}
+              {hasExp && <span className="flame-emoji" aria-hidden>🔥</span>}
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
 
-  const getSubjectsBySession = (session) => {
-    const subjects = [];
-    if (highErrorQuestions) {
-      Object.entries(highErrorQuestions).forEach(([subj, questions]) => {
-        if (questions.some(q => q.session === session)) {
-          subjects.push(subj);
-        }
-      });
-    }
-    
-    subjects.sort((a, b) => {
-      const aIndex = SUBJECT_ORDER.indexOf(a);
-      const bIndex = SUBJECT_ORDER.indexOf(b);
-      return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
-    });
-    
-    console.log(`${session} 과목들:`, subjects);
-    return subjects;
-  };
+  const getSubjectsBySession = (session) => {
+    const subjects = [];
+    if (highErrorQuestions) {
+      Object.entries(highErrorQuestions).forEach(([subj, questions]) => {
+        if (questions.some(q => q.session === session)) {
+          subjects.push(subj);
+        }
+      });
+    }
+    
+    subjects.sort((a, b) => {
+      const aIndex = SUBJECT_ORDER.indexOf(a);
+      const bIndex = SUBJECT_ORDER.indexOf(b);
+      return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+    });
+    
+    console.log(`${session} 과목들:`, subjects);
+    return subjects;
+  };
 
-  useEffect(() => {
-    const subjects = getSubjectsBySession(activeSession);
-    if (subjects.length > 0 && !subjects.includes(activeSubject)) {
-      setActiveSubject(subjects[0]);
-      console.log(`${activeSession} 첫 번째 과목으로 변경:`, subjects[0]);
-    }
-  }, [activeSession, highErrorQuestions]);
+  useEffect(() => {
+    const subjects = getSubjectsBySession(activeSession);
+    if (subjects.length > 0 && !subjects.includes(activeSubject)) {
+      setActiveSubject(subjects[0]);
+      console.log(`${activeSession} 첫 번째 과목으로 변경:`, subjects[0]);
+    }
+  }, [activeSession, highErrorQuestions]);
 
-  return (
-    <div className="wrong-panel-root">
-      <h2 style={{ marginTop: 0 }}>많이 틀린 문항 해설</h2>
+  return (
+    <div className="wrong-panel-root">
+      <h2 style={{ marginTop: 0 }}>많이 틀린 문항 해설</h2>
 
-      <div className="round-tabs" role="tablist" aria-label="회차 선택">
-        {allRoundLabels.map((r) => {
-          const isAvailable = isRoundAvailable(r);
-          return (
-            <button
-              key={r}
-              role="tab"
-              aria-selected={roundLabel === r}
-              className={`tab-btn ${roundLabel === r ? "active" : ""}`}
-              type="button"
-              disabled={!isAvailable}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (isAvailable) {
-                  onRoundChange(r);
-                }
-              }}
-            >
-              {r}
-            </button>
-          );
-        })}
-      </div>
+      <div className="round-tabs" role="tablist" aria-label="회차 선택">
+        {allRoundLabels.map((r) => {
+          const isAvailable = isRoundAvailable(r);
+          return (
+            <button
+              key={r}
+              role="tab"
+              aria-selected={roundLabel === r}
+              className={`tab-btn ${roundLabel === r ? "active" : ""}`}
+              type="button"
+              disabled={!isAvailable}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isAvailable) {
+                  onRoundChange(r);
+                }
+              }}
+            >
+              {r}
+            </button>
+          );
+        })}
+      </div>
 
-      <div className="session-tabs" role="tablist" aria-label="교시 선택">
-        {SESSIONS.map((s) => {
-          const isAvailable = isSessionAvailable(roundLabel, s);
-          return (
-            <button
-              key={s}
-              role="tab"
-              aria-selected={activeSession === s}
-              className={`tab-btn ${activeSession === s ? "active" : ""}`}
-              type="button"
-              disabled={!isAvailable}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (isAvailable) {
-                  setActiveSession(s);
-                }
-              }}
-            >
-              {s}
-            </button>
-          );
-        })}
-      </div>
+      <div className="session-tabs" role="tablist" aria-label="교시 선택">
+        {SESSIONS.map((s) => {
+          const isAvailable = isSessionAvailable(roundLabel, s);
+          return (
+            <button
+              key={s}
+              role="tab"
+              aria-selected={activeSession === s}
+              className={`tab-btn ${activeSession === s ? "active" : ""}`}
+              type="button"
+              disabled={!isAvailable}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isAvailable) {
+                  setActiveSession(s);
+                }
+              }}
+            >
+              {s}
+            </button>
+          );
+        })}
+      </div>
 
-      {getSubjectsBySession(activeSession).length > 0 && (
-        <div className="subject-tabs" role="tablist" aria-label="과목 선택">
-          {getSubjectsBySession(activeSession).map((s) => (
-            <button
-              key={s}
-              role="tab"
-              aria-selected={activeSubject === s}
-              className={`tab-btn ${activeSubject === s ? "active" : ""}`}
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setActiveSubject(s);
-              }}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
+      {getSubjectsBySession(activeSession).length > 0 && (
+        <div className="subject-tabs" role="tablist" aria-label="과목 선택">
+          {getSubjectsBySession(activeSession).map((s) => (
+            <button
+              key={s}
+              role="tab"
+              aria-selected={activeSubject === s}
+              className={`tab-btn ${activeSubject === s ? "active" : ""}`}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveSubject(s);
+              }}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
 
-      <div className="tab-content" ref={gridWrapRef}>
-        {loading ? (
-          <div style={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            height: '200px',
-            gap: '12px'
-          }}>
-            <div className="spinner"></div>
-            <div style={{ color: 'var(--muted)', fontSize: '14px' }}>
-              문항 데이터를 불러오고 있습니다...
-            </div>
-          </div>
-        ) : (
-          renderButtons()
-        )}
-      </div>
+      <div className="tab-content" ref={gridWrapRef}>
+        {loading ? (
+          <div style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            height: '200px',
+            gap: '12px'
+          }}>
+            <div className="spinner"></div>
+            <div style={{ color: 'var(--muted)', fontSize: '14px' }}>
+              문항 데이터를 불러오고 있습니다...
+            </div>
+          </div>
+        ) : (
+          renderButtons()
+        )}
+      </div>
 
-      <PdfModalPdfjs
-        open={pdfOpen}
-        onClose={() => setPdfOpen(false)}
-        filePath={pdfPath}
-        sid={sid}
-        title={`${roundLabel} ${activeSession} 많이 틀린 문항 해설`}
-      />
-    </div>
-  );
+      <PdfModalPdfjs
+        open={pdfOpen}
+        onClose={() => setPdfOpen(false)}
+        filePath={pdfPath}
+        sid={sid}
+        title={`${roundLabel} ${activeSession} ${activeSubject || ''} 많이 틀린 문항 해설`}
+      />
+    </div>
+  );
 }
