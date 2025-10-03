@@ -32,10 +32,9 @@ function mapAuthError(err) {
 }
 
 // ✅ [통일된 로고 + 이름 + 로그인 정보 헤더 정의]
-const SiteIdentifier = ({ displayPhone, selectedSid, handleLogout }) => {
-    
+const SiteIdentifier = ({ selectedSid, handleLogout }) => {
     // 로그인 정보가 있을 때만 우측 정보 표시
-    const isLoggedIn = !!displayPhone;
+    const isLoggedIn = !!selectedSid;
     
     return (
         <div style={{ 
@@ -69,23 +68,20 @@ const SiteIdentifier = ({ displayPhone, selectedSid, handleLogout }) => {
                 </h1>
             </div>
             
-            {/* 우측: 로그인 정보 + 로그아웃 버튼 */}
+            {/* 우측: 학수번호 + 로그아웃 버튼 (줄바꿈 없이 한 줄로) */}
             {isLoggedIn && (
                 <div style={{ 
                     display: 'flex', 
-                    flexDirection: 'column', 
-                    alignItems: 'flex-end', /* 오른쪽 정렬 */
-                    fontSize: '12px', 
+                    alignItems: 'center',
+                    gap: '12px',
+                    fontSize: '14px', 
                     color: 'var(--muted)', 
                     textAlign: 'right'
                 }}>
-                    <p style={{ margin: '0 0 2px 0', fontWeight: 600 }}>
-                        <span style={{ color: 'var(--primary)' }}>{displayPhone}</span>
+                    <p style={{ margin: 0, fontWeight: 700 }}>
+                        학수번호: <span style={{ color: 'var(--ink)', fontWeight: 800 }}>{selectedSid}</span>
                     </p>
-                    <p style={{ margin: '0 0 8px 0', fontWeight: 600 }}>
-                        학수번호: <span style={{ color: 'var(--ink)' }}>{selectedSid}</span>
-                    </p>
-                    <button onClick={handleLogout} className="btn secondary" style={{ fontSize: '11px', padding: '3px 6px', height: 'auto' }}>
+                    <button onClick={handleLogout} className="btn secondary" style={{ fontSize: '12px', padding: '4px 8px', height: 'auto', fontWeight: 600 }}>
                         로그아웃
                     </button>
                 </div>
@@ -312,7 +308,6 @@ function App() {
             <ControversialPanel
               allRoundLabels={availableRounds}
               roundLabel={selectedRoundLabel}
-              onRoundChange={setSelectedRoundLabel}
               sid={studentId}
               onBack={() => navigateToView('main')}
             />
@@ -322,7 +317,6 @@ function App() {
       case 'main':
         {
           const selectedSid = studentId; 
-          const displayPhone = boundPhone || user?.phoneNumber || '알 수 없음';
           
           return (
               <div className="container" style={{ paddingTop: '0px' }}>
@@ -346,7 +340,7 @@ function App() {
                           {/* 1교시: 내과 (과목 순서 및 이름 준수) */}
                           <div className="group-box" style={{ background: 'var(--surface-2)', padding: '12px 16px' }}>
                               <p style={{ margin: 0, fontWeight: 800, color: 'var(--ink)' }}>1교시</p>
-                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>간계내과학, 심계내과학, 비계내과학, 폐계내과학, 신계내과학 (각 2문제) &nbsp;&nbsp;<span style={{ color: 'var(--ink)', fontWeight: 800 }}>총 10문제</span></p>
+                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>간계내과학 (2문제), 심계내과학 (2문제), 비계내과학 (2문제), 폐계내과학 (2문제), 신계내과학 (2문제) &nbsp;&nbsp;<span style={{ color: 'var(--ink)', fontWeight: 800 }}>총 10문제</span></p>
                           </div>
                           
                           {/* 2교시: 순서: 상한론, 사상의학, 침구의학, 보건의약관계법규 */}
@@ -364,7 +358,7 @@ function App() {
                           {/* 4교시: 순서: 소아과학, 예방의학, 한방생리학, 본초학 */}
                           <div className="group-box" style={{ background: 'var(--surface-2)', padding: '12px 16px' }}>
                               <p style={{ margin: 0, fontWeight: 800, color: 'var(--ink)' }}>4교시</p>
-                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>소아과학, 예방의학, 한방생리학, 본초학 (각 2문제) &nbsp;&nbsp;<span style={{ color: 'var(--ink)', fontWeight: 800 }}>총 8문제</span></p>
+                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>소아과학 (2문제), 예방의학 (2문제), 한방생리학 (2문제), 본초학 (2문제) &nbsp;&nbsp;<span style={{ color: 'var(--ink)', fontWeight: 800 }}>총 8문제</span></p>
                           </div>
 
                       </div>
@@ -375,7 +369,7 @@ function App() {
                           <p style={{ color: 'var(--muted)', lineHeight: '1.5', margin: '8px 0' }}>
                               본 특별 해설은 응시자 전체의 오답률 상위 문항에 대한 심층 분석을 제공하여, 응시자의 복습 효율을 증대시키고 고난도 내용을 최종 점검하는 것을 목표로 합니다.
                           </p>
-                          <ul style={{ paddingLeft: '20px', margin: '8px 0 0', lineHeight: '1.6', fontSize: '13px', color: 'var(--muted)' }}>
+                          <ul style={{ paddingLeft: '20px', margin: '8px 0 0', lineHeight: '1.6', fontSize: '13px', color: 'var(--muted)', listStyleType: 'disc' }}>
                               <li>제공 기준: 과목별 오답률 상위 10% 문항</li>
                               <li>제공 내용: 정답률, 5개 선지 선택 비율, '왜 매력적인 오답이 되었는지'에 대한 간략한 설명 포함</li>
                           </ul>
@@ -413,7 +407,7 @@ function App() {
             <div className="container" style={{ paddingTop: '0px' }}>
               <div className="card narrow">
                 <h2 style={{ textAlign: 'center', marginBottom: '24px', fontSize: '20px', fontWeight: 800 }}>
-                    2025 전국모의고사
+                    2025 전국모의고사 인증
                 </h2>
                 <form onSubmit={handleSubmit} className="flex-column">
                   <label style={{ fontWeight: 800 }}>학수번호</label>
@@ -487,7 +481,7 @@ function App() {
       
       <div className="container">
           {/* SiteIdentifier는 로딩 뷰를 제외하고 항상 상단 왼쪽에 표시 */}
-          {currentView !== 'loading' && <SiteIdentifier displayPhone={boundPhone || user?.phoneNumber} selectedSid={studentId} handleLogout={handleLogout} />}
+          {currentView !== 'loading' && <SiteIdentifier selectedSid={studentId} handleLogout={handleLogout} />}
           {renderContent()}
       </div>
     </div>
