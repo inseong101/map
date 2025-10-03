@@ -40,7 +40,6 @@ const SiteIdentifier = () => (
         marginBottom: '0px', 
         paddingTop: '8px'
     }}>
-        {/* 로고 파일은 public 폴더의 logo.png 사용 */}
         <img 
             src="/logo.png" 
             alt="전졸협 로고" 
@@ -242,7 +241,9 @@ function App() {
       setConfirmation(null); 
       if (window.recaptchaVerifier) window.recaptchaVerifier.clear();
       return false;
-    } finally { setVerifying(false); }
+    } finally {
+      setVerifying(false);
+    }
   };
   
   const handleSubmit = async (e) => {
@@ -300,19 +301,26 @@ function App() {
                       2025 전국모의고사
                   </h1>
                   
-                  {/* 1. 로그인 정보 (작게 표시) */}
+                  {/* 1. 로그인 정보 (왼쪽 몰아서 배치) */}
                   <div style={{ 
                       display: 'flex', 
-                      justifyContent: 'space-between', 
-                      alignItems: 'center', 
-                      fontSize: '12px', 
+                      flexDirection: 'column', 
+                      alignItems: 'flex-start', /* 왼쪽 정렬 */
+                      fontSize: '14px', 
                       color: 'var(--muted)', 
                       marginBottom: '20px',
                       padding: '8px 0',
                       borderBottom: '1px solid var(--line)'
                   }}>
-                      <span>인증된 번호: <span style={{ color: 'var(--primary)', fontWeight: 700 }}>{displayPhone}</span></span>
-                      <span>학수번호: <span style={{ fontWeight: 700, color: 'var(--ink)' }}>{selectedSid}</span></span>
+                      <p style={{ margin: '0 0 4px 0', fontWeight: 700 }}>
+                          인증된 번호: <span style={{ color: 'var(--primary)', fontWeight: 700 }}>{displayPhone}</span>
+                      </p>
+                      <p style={{ margin: '0 0 12px 0', fontWeight: 700 }}>
+                          학수번호: <span style={{ fontWeight: 700, color: 'var(--ink)' }}>{selectedSid}</span>
+                      </p>
+                      <button onClick={handleLogout} className="btn secondary" style={{ fontSize: '12px', padding: '4px 8px' }}>
+                          로그아웃
+                      </button>
                   </div>
 
                   {/* 2. 사이트 설명 및 문항 현황 */}
@@ -326,28 +334,28 @@ function App() {
                       <div style={{ display: 'grid', gap: '15px' }}>
                           <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--primary)' }}>교시별 특별 해설 문항 수 (총 38문제)</h3>
                           
-                          {/* 1교시: 내과 (5과목 x 2문제) */}
+                          {/* 1교시: 내과 */}
                           <div className="group-box" style={{ background: 'var(--surface-2)', padding: '12px 16px' }}>
-                              <p style={{ margin: 0, fontWeight: 800, color: 'var(--ink)' }}>1교시 (내과학)</p>
-                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>간계, 심계, 비계, 폐계, 신계 내과학 (각 2문제) &nbsp;&nbsp;<span style={{ color: 'var(--warn)', fontWeight: 800 }}>총 10문제</span></p>
+                              <p style={{ margin: 0, fontWeight: 800, color: 'var(--ink)' }}>1교시</p>
+                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>간계내과학, 심계내과학, 비계내과학, 폐계내과학, 신계내과학 (각 2문제) &nbsp;&nbsp;<span style={{ color: 'var(--warn)', fontWeight: 800 }}>총 10문제</span></p>
                           </div>
                           
                           {/* 2교시: 침구/상한 등 */}
                           <div className="group-box" style={{ background: 'var(--surface-2)', padding: '12px 16px' }}>
-                              <p style={{ margin: 0, fontWeight: 800, color: 'var(--ink)' }}>2교시 (침구, 사상, 법규 등)</p>
-                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>침구의학 (5), 상한론/사상/법규 (각 2문제) &nbsp;&nbsp;<span style={{ color: 'var(--warn)', fontWeight: 800 }}>총 11문제</span></p>
+                              <p style={{ margin: 0, fontWeight: 800, color: 'var(--ink)' }}>2교시</p>
+                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>침구의학 (5문제), 상한론, 사상의학, 보건의약관계법규 (각 2문제) &nbsp;&nbsp;<span style={{ color: 'var(--warn)', fontWeight: 800 }}>총 11문제</span></p>
                           </div>
                           
                           {/* 3교시: 부인/외과 등 */}
                           <div className="group-box" style={{ background: 'var(--surface-2)', padding: '12px 16px' }}>
-                              <p style={{ margin: 0, fontWeight: 800, color: 'var(--ink)' }}>3교시 (부인, 외과, 안이비 등)</p>
-                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>부인과학 (3), 외과/신경정신과/안이비인후과학 (각 2문제) &nbsp;&nbsp;<span style={{ color: 'var(--warn)', fontWeight: 800 }}>총 9문제</span></p>
+                              <p style={{ margin: 0, fontWeight: 800, color: 'var(--ink)' }}>3교시</p>
+                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>부인과학 (3문제), 외과학, 신경정신과학, 안이비인후과학 (각 2문제) &nbsp;&nbsp;<span style={{ color: 'var(--warn)', fontWeight: 800 }}>총 9문제</span></p>
                           </div>
                           
                           {/* 4교시: 기초/기타 */}
                           <div className="group-box" style={{ background: 'var(--surface-2)', padding: '12px 16px' }}>
-                              <p style={{ margin: 0, fontWeight: 800, color: 'var(--ink)' }}>4교시 (소아, 기초 등)</p>
-                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>소아, 예방, 생리, 본초학 (각 2문제) &nbsp;&nbsp;<span style={{ color: 'var(--warn)', fontWeight: 800 }}>총 8문제</span></p>
+                              <p style={{ margin: 0, fontWeight: 800, color: 'var(--ink)' }}>4교시</p>
+                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>소아과학, 예방의학, 한방생리학, 본초학 (각 2문제) &nbsp;&nbsp;<span style={{ color: 'var(--warn)', fontWeight: 800 }}>총 8문제</span></p>
                           </div>
 
                       </div>
@@ -356,13 +364,13 @@ function App() {
                       <div className="group-box" style={{ background: 'var(--surface-2)', marginTop: '20px', padding: '12px 16px' }}>
                           <h3 style={{ marginTop: 0, fontSize: '15px', color: 'var(--warn)', fontWeight: 700 }}>해설 제공의 목적과 기준</h3>
                           <p style={{ color: 'var(--muted)', lineHeight: '1.5', margin: '8px 0' }}>
-                              본 특별 해설은 응시자 전체의 **오답률 상위 문항**에 대한 심층 분석을 제공하여, 응시자의 복습 효율을 증대시키고 고난도 내용을 최종 점검하는 것을 목표로 합니다.
+                              본 특별 해설은 응시자 전체의 오답률 상위 문항에 대한 심층 분석을 제공하여, 응시자의 복습 효율을 증대시키고 고난도 내용을 최종 점검하는 것을 목표로 합니다.
                           </p>
                       </div>
                       
-                      {/* 보안 유의사항 */}
-                      <p style={{ color: 'var(--bad)', fontSize: '12px', fontWeight: 700, textAlign: 'center', marginTop: '20px' }}>
-                          * 본 해설은 응시자 전용이며, **무단 캡처 및 외부 유출을 엄격히 금지합니다.** (개인 정보 워터마크 처리됨)
+                      {/* 보안 유의사항 (법적 경고문구) */}
+                      <p style={{ color: 'var(--bad)', fontSize: '13px', fontWeight: 700, textAlign: 'center', marginTop: '20px', lineHeight: '1.6' }}>
+                          이 콘텐츠의 무단 사용은 저작권법에 위배되며, 이를 위반할 경우 민사 및 형사상의 법적 처벌을 받을 수 있습니다. 무단 복제, 배포를 금지합니다.
                       </p>
                       
                       <hr className="sep" style={{ margin: '24px 0 16px 0' }} />
@@ -375,11 +383,6 @@ function App() {
                           style={{ height: '48px', fontSize: '16px' }}
                       >
                           해설 페이지로 이동
-                      </button>
-
-                      <hr className="sep" />
-                      <button onClick={handleLogout} className="btn secondary wide">
-                          로그아웃
                       </button>
                   </div>
               </div>
@@ -397,7 +400,7 @@ function App() {
             <div className="container" style={{ paddingTop: '0px' }}>
               <div className="card narrow">
                 <h2 style={{ textAlign: 'center', marginBottom: '24px', fontSize: '20px', fontWeight: 800 }}>
-                    2025 전국모의고사
+                    2025 전국모의고사 인증
                 </h2>
                 <form onSubmit={handleSubmit} className="flex-column">
                   <label style={{ fontWeight: 800 }}>학수번호</label>
