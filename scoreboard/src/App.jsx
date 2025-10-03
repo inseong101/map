@@ -70,17 +70,6 @@ const SiteIdentifier = ({ selectedSid, handleLogout, currentView }) => {
             
             {/* 우측: 학수번호 + 로그아웃 버튼 (줄바꿈 없이 한 줄로) */}
             {isRightSideVisible && (
-                <div style={{ 
-                    display: 'flex', 
-                    alignItems: 'center',
-                    gap: '12px',
-                    fontSize: '14px', 
-                    color: 'var(--muted)', 
-                    textAlign: 'right'
-                }}>
-                    <p style={{ margin: 0, fontWeight: 700 }}>
-                        학수번호: <span style={{ color: 'var(--ink)', fontWeight: 800 }}>{selectedSid}</span>
-                    </p>
                     <button onClick={handleLogout} className="btn secondary" style={{ fontSize: '12px', padding: '3px 6px', height: 'auto', fontWeight: 600 }}>
                         로그아웃
                     </button>
