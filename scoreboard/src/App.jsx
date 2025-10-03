@@ -37,7 +37,7 @@ const SiteIdentifier = () => (
         display: 'flex', 
         alignItems: 'center', 
         gap: '12px', 
-        marginBottom: '20px', // 메인 컨텐츠와 분리
+        marginBottom: '0px', 
         paddingTop: '8px'
     }}>
         {/* 로고 파일은 public 폴더의 logo.png 사용 */}
@@ -45,19 +45,19 @@ const SiteIdentifier = () => (
             src="/logo.png" 
             alt="전졸협 로고" 
             style={{ 
-                height: '32px', // 로고 크기 조정
+                height: '32px', 
                 flexShrink: 0
             }} 
         />
         <h1 style={{ 
             margin: 0, 
-            fontSize: '20px', 
+            fontSize: '16px', 
             fontWeight: 800, 
             lineHeight: 1.2,
-            color: 'var(--ink)'
+            color: 'var(--ink)',
+            whiteSpace: 'nowrap' /* 줄바꿈 방지 */
         }}>
-            전국한의과대학<br />
-            졸업준비협의체
+            전국한의과대학 졸업준비협의체
         </h1>
     </div>
 );
@@ -134,7 +134,7 @@ function App() {
         cooldownTimerRef.current = null;
       }
     };
-  }, [navigateToView, currentView]);
+  }, [navigateToView]);
   
   const fetchBoundSids = async (user) => {
     try {
@@ -176,7 +176,6 @@ function App() {
     }, 1000);
   };
   
-  // ✅ [중복 선언 수정 완료] 단일 handleSendCode 함수 정의
   const handleSendCode = async () => {
     if (sending || verifying || loading || resendLeft > 0) return;
     setError('');
@@ -269,7 +268,6 @@ function App() {
     switch (currentView) {
       case 'loading':
         return (
-          // 로딩 중에는 SiteIdentifier를 표시하지 않아 중앙에 스피너만 표시합니다.
           <div style={{ textAlign: 'center', padding: '100px 0' }}>
             <div className="spinner" />
             <p className="small">로그인 상태 확인 및 데이터 로드 중...</p>
@@ -296,6 +294,12 @@ function App() {
           
           return (
               <div className="container" style={{ paddingTop: '0px' }}>
+                  
+                  {/* 🚨 [FIXED]: 중앙 제목 복원 */}
+                  <h1 style={{ textAlign: 'center', margin: '0 0 20px', fontSize: '24px', fontWeight: 800 }}>
+                      2025 전국모의고사
+                  </h1>
+                  
                   {/* 1. 로그인 정보 (작게 표시) */}
                   <div style={{ 
                       display: 'flex', 
@@ -392,8 +396,10 @@ function App() {
           return (
             <div className="container" style={{ paddingTop: '0px' }}>
               <div className="card narrow">
+                <h2 style={{ textAlign: 'center', marginBottom: '24px', fontSize: '20px', fontWeight: 800 }}>
+                    2025 전국모의고사 인증
+                </h2>
                 <form onSubmit={handleSubmit} className="flex-column">
-                  <h2 style={{ textAlign: 'center', marginBottom: '24px', fontSize: '20px', fontWeight: 800 }}>학수번호 인증</h2>
                   <label style={{ fontWeight: 800 }}>학수번호</label>
                   <input
                     className="input"
@@ -464,7 +470,7 @@ function App() {
       />
       
       <div className="container">
-          {/* 로딩 뷰에서는 SiteIdentifier를 표시하지 않아 중앙 정렬을 유지 */}
+          {/* SiteIdentifier는 로딩 뷰를 제외하고 항상 상단 왼쪽에 표시 */}
           {currentView !== 'loading' && <SiteIdentifier />}
           {renderContent()}
       </div>
