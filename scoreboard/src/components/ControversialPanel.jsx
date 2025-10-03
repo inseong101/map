@@ -132,7 +132,7 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
 
   const getHighErrorRateQuestions = useCallback(async (rLabel) => {
     try {
-      const functions = getFunctions(undefined, "us-central1");
+      const functions = getFunctions(undefined, "asia-northeast3");
       const getHighError = httpsCallable(functions, "getHighErrorRateQuestions");
       const res = await getHighError({ roundLabel: rLabel });
       return res.data?.data || {};
@@ -144,7 +144,7 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
 
   const getExplanationIndex = useCallback(async (rLabel) => {
     try {
-      const functions = getFunctions(undefined, "us-central1");
+      const functions = getFunctions(undefined, "asia-northeast3");
       const getIndex = httpsCallable(functions, "getExplanationIndex");
       const res = await getIndex({ roundLabel: rLabel });
       return res.data || {};
