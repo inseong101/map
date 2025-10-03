@@ -4,7 +4,7 @@ import ControversialPanel from './components/ControversialPanel';
 import './App.css';
 
 import { auth, functions } from './firebase';
-import { RecaptchaVerifier, signInWithPhoneNumber, onAuthStateChanged } from 'firebase/auth'; 
+import { RecaptchaVerifier, signInWithPhoneNumber, onAuthStateChanged } from 'firebase/auth'; // ✅ onAuthStateChanged 추가
 import { httpsCallable } from 'firebase/functions';
 
 // ✅ 회차 목록을 앱 내에서 직접 정의
@@ -19,8 +19,11 @@ function mapAuthError(err) {
     case 'auth/invalid-phone-number':
       return '전화번호 형식이 올바르지 않습니다. (예: +821012345678)';
     case 'auth/missing-phone-number':
+      return '전화번호를 입력해주세요.';
+    case 'auth/invalid-verification-code':
+      return '인증번호가 올바르지 않습니다.';
     case 'auth/code-expired':
-      return '인증번호가 만료되었습니다. 다시 요청해주세요.'; 
+      return '인증번호가 만료되었습니다. 다시 요청해주세요.';
     case 'functions/internal':
     case 'functions/invalid-argument':
       return '서버 검증 중 오류가 발생했습니다. 정보를 확인하고 다시 시도해주세요.';
@@ -29,36 +32,32 @@ function mapAuthError(err) {
   }
 }
 
-// ----------------------
-// 메인 앱 컴포넌트 시작
-// ----------------------
 function App() {
-  const [currentView, setCurrentView] = useState('loading');
-  const [user, setUser] = useState(null); 
-  const [studentId, setStudentId] = useState(''); 
-  const [boundSids, setBoundSids] = useState([]); 
-  const [boundPhone, setBoundPhone] = useState(''); 
-
-  const [phone, setPhone] = useState(''); 
+  const [currentView, setCurrentView] = useState('loading'); // ✅ loading 상태 추가
+  const [user, setUser] = useState(null); // ✅ user 상태 추가
+  const [studentId, setStudentId] = useState('');
+  const [boundSids, setBoundSids] = useState([]); // ✅ boundSids 상태 추가
+  const [boundPhone, setBoundPhone] = useState(''); // ✅ boundPhone 상태 추가
+  const [phone, setPhone] = useState('');
   const [smsCode, setSmsCode] = useState('');
   const [confirmation, setConfirmation] = useState(null);
   const [error, setError] = useState('');
 
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false); // ✅ loading 상태 사용
   const [resendLeft, setResendLeft] = useState(0);
   const cooldownTimerRef = useRef(null);
   const [selectedRoundLabel, setSelectedRoundLabel] = useState(ALL_ROUND_LABELS[0]);
   const [availableRounds, setAvailableRounds] = useState(ALL_ROUND_LABELS);
-  
-  // ✅ 1. Firebase Auth 상태 변화 감지 및 SID 로드
+
+  // ✅ 1. Auth 상태 감지 및 Recaptcha 초기화
   useEffect(() => {
-    // Recaptcha 초기화 (컨테이너가 DOM에 항상 존재하도록 보장)
+    // Recaptcha 초기화
     if (!window.recaptchaVerifier) {
       window.recaptchaVerifier = new RecaptchaVerifier(
         auth,
-        'recaptcha-container', 
+        'recaptcha-container',
         { size: 'invisible' }
       );
     }
@@ -68,7 +67,6 @@ function App() {
       setUser(user);
       if (user) {
         setCurrentView('loading');
-        // ✅ 로그인 상태 확인 시, 서버 바인딩 과정을 fetchBoundSids에서 처리
         await fetchBoundSids(user);
       } else {
         setCurrentView('home');
@@ -98,10 +96,10 @@ function App() {
       setBoundSids(sids);
       setBoundPhone(fetchedPhone || ''); 
 
-      // 🚨 단일 SID 모델 적용: SID가 1개일 때만 정상으로 간주하고 메인으로 전환
+      // 단일 SID 모델 적용
       if (sids.length === 1) { 
         setStudentId(sids[0]);
-        setCurrentView('main'); 
+        setCurrentView('main'); // ✅ 메인 화면으로 이동
       } else {
         setCurrentView('home'); 
       }
@@ -113,37 +111,69 @@ function App() {
       setLoading(false);
     }
   };
-  
-  // ✅ 3. [강화] 서버 바인딩 로직 분리 (인증 성공 후 실행)
-  // Firebase Auth 성공 후 이 함수를 호출하여 서버 측 바인딩을 수행합니다.
-  const runServerVerifyAndBind = async (phoneInput, sidInput) => {
-    try {
-        setVerifying(true);
-        const verifyFn = httpsCallable(functions, 'verifyAndBindPhoneSid');
-        const res = await verifyFn({ phone: phoneInput, sid: sidInput });
-        const { ok, message } = res.data || {};
-        
-        if (!ok) {
-            throw new Error(message || '서버 바인딩 검증 실패');
+
+
+  const startCooldown = () => {
+    setResendLeft(RESEND_COOLDOWN);
+    if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
+    cooldownTimerRef.current = setInterval(() => {
+      setResendLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(cooldownTimerRef.current);
+          return 0;
         }
-        
-        // 서버 바인딩까지 성공하면 상태 업데이트 후 메인 화면으로 이동
-        await fetchBoundSids(auth.currentUser);
-        
-    } catch (err) {
-        console.error('최종 서버 바인딩 오류:', err);
-        setError(mapAuthError(err));
-        auth.signOut(); // 실패 시 Firebase Auth 세션도 제거하여 재로그인 유도
-    } finally {
-        setVerifying(false);
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const handleSendCode = async () => {
+    if (sending || verifying || loading || resendLeft > 0) return;
+    setError('');
+
+    // ✅ [강화]: 새로운 요청 시작 시 이전 상태 초기화
+    setConfirmation(null); 
+
+    const cleanPhone = String(phone).trim().replace(/-/g, '');
+    const formattedPhone = cleanPhone.startsWith('010') ? `+82${cleanPhone.substring(1)}` : cleanPhone;
+
+    if (!formattedPhone) {
+      setError('전화번호를 입력해주세요.');
+      return;
     }
-  }
 
+    try {
+      setSending(true);
+      const appVerifier = window.recaptchaVerifier;
+      await appVerifier.render(); // reCAPTCHA 렌더링 강제
+      
+      const conf = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
+      setConfirmation(conf);
+      startCooldown();
+      alert('인증번호가 전송되었습니다.');
+    } catch (err) {
+      console.error('SMS 전송 오류:', err);
+      setError(mapAuthError(err));
+      window.recaptchaVerifier.clear(); // 오류 시 초기화
+    } finally {
+      setSending(false);
+    }
+  };
 
-  const startCooldown = () => { /* ... (생략) ... */ };
-  const handleSendCode = async () => { /* ... (생략) ... */ };
-  
-  // ✅ 4. [핵심 수정] 인증 코드 확인 및 바인딩 함수: Firebase Auth만 먼저 빠르게 처리
+  const serverVerifyAndBind = async (phoneInput, sidInput) => {
+    const verifyFn = httpsCallable(functions, 'verifyAndBindPhoneSid');
+    const res = await verifyFn({ phone: phoneInput, sid: sidInput });
+    const { ok, code, message } = res.data || {};
+    if (!ok) {
+      const msg =
+        code === 'PHONE_NOT_FOUND' ? '등록되지 않은 전화번호입니다.' :
+        code === 'SID_MISMATCH'    ? '전화번호와 학수번호가 일치하지 않습니다.' :
+        message || '검증에 실패했습니다.';
+      throw new Error(msg);
+    }
+    return true;
+  };
+
   const handleVerifyCode = async () => {
     if (verifying) return false;
     setError('');
@@ -152,30 +182,29 @@ function App() {
       setError('먼저 인증번호를 받아주세요.');
       return false;
     }
-    
-    setVerifying(true);
     try {
-      // 🚨 [가장 중요] Firebase Auth 확인만 먼저 수행하여 성공 여부를 빠르게 확보
-      const result = await confirmation.confirm(smsCode); 
+      setVerifying(true);
       
-      // Auth 성공 후, 즉시 서버 바인딩을 비동기로 실행하고 verifying 상태 유지
-      runServerVerifyAndBind(phone, studentId); 
+      // ✅ [강화]: Firebase Auth 확인과 서버 바인딩을 순차적으로 빠르게 처리
+      const result = await confirmation.confirm(smsCode);
+      await serverVerifyAndBind(phone, studentId);
+      
+      // 로그인 및 바인딩 성공 후 상태 업데이트
+      setUser(result.user);
+      await fetchBoundSids(result.user); // 메인 화면으로 전환
       
       return true;
     } catch (err) {
       console.error('코드/바인딩 검증 오류:', err);
       setError(mapAuthError(err));
-      setConfirmation(null);
-      if (window.recaptchaVerifier) {
-          window.recaptchaVerifier.clear();
-      }
-      setVerifying(false); // Auth 실패 시에만 verifying 상태 해제
+      setConfirmation(null); // 실패 시 초기화
+      if (window.recaptchaVerifier) window.recaptchaVerifier.clear();
       return false;
+    } finally {
+      setVerifying(false);
     }
   };
 
-
-  // 폼 제출 함수
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!/^\d{6}$/.test(studentId)) {
@@ -185,16 +214,18 @@ function App() {
     await handleVerifyCode();
   };
 
-  // 로그아웃 함수
   const handleLogout = () => {
     auth.signOut();
-    setCurrentView('loading'); 
+    setCurrentView('loading');
+    setStudentId('');
+    setPhone('');
+    setSmsCode('');
+    setConfirmation(null);
   };
 
   // ----------------------
   // 뷰 렌더링
   // ----------------------
-
   const renderContent = () => {
     switch (currentView) {
       case 'loading':
@@ -204,20 +235,20 @@ function App() {
             <p className="small">로그인 상태 확인 및 데이터 로드 중...</p>
           </div>
         );
-        
+      
       case 'controversial':
         return (
           <div className="container">
             <ControversialPanel
-              allRoundLabels={ALL_ROUND_LABELS}
+              allRoundLabels={availableRounds}
               roundLabel={selectedRoundLabel}
               onRoundChange={setSelectedRoundLabel}
               sid={studentId}
-              onBack={() => setCurrentView('main')}
+              onBack={() => setCurrentView('main')} // 메인으로 복귀
             />
           </div>
         );
-        
+
       case 'main':
         {
           const selectedSid = studentId; 
@@ -229,7 +260,6 @@ function App() {
                   <div className="card narrow">
                       <h2 style={{ fontSize: '20px' }}>로그인 정보</h2>
                       
-                      {/* 로그인 인증 정보 표시 */}
                       <div className="group-grid" style={{ marginBottom: '20px' }}>
                           <div className="group-box span-12">
                               <p style={{ margin: 0, fontWeight: 800 }}>인증된 전화번호</p>
@@ -266,7 +296,6 @@ function App() {
       case 'home':
       default:
         {
-          // 인증 확인 중이거나 서버 바인딩 중이면 로딩 상태로 처리
           const isInteracting = sending || verifying || loading;
           const sendDisabled = isInteracting || resendLeft > 0 || !phone.trim();
           const submitDisabled = isInteracting || !studentId || !smsCode;
@@ -300,7 +329,7 @@ function App() {
                       type="button"
                       className="btn secondary"
                       onClick={handleSendCode}
-                      disabled={sendDisabled}
+                      disabled={sendDisabled} // ✅ 이 조건이 false일 때 버튼이 활성화됩니다.
                       title={resendLeft > 0 ? `재전송까지 ${resendLeft}초` : ''}
                     >
                       {sending
