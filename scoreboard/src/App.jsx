@@ -31,18 +31,37 @@ function mapAuthError(err) {
   }
 }
 
-// ✅ [통일된 헤딩 컴포넌트] (사용자 지정 내용)
-const MainHeader = () => (
-    <header style={{ textAlign: 'center', marginBottom: '20px' }}>
-        <h1 style={{ margin: '0 0 4px 0', fontSize: '24px', fontWeight: 800 }}>
+// ✅ [통일된 로고 + 이름 헤더 정의]
+const SiteIdentifier = () => (
+    <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: '12px', 
+        marginBottom: '20px', // 메인 컨텐츠와 분리
+        paddingTop: '8px'
+    }}>
+        {/* 로고 파일은 public 폴더의 logo.png 사용 */}
+        <img 
+            src="/logo.png" 
+            alt="전졸협 로고" 
+            style={{ 
+                height: '32px', // 로고 크기 조정
+                flexShrink: 0
+            }} 
+        />
+        <h1 style={{ 
+            margin: 0, 
+            fontSize: '20px', 
+            fontWeight: 800, 
+            lineHeight: 1.2,
+            color: 'var(--ink)'
+        }}>
             전국한의과대학<br />
             졸업준비협의체
         </h1>
-        <h2 style={{ fontSize: '18px', margin: '4px 0 0', color: 'var(--muted)', fontWeight: 700 }}>
-            2025 전국모의고사 지원 사이트
-        </h2>
-    </header>
+    </div>
 );
+
 
 // ----------------------
 // 메인 앱 컴포넌트 시작
@@ -67,7 +86,7 @@ function App() {
   const [selectedRoundLabel, setSelectedRoundLabel] = useState(ALL_ROUND_LABELS[0]);
   const [availableRounds, setAvailableRounds] = useState(ALL_ROUND_LABELS);
 
-  const navigateToView = useCallback((viewName) => { /* ... (History Logic) ... */
+  const navigateToView = useCallback((viewName) => {
     if (viewName === 'controversial') {
         window.history.pushState({ view: 'controversial' }, '', '#controversial');
     } else if (viewName === 'main') {
@@ -78,7 +97,7 @@ function App() {
     setCurrentView(viewName);
   }, []);
   
-  useEffect(() => { /* ... (Auth Logic & Popstate Listener) ... */
+  useEffect(() => {
     if (!window.recaptchaVerifier) {
       window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', { size: 'invisible' });
     }
@@ -115,9 +134,9 @@ function App() {
         cooldownTimerRef.current = null;
       }
     };
-  }, [navigateToView]);
+  }, [navigateToView, currentView]);
   
-  const fetchBoundSids = async (user) => { /* ... (Server Fetch Logic) ... */
+  const fetchBoundSids = async (user) => {
     try {
       setLoading(true);
       const getBindingsFn = httpsCallable(functions, 'getMyBindings');
@@ -142,14 +161,22 @@ function App() {
     }
   };
 
-  const startCooldown = () => { /* ... (생략) ... */ };
-  const handleSendCode = async () => { /* ... (생략) ... */ };
-  const serverVerifyAndBind = async (phoneInput, sidInput) => { /* ... (생략) ... */ };
-  const handleVerifyCode = async () => { /* ... (생략) ... */ };
-  const handleSubmit = async (e) => { /* ... (생략) ... */ };
-  const handleLogout = () => { /* ... (생략) ... */ };
+  const startCooldown = () => {
+    setResendLeft(RESEND_COOLDOWN);
+    if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
+    cooldownTimerRef.current = setInterval(() => {
+      setResendLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(cooldownTimerRef.current);
+          cooldownTimerRef.current = null;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
   
-  // (이하 함수들은 이전 단계의 최종 코드를 사용합니다.)
+  // ✅ [중복 선언 수정 완료] 단일 handleSendCode 함수 정의
   const handleSendCode = async () => {
     if (sending || verifying || loading || resendLeft > 0) return;
     setError('');
@@ -208,7 +235,7 @@ function App() {
       const result = await confirmation.confirm(smsCode); 
       await serverVerifyAndBind(phone, studentId);
       setUser(result.user);
-      await fetchBoundSids(result.user); 
+      await fetchBoundSids(result.user);
       return true;
     } catch (err) {
       console.error('코드/바인딩 검증 오류:', err);
@@ -225,6 +252,15 @@ function App() {
     await handleVerifyCode();
   };
 
+  const handleLogout = () => {
+    auth.signOut();
+    setCurrentView('home');
+    setStudentId('');
+    setPhone('');
+    setSmsCode('');
+    setConfirmation(null);
+  };
+  
   // ----------------------
   // 뷰 렌더링
   // ----------------------
@@ -233,6 +269,7 @@ function App() {
     switch (currentView) {
       case 'loading':
         return (
+          // 로딩 중에는 SiteIdentifier를 표시하지 않아 중앙에 스피너만 표시합니다.
           <div style={{ textAlign: 'center', padding: '100px 0' }}>
             <div className="spinner" />
             <p className="small">로그인 상태 확인 및 데이터 로드 중...</p>
@@ -241,7 +278,7 @@ function App() {
         
       case 'controversial':
         return (
-          <div className="container">
+          <div className="container" style={{ paddingTop: '0px' }}>
             <ControversialPanel
               allRoundLabels={availableRounds}
               roundLabel={selectedRoundLabel}
@@ -258,7 +295,7 @@ function App() {
           const displayPhone = boundPhone || user?.phoneNumber || '알 수 없음';
           
           return (
-              <div className="container">
+              <div className="container" style={{ paddingTop: '0px' }}>
                   {/* 1. 로그인 정보 (작게 표시) */}
                   <div style={{ 
                       display: 'flex', 
@@ -291,19 +328,19 @@ function App() {
                               <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>간계, 심계, 비계, 폐계, 신계 내과학 (각 2문제) &nbsp;&nbsp;<span style={{ color: 'var(--warn)', fontWeight: 800 }}>총 10문제</span></p>
                           </div>
                           
-                          {/* 2교시: 침구/상한 등 (5문제, 2문제, 2문제, 2문제) */}
+                          {/* 2교시: 침구/상한 등 */}
                           <div className="group-box" style={{ background: 'var(--surface-2)', padding: '12px 16px' }}>
                               <p style={{ margin: 0, fontWeight: 800, color: 'var(--ink)' }}>2교시 (침구, 사상, 법규 등)</p>
-                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>침구의학 (5), 상한/사상/법규 (각 2문제) &nbsp;&nbsp;<span style={{ color: 'var(--warn)', fontWeight: 800 }}>총 11문제</span></p>
+                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>침구의학 (5), 상한론/사상/법규 (각 2문제) &nbsp;&nbsp;<span style={{ color: 'var(--warn)', fontWeight: 800 }}>총 11문제</span></p>
                           </div>
                           
-                          {/* 3교시: 부인/외과 등 (3문제, 2문제, 2문제, 2문제) */}
+                          {/* 3교시: 부인/외과 등 */}
                           <div className="group-box" style={{ background: 'var(--surface-2)', padding: '12px 16px' }}>
                               <p style={{ margin: 0, fontWeight: 800, color: 'var(--ink)' }}>3교시 (부인, 외과, 안이비 등)</p>
-                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>부인과학 (3), 외과/신정/안이비인후과학 (각 2문제) &nbsp;&nbsp;<span style={{ color: 'var(--warn)', fontWeight: 800 }}>총 9문제</span></p>
+                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>부인과학 (3), 외과/신경정신과/안이비인후과학 (각 2문제) &nbsp;&nbsp;<span style={{ color: 'var(--warn)', fontWeight: 800 }}>총 9문제</span></p>
                           </div>
                           
-                          {/* 4교시: 기초/기타 (4과목 x 2문제) */}
+                          {/* 4교시: 기초/기타 */}
                           <div className="group-box" style={{ background: 'var(--surface-2)', padding: '12px 16px' }}>
                               <p style={{ margin: 0, fontWeight: 800, color: 'var(--ink)' }}>4교시 (소아, 기초 등)</p>
                               <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--muted)' }}>소아, 예방, 생리, 본초학 (각 2문제) &nbsp;&nbsp;<span style={{ color: 'var(--warn)', fontWeight: 800 }}>총 8문제</span></p>
@@ -353,10 +390,10 @@ function App() {
           const submitDisabled = isInteracting || !studentId || !smsCode;
 
           return (
-            <div className="container">
-              
+            <div className="container" style={{ paddingTop: '0px' }}>
               <div className="card narrow">
                 <form onSubmit={handleSubmit} className="flex-column">
+                  <h2 style={{ textAlign: 'center', marginBottom: '24px', fontSize: '20px', fontWeight: 800 }}>학수번호 인증</h2>
                   <label style={{ fontWeight: 800 }}>학수번호</label>
                   <input
                     className="input"
@@ -420,14 +457,15 @@ function App() {
 
   return (
     <div className="app-root-container">
-      {/* reCAPTCHA 컨테이너를 모든 뷰에서 항상 DOM에 존재하도록 고정 */}
+      {/* reCAPTCHA 컨테이너 */}
       <div 
         id="recaptcha-container" 
         style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }} 
       />
-      {/* 🚨 [FIX]: 메인 헤더를 컨텐츠 렌더링 외부에 배치하여 모든 뷰에서 통일되게 표시 */}
+      
       <div className="container">
-          <MainHeader />
+          {/* 로딩 뷰에서는 SiteIdentifier를 표시하지 않아 중앙 정렬을 유지 */}
+          {currentView !== 'loading' && <SiteIdentifier />}
           {renderContent()}
       </div>
     </div>
