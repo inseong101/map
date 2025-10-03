@@ -439,7 +439,7 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
 
   return (
     <div className="wrong-panel-root">
-      <h2 style={{ marginTop: 0 }}>많이 틀린 문항 해설</h2>
+      <h2 style={{ marginTop: 0 }}>2025 전국모의고사</h2>
 
       <div className="round-tabs" role="tablist" aria-label="회차 선택">
         {allRoundLabels.map((r) => {
