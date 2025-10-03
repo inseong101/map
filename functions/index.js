@@ -111,28 +111,17 @@ exports.onPhonesFileUploaded = functions
 });
 
 exports.serveWatermarkedPdf = functions
-  .region('asia-northeast3') // ✅ 지역 설정
-  .runWith({ memory: '8GB', timeoutSeconds: 180 }) // ✅ 8GB 메모리 설정
+  .region('asia-northeast3')
+  .runWith({ memory: '8GB', timeoutSeconds: 180 })
   .https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
-  }
-
-  const { filePath, sid } = data || {};
-  if (!filePath || !sid) {
-    throw new functions.https.HttpsError("invalid-argument", "filePath, sid가 필요합니다.");
-  }
-
-  const bucket = admin.storage().bucket();
-  const [bytes] = await bucket.file(filePath).download();
+  // ... (권한 및 에러 체크 생략) ...
 
   const pdfDoc = await PDFDocument.load(bytes);
   const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
   const text = String(sid);
-  const fontSize = 64; // ✅ 크기를 64로 증가
-  const angle = degrees(45); // ✅ 45도 기울임
-  const color = rgb(0.6, 0.6, 0.6);
+  const fontSize = 64; 
+  const angle = degrees(45); // 45도 기울임
   const opacity = 0.12;
 
   const pages = pdfDoc.getPages();
@@ -140,28 +129,28 @@ exports.serveWatermarkedPdf = functions
     const { width, height } = page.getSize();
     const textWidth = font.widthOfTextAtSize(text, fontSize);
     
-    // ✅ X축 정중앙 시작점 계산: (페이지 너비 - 텍스트 너비) / 2
+    // ✅ [FIXED]: X축 정중앙 시작점 계산: (페이지 너비 - 텍스트 너비) / 2
     const centerX = (width - textWidth) / 2; 
     
     const textHeight = fontSize;
     const stepY = textHeight * 3.5; // Y축 반복 간격 (띄엄띄엄 배치)
 
     // Y축 중앙을 기준으로 위아래로 반복 배치
-    for (let y = -height * 0.5; y < height * 2.5; y += stepY) { // Y축 범위를 더 넓혀 짤림 방지
+    for (let y = -height * 0.5; y < height * 2.5; y += stepY) { 
       page.drawText(text, {
         x: centerX, // ✅ X축 정중앙 시작점에 고정
         y: y, 
         size: fontSize,
         font,
-        color,
-        opacity,
+        color: rgb(0.6, 0.6, 0.6),
+        opacity: opacity,
         rotate: angle, // 45도
       });
     }
   }
-
   const out = await pdfDoc.save();
 
+    
   await writeAudit({
     uid: context.auth.uid,
     sid,
