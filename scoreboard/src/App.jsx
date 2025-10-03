@@ -1,416 +1,551 @@
-// src/App.jsx
-import React, { useState, useEffect, useRef, useCallback } from 'react'; // ✅ useCallback 추가
-import ControversialPanel from './components/ControversialPanel';
-import './App.css';
+// src/components/PdfModalPdfjs.jsx
+import React, { useEffect, useRef, useState, useCallback } from "react";
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/build/pdf";
 
-import { auth, functions } from './firebase';
-import { RecaptchaVerifier, signInWithPhoneNumber, onAuthStateChanged } from 'firebase/auth'; 
-import { httpsCallable } from 'firebase/functions';
+GlobalWorkerOptions.workerSrc = "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
 
-// ✅ 회차 목록을 앱 내에서 직접 정의
-const ALL_ROUND_LABELS = ['1차', '2차', '3차', '4차', '5차', '6차', '7차', '8차'];
-const RESEND_COOLDOWN = 60;
-
-function mapAuthError(err) {
-  const code = err?.code || '';
-  switch (code) {
-    case 'auth/too-many-requests':
-      return '요청이 너무 많이 시도되어 잠시 차단되었습니다. 잠시 후 다시 시도해주세요.';
-    case 'auth/invalid-phone-number':
-      return '전화번호 형식이 올바르지 않습니다. (예: +821012345678)';
-    case 'auth/missing-phone-number':
-      return '전화번호를 입력해주세요.';
-    case 'auth/invalid-verification-code':
-    case 'auth/code-expired':
-      return '인증번호가 만료되었습니다. 다시 요청해주세요.'; 
-    case 'functions/internal':
-    case 'functions/invalid-argument':
-      return '서버 검증 중 오류가 발생했습니다. 정보를 확인하고 다시 시도해주세요.';
-    default:
-      return err?.message || '요청 처리 중 오류가 발생했습니다.';
-  }
-}
-
-// ----------------------
-// 메인 앱 컴포넌트 시작
-// ----------------------
-function App() {
-  const [currentView, setCurrentView] = useState('loading');
-  const [user, setUser] = useState(null); 
-  const [studentId, setStudentId] = useState(''); 
-  const [boundSids, setBoundSids] = useState([]); 
-  const [boundPhone, setBoundPhone] = useState(''); 
-
-  const [phone, setPhone] = useState(''); 
-  const [smsCode, setSmsCode] = useState('');
-  const [confirmation, setConfirmation] = useState(null);
-  const [error, setError] = useState('');
-
-  const [sending, setSending] = useState(false);
-  const [verifying, setVerifying] = useState(false);
+export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
+  const holderRef = useRef(null);
+  const canvasRef = useRef(null);
   const [loading, setLoading] = useState(false);
-  const [resendLeft, setResendLeft] = useState(0);
-  const cooldownTimerRef = useRef(null);
-  const [selectedRoundLabel, setSelectedRoundLabel] = useState(ALL_ROUND_LABELS[0]);
-  const [availableRounds, setAvailableRounds] = useState(ALL_ROUND_LABELS);
+  const [err, setErr] = useState(null);
+  const [pdfDoc, setPdfDoc] = useState(null);
+  const [pageNum, setPageNum] = useState(1);
+  const [numPages, setNumPages] = useState(0);
+  const lastKeyRef = useRef(null);
+  const renderedRef = useRef(false);
 
-  // ✅ [수정]: History API를 사용하는 새로운 뷰 전환 함수 정의
-  const navigateToView = useCallback((viewName) => {
-    if (viewName === 'controversial') {
-        // 메인에서 컨텐츠로 갈 때만 히스토리를 push
-        window.history.pushState({ view: 'controversial' }, '', '#controversial');
-    } else if (viewName === 'main') {
-        // 메인으로 돌아오거나 메인으로 처음 갈 때는 히스토리를 교체 (깔끔하게)
-        window.history.replaceState({ view: 'main' }, '', '#main');
-    } else if (viewName === 'home' || viewName === 'loading') {
-        // 홈이나 로딩은 히스토리 교체
-        window.history.replaceState({ view: viewName }, '', '#');
+  // 터치/줌 상태 관리
+  const [isZoomed, setIsZoomed] = useState(false);
+  const touchState = useRef({
+    scale: 1,
+    translateX: 0,
+    translateY: 0,
+    initialDistance: 0,
+    lastTouchX: 0,
+    lastTouchY: 0,
+    isScaling: false,
+    isDragging: false
+  });
+  
+  // 마우스 상태 관리 (웹 드래그용)
+  const mouseState = useRef({
+    isDragging: false,
+    lastMouseX: 0,
+    lastMouseY: 0
+  });
+
+  const getContainerSize = () => {
+    const el = holderRef.current;
+    if (!el) return { width: 600, height: 400 };
+    const rect = el.getBoundingClientRect();
+    return { 
+      width: Math.max(320, Math.floor(rect.width - 20)), 
+      height: Math.max(300, Math.floor(rect.height - 20))
+    };
+  };
+
+  // 터치 헬퍼 함수들
+  const getTouchDistance = (touch1, touch2) => {
+    const dx = touch1.clientX - touch2.clientX;
+    const dy = touch1.clientY - touch2.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  // 캔버스 transform 직접 적용 (CSS 우선순위 무시)
+  const applyCanvasTransform = useCallback((scale, translateX, translateY) => {
+    if (!canvasRef.current) return;
+    
+    const transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+    const canvas = canvasRef.current;
+    
+    // CSS 규칙을 완전히 무시하고 직접 적용
+    canvas.style.setProperty('transform', transform, 'important');
+    canvas.style.setProperty('transform-origin', 'center center', 'important');
+    // 드래그 중이 아닐 때만 transition 적용
+    const isInteracting = touchState.current.isScaling || touchState.current.isDragging || mouseState.current.isDragging;
+    canvas.style.setProperty('transition', isInteracting ? 'none' : 'transform 0.3s ease', 'important');
+    
+    setIsZoomed(scale > 1.1);
+  }, []);
+
+  const handleTouchStart = useCallback((e) => {
+    e.preventDefault();
+    const touches = e.touches;
+    const state = touchState.current;
+    
+    if (touches.length === 2) {
+      // 핀치 시작
+      state.isScaling = true;
+      state.isDragging = false;
+      state.initialDistance = getTouchDistance(touches[0], touches[1]);
+    } else if (touches.length === 1 && state.scale > 1) {
+      // 드래그 시작
+      state.isDragging = true;
+      state.isScaling = false;
+      state.lastTouchX = touches[0].clientX;
+      state.lastTouchY = touches[0].clientY;
+      if(canvasRef.current) canvasRef.current.style.transition = 'none';
     }
-    setCurrentView(viewName);
+  }, []);
+
+  const handleTouchMove = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const touches = e.touches;
+    const state = touchState.current;
+    
+    if (touches.length === 2 && state.isScaling) {
+      // 핀치 줌
+      const currentDistance = getTouchDistance(touches[0], touches[1]);
+      const scaleChange = currentDistance / state.initialDistance;
+      let newScale = state.scale * scaleChange;
+      newScale = Math.max(1, Math.min(4, newScale));
+      
+      if (Math.abs(newScale - state.scale) > 0.01) {
+        state.scale = newScale;
+        applyCanvasTransform(state.scale, state.translateX, state.translateY);
+        state.initialDistance = currentDistance;
+      }
+      
+    } else if (touches.length === 1 && state.isDragging && state.scale > 1) {
+      // 드래그 이동
+      const deltaX = touches[0].clientX - state.lastTouchX;
+      const deltaY = touches[0].clientY - state.lastTouchY;
+      
+      if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1) {
+        state.translateX += deltaX;
+        state.translateY += deltaY;
+        state.lastTouchX = touches[0].clientX;
+        state.lastTouchY = touches[0].clientY;
+        
+        applyCanvasTransform(state.scale, state.translateX, state.translateY);
+      }
+    }
+  }, [applyCanvasTransform]);
+
+  const handleTouchEnd = useCallback(() => {
+    const state = touchState.current;
+    state.isScaling = false;
+    state.isDragging = false;
+    state.initialDistance = 0;
+    if(canvasRef.current) canvasRef.current.style.transition = 'transform 0.3s ease';
   }, []);
   
-  // ✅ 1. Firebase Auth 상태 변화 감지 및 SID 로드
-  useEffect(() => {
-    // Recaptcha 초기화 (컨테이너가 DOM에 항상 존재하도록 보장)
-    if (!window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier(
-        auth,
-        'recaptcha-container', 
-        { size: 'invisible' }
-      );
-    }
-    
-    // Auth 상태 변경 리스너
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setUser(user);
-      if (user) {
-        navigateToView('loading'); // ✅ navigateToView 사용
-        await fetchBoundSids(user);
-      } else {
-        navigateToView('home'); // ✅ navigateToView 사용
-        setBoundSids([]);
-        setStudentId('');
-        setBoundPhone('');
-      }
-    });
+  // 웹/노트북 마우스 드래그 핸들러
+  const handleMouseDown = useCallback((e) => {
+    if (e.button !== 0 || touchState.current.scale <= 1.1) return; 
 
-    // 🚨 [핵심 수정]: Popstate 이벤트 리스너 추가 (뒤로가기 처리)
-    const handlePopState = (event) => {
-        const targetView = event.state?.view;
-        // 히스토리 항목이 'main'이나 'home'으로 설정되어 있었다면 해당 뷰로 복귀
-        if (targetView === 'main' || targetView === 'home') {
-            setCurrentView(targetView);
-        } else if (currentView === 'controversial') {
-            // 컨텐츠 페이지에서 뒤로가기 시도 시, 명시적으로 메인으로 복귀
-            setCurrentView('main');
-            // history.replaceState를 사용하지 않으면 브라우저가 다시 뒤로가기를 시도할 수 있으므로
-            // 이 처리는 단순하게 view를 변경하는 것으로 충분
-        }
-    };
-
-    window.addEventListener('popstate', handlePopState);
-
-    return () => {
-      unsubscribe();
-      window.removeEventListener('popstate', handlePopState);
-      if (cooldownTimerRef.current) {
-        clearInterval(cooldownTimerRef.current);
-        cooldownTimerRef.current = null;
-      }
-    };
-  }, [navigateToView]);
-  
-  // ✅ 2. 바인딩된 SID를 서버에서 가져와 메인 뷰로 전환
-  const fetchBoundSids = async (user) => {
-    try {
-      setLoading(true);
-      const getBindingsFn = httpsCallable(functions, 'getMyBindings');
-      const res = await getBindingsFn();
-      const { sids = [], phone: fetchedPhone } = res.data || {};
-      
-      setBoundSids(sids);
-      setBoundPhone(fetchedPhone || ''); 
-
-      // 🚨 단일 SID 모델 적용: SID가 1개일 때만 정상으로 간주하고 메인으로 전환
-      if (sids.length === 1) { 
-        setStudentId(sids[0]);
-        navigateToView('main'); // ✅ navigateToView 사용
-      } else {
-        navigateToView('home'); // ✅ navigateToView 사용
-      }
-    } catch (err) {
-      console.error('바인딩 SID 로드 오류:', err);
-      setError('로그인 상태를 확인할 수 없습니다. 다시 시도해주세요.');
-      navigateToView('home'); // ✅ navigateToView 사용
-    } finally {
-      setLoading(false);
-    }
-  };
-
-
-  const startCooldown = () => { /* ... (생략) ... */ };
-
-  // SMS 인증 번호 요청 함수
-  const handleSendCode = async () => {
-    if (sending || verifying || loading || resendLeft > 0) return;
-    
-    // ✅ [강화]: 새로운 요청 시작 시 이전 상태 초기화
-    setError('');
-    setConfirmation(null); 
-
-    const cleanPhone = String(phone).trim().replace(/-/g, '');
-    const formattedPhone = cleanPhone.startsWith('010') ? `+82${cleanPhone.substring(1)}` : cleanPhone;
-
-    if (!formattedPhone) {
-      setError('전화번호를 입력해주세요.');
-      return;
-    }
-
-    // 학수번호 유효성 검증
-    if (!/^\d{6}$/.test(studentId)) {
-      setError('학수번호는 숫자 6자리여야 합니다.');
-      return;
-    }
-    
-    // 🚨 [핵심 보안 조치]: 1. SMS 발송 전에 서버에서 DB 존재 여부 확인
-    try {
-      setSending(true);
-      
-      const checkFn = httpsCallable(functions, 'checkPhoneSidExists');
-      const checkRes = await checkFn({ phone: formattedPhone, sid: studentId });
-      
-      if (!checkRes.data?.ok) {
-          // 🚨 [보안]: DB 검증 실패 시, 구체적인 오류 대신 일반적인 오류 메시지를 표시하여 정보 유출/테러 방지
-          setError('입력하신 정보가 등록되지 않았습니다. 정보를 확인해 주세요.');
-          return; // 검증 실패 시 SMS 발송을 중단
-      }
-
-      // 2. DB 검증 통과 후 Firebase SMS 발송
-      const appVerifier = window.recaptchaVerifier;
-      await appVerifier.render(); // reCAPTCHA 위젯 렌더링 강제
-      
-      const conf = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
-      setConfirmation(conf);
-      startCooldown();
-      alert('인증번호가 전송되었습니다.');
-    } catch (err) {
-      console.error('SMS 전송/검증 오류:', err);
-      // Firebase SDK 오류 처리
-      setError(mapAuthError(err)); 
-      if (window.recaptchaVerifier) window.recaptchaVerifier.clear();
-    } finally {
-      setSending(false);
-    }
-  };
-
-
-  // 서버 학수번호 바인딩 검증 함수
-  const serverVerifyAndBind = async (phoneInput, sidInput) => { /* ... (생략) ... */ };
-
-  // 인증 코드 확인 및 바인딩 함수
-  const handleVerifyCode = async () => {
-    if (verifying) return false;
-    setError('');
-
-    if (!confirmation) {
-      setError('먼저 인증번호를 받아주세요.');
-      return false;
-    }
-    try {
-      setVerifying(true);
-      
-      const result = await confirmation.confirm(smsCode); 
-      
-      await serverVerifyAndBind(phone, studentId);
-      
-      // 3. 최종 성공 후 상태 업데이트
-      setUser(result.user);
-      await fetchBoundSids(result.user); // 메인 화면으로 전환
-      
-      return true;
-    } catch (err) {
-      console.error('코드/바인딩 검증 오류:', err);
-      setError(mapAuthError(err));
-      setConfirmation(null); // 실패 시 confirmation 객체 초기화
-      if (window.recaptchaVerifier) window.recaptchaVerifier.clear();
-      return false;
-    } finally {
-      setVerifying(false);
-    }
-  };
-
-  // 폼 제출 함수
-  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!/^\d{6}$/.test(studentId)) {
-        setError('학수번호는 숫자 6자리여야 합니다.');
-        return;
+    const state = mouseState.current;
+    state.isDragging = true;
+    state.lastMouseX = e.clientX;
+    state.lastMouseY = e.clientY;
+    
+    if(canvasRef.current) canvasRef.current.style.transition = 'none';
+  }, []);
+
+  const handleMouseMove = useCallback((e) => {
+    const mState = mouseState.current;
+    const tState = touchState.current;
+    
+    if (!mState.isDragging) return;
+    
+    const deltaX = e.clientX - mState.lastMouseX;
+    const deltaY = e.clientY - mState.lastMouseY;
+    
+    tState.translateX += deltaX;
+    tState.translateY += deltaY;
+    mState.lastMouseX = e.clientX;
+    mState.lastMouseY = e.clientY;
+    
+    applyCanvasTransform(tState.scale, tState.translateX, tState.translateY);
+  }, [applyCanvasTransform]);
+
+  const handleMouseUp = useCallback(() => {
+    const mState = mouseState.current;
+    if (!mState.isDragging) return;
+    
+    mState.isDragging = false;
+    
+    if(canvasRef.current) canvasRef.current.style.transition = 'transform 0.3s ease';
+  }, []);
+
+
+  const handleDoubleClick = useCallback(() => {
+    const state = touchState.current;
+    
+    if (state.scale > 1.1) {
+      // 줌 아웃
+      state.scale = 1;
+      state.translateX = 0;
+      state.translateY = 0;
+    } else {
+      // 2배 확대
+      state.scale = 2;
+      state.translateX = 0;
+      state.translateY = 0;
     }
-    await handleVerifyCode();
-  };
+    
+    applyCanvasTransform(state.scale, state.translateX, state.translateY);
+  }, [applyCanvasTransform]);
 
-  // 로그아웃 함수
-  const handleLogout = () => {
-    auth.signOut();
-    navigateToView('loading'); // ✅ navigateToView 사용
-  };
+  const resetZoom = useCallback(() => {
+    const state = touchState.current;
+    state.scale = 1;
+    state.translateX = 0;
+    state.translateY = 0;
+    applyCanvasTransform(1, 0, 0);
+  }, [applyCanvasTransform]);
 
-  // ----------------------
-  // 뷰 렌더링
-  // ----------------------
-
-  const renderContent = () => {
-    switch (currentView) {
-      case 'loading':
-        return (
-          <div style={{ textAlign: 'center', padding: '100px 0' }}>
-            <div className="spinner" />
-            <p className="small">로그인 상태 확인 및 데이터 로드 중...</p>
-          </div>
-        );
-        
-      case 'controversial':
-        return (
-          <div className="container">
-            <ControversialPanel
-              allRoundLabels={availableRounds}
-              roundLabel={selectedRoundLabel}
-              onRoundChange={setSelectedRoundLabel}
-              sid={studentId}
-              onBack={() => navigateToView('main')} // ✅ navigateToView 사용
-            />
-          </div>
-        );
-        
-      case 'main':
-        {
-          const selectedSid = studentId; 
-          const displayPhone = boundPhone || user?.phoneNumber || '알 수 없음';
-          
-          return (
-              <div className="container">
-                  <h1 style={{ marginBottom: '16px' }}>환영합니다!</h1>
-                  <div className="card narrow">
-                      <h2 style={{ fontSize: '20px' }}>로그인 정보</h2>
-                      
-                      {/* 로그인 인증 정보 표시 */}
-                      <div className="group-grid" style={{ marginBottom: '20px' }}>
-                          <div className="group-box span-12">
-                              <p style={{ margin: 0, fontWeight: 800 }}>인증된 전화번호</p>
-                              <p style={{ margin: 0, fontSize: '18px', color: 'var(--primary)', fontWeight: 700 }}>{displayPhone}</p>
-                          </div>
-                          <div className="group-box span-12">
-                              <p style={{ margin: 0, fontWeight: 800 }}>현재 학수번호</p>
-                              <p className="kpi" style={{ margin: 0 }}>
-                                  <span className="num" style={{ fontSize: '28px' }}>{selectedSid || '오류'}</span>
-                              </p>
-                          </div>
-                      </div>
-
-                      <hr className="sep" />
-
-                      <button
-                          className="btn primary wide"
-                          onClick={() => navigateToView('controversial')} // ✅ navigateToView 사용
-                          disabled={!selectedSid}
-                          style={{ height: '48px', fontSize: '16px' }}
-                      >
-                          해설 페이지로 이동
-                      </button>
-
-                      <hr className="sep" />
-                      <button onClick={handleLogout} className="btn secondary wide">
-                          로그아웃
-                      </button>
-                  </div>
-              </div>
-          );
-        }
-
-      case 'home':
-      default:
-        {
-          const isInteracting = sending || verifying || loading;
-          // ✅ [강화]: 학수번호와 전화번호 유효성 검사 통과 시에만 버튼 활성화
-          const sendDisabled = isInteracting || resendLeft > 0 || !phone.trim() || !/^\d{6}$/.test(studentId); 
-          const submitDisabled = isInteracting || !studentId || !smsCode;
-
-          return (
-            <div className="container">
-              <h1>학수번호 인증</h1>
-              <div className="card narrow">
-                <form onSubmit={handleSubmit} className="flex-column">
-                  <label style={{ fontWeight: 800 }}>학수번호</label>
-                  <input
-                    className="input"
-                    type="text"
-                    value={studentId}
-                    onChange={(e) => setStudentId(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    placeholder="예) 015001"
-                    disabled={isInteracting}
-                  />
-                  <label style={{ fontWeight: 800, marginTop: 6 }}>전화번호</label>
-                  <div className="flex" style={{ gap: 8 }}>
-                    <input
-                      className="input"
-                      style={{ flex: 1 }}
-                      type="tel"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="010-1234-5678"
-                      disabled={isInteracting}
-                    />
-                    <button
-                      type="button"
-                      className="btn secondary"
-                      onClick={handleSendCode}
-                      disabled={sendDisabled}
-                      title={resendLeft > 0 ? `재전송까지 ${resendLeft}초` : ''}
-                    >
-                      {sending
-                        ? '전송 중...'
-                        : resendLeft > 0
-                          ? `재전송(${resendLeft}s)`
-                          : '인증번호 받기'}
-                    </button>
-                  </div>
-                  <label style={{ fontWeight: 800, marginTop: 6 }}>인증번호</label>
-                  <input
-                    className="input"
-                    type="text"
-                    value={smsCode}
-                    onChange={(e) => setSmsCode(e.target.value)}
-                    placeholder="예) 123456"
-                    disabled={isInteracting}
-                  />
-                  <button
-                    type="submit"
-                    className="btn"
-                    disabled={submitDisabled}
-                    style={{ marginTop: 6 }}
-                  >
-                    {verifying ? '인증 확인 중...' : '인증 확인 후 해설 보기'}
-                  </button>
-                </form>
-                {error && <div className="alert" style={{ whiteSpace: 'pre-line' }}>{error}</div>}
-              </div>
-            </div>
-          );
-        }
+  // ✅ [NEW] 휠 이벤트 핸들러: 터치패드 핀치 줌(전역 줌) 방지
+  const handleWheel = useCallback((e) => {
+    // Ctrl 또는 Meta 키와 함께 휠 이벤트가 발생하면 (주로 브라우저 줌) 기본 동작을 막습니다.
+    // 이는 macOS 등에서 터치패드 핀치 줌을 브라우저가 전역 줌으로 해석하는 것을 방지합니다.
+    if (e.ctrlKey || e.metaKey || e.deltaY % 1 !== 0) {
+        e.preventDefault();
+        e.stopPropagation();
     }
-  };
+    // (선택 사항: e.deltaY와 e.deltaX를 사용하여 여기서 모달 줌 로직을 구현할 수 있음)
+  }, []);
 
+  // 고화질 렌더링 (화질 문제 해결)
+  const renderPage = useCallback(async (doc, num) => {
+    if (!doc || !canvasRef.current || !holderRef.current || renderedRef.current) return;
+    
+    try {
+      renderedRef.current = true;
+      
+      const page = await doc.getPage(num);
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d", { alpha: false });
+
+      const { width: containerWidth, height: containerHeight } = getContainerSize();
+      const baseViewport = page.getViewport({ scale: 1 });
+      
+      // 화면 맞춤 스케일 계산
+      const scaleX = containerWidth / baseViewport.width;
+      const scaleY = containerHeight / baseViewport.height;
+      const baseFitScale = Math.min(scaleX, scaleY);
+      
+      // 고해상도 렌더링을 위한 스케일
+      const isMobile = window.innerWidth <= 768;
+      const qualityMultiplier = isMobile ? 3.0 : 4.0;
+      const renderScale = baseFitScale * qualityMultiplier;
+      
+      // 렌더링 뷰포트
+      const renderViewport = page.getViewport({ scale: renderScale });
+      
+      // 캔버스 크기 설정 (고해상도)
+      canvas.width = Math.floor(renderViewport.width);
+      canvas.height = Math.floor(renderViewport.height);
+      
+      // 표시 크기 설정 (화면에 맞춤)
+      const displayWidth = Math.floor(baseViewport.width * baseFitScale);
+      const displayHeight = Math.floor(baseViewport.height * baseFitScale);
+      canvas.style.width = `${displayWidth}px`;
+      canvas.style.height = `${displayHeight}px`;
+      
+      // 컨텍스트 초기화
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // 고해상도로 렌더링
+      await page.render({ 
+        canvasContext: ctx, 
+        viewport: renderViewport,
+        intent: 'display',
+        renderInteractiveForms: false
+      }).promise;
+
+      // 줌 상태 초기화 (페이지 변경 시)
+      resetZoom();
+      
+    } catch (error) {
+      console.error("PDF 렌더링 오류:", error);
+    } finally {
+      setTimeout(() => {
+        renderedRef.current = false;
+      }, 100);
+    }
+  }, [resetZoom]);
+
+  const renderFirstPage = useCallback(async (doc) => {
+    if (!doc) return;
+    await renderPage(doc, 1);
+  }, [renderPage]);
+
+  // PDF 로딩
+  useEffect(() => { /* ... (PDF 로딩 로직은 동일) ... */ }, [open, filePath, sid, renderFirstPage, pdfDoc]);
+
+  // 키보드 이벤트 (Esc 키 닫기 기능만 유지)
+  useEffect(() => {
+    if (!open) return;
+    
+    const handler = (e) => {
+      if (e.key === "Escape" && !loading) {
+        onClose();
+      }
+      
+      if ((e.ctrlKey || e.metaKey) && (e.key === "p" || e.key === "P")) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    
+    // 마우스 이벤트를 전역에서 감지하여 드래그를 처리합니다.
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    
+    window.addEventListener("keydown", handler, { capture: true });
+    return () => {
+      window.removeEventListener("keydown", handler, { capture: true });
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    }
+  }, [open, onClose, loading, handleMouseMove, handleMouseUp]);
+  
+  // 뒤로가기 히스토리 조작 로직은 완전히 제거됩니다.
+  // 이로 인해 모달이 늦게 꺼지는 문제가 해결됩니다.
+
+  if (!open) return null;
 
   return (
-    <div className="app-root-container">
-      {/* reCAPTCHA 컨테이너를 모든 뷰에서 항상 DOM에 존재하도록 고정 */}
-      <div 
-        id="recaptcha-container" 
-        style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }} 
-      />
-      {renderContent()}
+    <div style={backdropStyle} onClick={loading ? undefined : onClose}>
+      <div
+        style={modalStyle}
+        onClick={(e) => e.stopPropagation()}
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        <div style={headerStyle}>
+          <div style={{ fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {title || "특별해설"}
+          </div>
+          <button onClick={onClose} style={closeBtnStyle} aria-label="닫기">
+            ✕
+          </button>
+        </div>
+
+        <div ref={holderRef} style={viewerStyle}>
+          {loading && (
+            <div style={centerStyle}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                <div style={{ 
+                  width: '50px', 
+                  height: '50px', 
+                  border: '4px solid #333', 
+                  borderTop: '4px solid #7ea2ff', 
+                  borderRadius: '50%', 
+                  animation: 'spin 1s linear infinite' 
+                }}></div>
+                <div style={{ fontSize: '16px', fontWeight: '700', color: '#7ea2ff' }}>
+                  고화질 PDF를 준비하는 중...
+                </div>
+                <div style={{ fontSize: '14px', textAlign: 'center', lineHeight: '1.4' }}>
+                  처음 접속 시 1-2분 정도 소요될 수 있습니다.<br/>
+                  잠시만 기다려주세요.
+                </div>
+              </div>
+            </div>
+          )}
+          {err && <div style={{ ...centerStyle, color: "#ef4444" }}>{String(err)}</div>}
+          {!loading && !err && (
+            <canvas
+              ref={canvasRef}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onMouseDown={handleMouseDown} // <-- 마우스 드래그 시작
+              onMouseMove={handleMouseMove} // <-- 마우스 이동 (드래그)
+              onMouseUp={handleMouseUp}     // <-- 마우스 버튼 해제
+              onMouseLeave={handleMouseUp}  // <-- 마우스가 영역을 벗어나면 드래그 해제
+              onDoubleClick={handleDoubleClick}
+              onWheel={handleWheel} // 🚨 [NEW] 휠 이벤트 핸들러 추가
+              style={{
+                display: "block",
+                margin: "0 auto",
+                userSelect: "none",
+                maxWidth: "100%",
+                maxHeight: "100%",
+                objectFit: "contain",
+                imageRendering: "high-quality",
+                touchAction: "none",
+                cursor: isZoomed ? 'grab' : 'pointer'
+              }}
+            />
+          )}
+        </div>
+
+        {numPages > 1 && !loading && (
+          <div style={footerStyle}>
+            <button
+              style={{...navBtnStyle, opacity: renderedRef.current || pageNum <= 1 ? 0.5 : 1}}
+              disabled={renderedRef.current || pageNum <= 1}
+              onClick={async () => {
+                if (renderedRef.current || !pdfDoc || pageNum <= 1) return;
+                const prev = pageNum - 1;
+                setPageNum(prev);
+                await renderPage(pdfDoc, prev);
+              }}
+            >
+              ← 이전
+            </button>
+            <span style={{ fontWeight: 700 }}>Page {pageNum} / {numPages}</span>
+            <button
+              style={{...navBtnStyle, opacity: renderedRef.current || pageNum >= numPages ? 0.5 : 1}}
+              disabled={renderedRef.current || pageNum >= numPages}
+              onClick={async () => {
+                if (renderedRef.current || !pdfDoc || pageNum >= numPages) return;
+                const next = pageNum + 1;
+                setPageNum(next);
+                await renderPage(pdfDoc, next);
+              }}
+            >
+              다음 →
+            </button>
+          </div>
+        )}
+
+        {/* 확대 상태 표시 */}
+        {isZoomed && (
+          <div style={{
+            position: 'absolute',
+            top: '60px',
+            right: '12px',
+            background: 'rgba(0,0,0,0.8)',
+            color: 'white',
+            padding: '6px 12px',
+            borderRadius: '16px',
+            fontSize: '12px',
+            fontWeight: '600',
+            zIndex: 10,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}>
+            <span>확대 중</span>
+            <button
+              onClick={resetZoom}
+              style={{
+                background: 'rgba(255,255,255,0.3)',
+                border: 'none',
+                color: 'white',
+                borderRadius: '50%',
+                width: '18px',
+                height: '18px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '10px'
+              }}
+            >
+              ×
+            </button>
+          </div>
+        )}
+      </div>
+
+      <style jsx>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+        @media print { 
+          .pdf-modal-root { display: none !important; } 
+        }
+      `}</style>
     </div>
   );
 }
 
-export default App;
+// ... (const backdropStyle, modalStyle, headerStyle, etc. remain the same)
+// ... (omitting the style block for brevity)
+// ...
+
+const backdropStyle = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(0,0,0,.65)",
+  display: "flex",
+  alignItems: "center", // 중앙 정렬 유지
+  justifyContent: "center",
+  zIndex: 9999,
+};
+
+const modalStyle = {
+  width: "min(95vw, 900px)",
+  height: "min(80vh, 800px)", // 80% 높이 제한 유지
+  background: "#1c1f24",
+  color: "#e5e7eb",
+  border: "1px solid #2d333b",
+  borderRadius: 12,
+  display: "flex",
+  flexDirection: "column",
+  overflow: "hidden",
+  boxShadow: "0 15px 50px rgba(0,0,0,.5)",
+  position: 'relative'
+};
+
+const headerStyle = {
+  height: 44,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "0 12px",
+  borderBottom: "1px solid #2d333b",
+  background: "linear-gradient(#1c1f24, #1a1d22)",
+  flexShrink: 0
+};
+
+const closeBtnStyle = {
+  border: "1px solid #2d333b",
+  borderRadius: 6,
+  background: "transparent",
+  padding: "4px 10px",
+  cursor: "pointer",
+  color: "#e5e7eb",
+  fontSize: 16,
+  lineHeight: 1,
+};
+
+const viewerStyle = {
+  flex: 1,
+  background: "#111",
+  position: "relative",
+  overflow: "hidden",
+  padding: "15px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  touchAction: "none"
+};
+
+const centerStyle = {
+  position: "absolute",
+  inset: 0,
+  display: "grid",
+  placeItems: "center",
+};
+
+const footerStyle = {
+  borderTop: "1px solid #2d333b",
+  padding: "8px 12px",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  background: "#15181c",
+  fontSize: 14,
+  flexShrink: 0
+};
+
+const navBtnStyle = {
+  border: "1px solid #2d333b",
+  background: "transparent",
+  color: "#e5e7eb",
+  borderRadius: 8,
+  padding: "8px 12px",
+  cursor: "pointer",
+  fontWeight: 600,
+};
