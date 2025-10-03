@@ -24,4 +24,4 @@ export const db = initializeFirestore(app, {
   useFetchStreams: false,
 });
 
-export const functions = getFunctions(app, "us-central1");
+export const functions = getFunctions(app, "asia-northeast3");
