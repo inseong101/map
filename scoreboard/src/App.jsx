@@ -20,7 +20,7 @@ function mapAuthError(err) {
       return '전화번호 형식이 올바르지 않습니다. (예: +821012345678)';
     case 'auth/missing-phone-number':
     case 'auth/code-expired':
-      return '인증번호가 만료되었습니다. 다시 요청해주세요.'; // ✅ 오류 메시지 수정: 만료 시 재요청 유도
+      return '인증번호가 만료되었습니다. 다시 요청해주세요.'; 
     case 'functions/internal':
     case 'functions/invalid-argument':
       return '서버 검증 중 오류가 발생했습니다. 정보를 확인하고 다시 시도해주세요.';
@@ -102,8 +102,7 @@ function App() {
         setStudentId(sids[0]);
         setCurrentView('main'); // ✅ 메인 화면으로 이동
       } else {
-        // SID가 0개거나 2개 이상이면 에러로 간주하고 홈으로
-        setCurrentView('home');
+        setCurrentView('home'); // SID가 없거나 2개 이상이면 홈으로
       }
     } catch (err) {
       console.error('바인딩 SID 로드 오류:', err);
@@ -202,7 +201,10 @@ function App() {
     } catch (err) {
       console.error('코드/바인딩 검증 오류:', err);
       setError(mapAuthError(err));
-      setConfirmation(null); // ✅ [강화]: 실패 시 confirmation 객체 초기화 (재시도 시 새로운 코드 요청 유도)
+      setConfirmation(null); // 실패 시 confirmation 객체 초기화
+      if (window.recaptchaVerifier) { // ✅ 실패 시 reCAPTCHA 상태 초기화
+          window.recaptchaVerifier.clear();
+      }
       return false;
     } finally {
       setVerifying(false);
