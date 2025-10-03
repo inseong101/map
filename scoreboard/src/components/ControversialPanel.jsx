@@ -6,6 +6,28 @@ import "./WrongPanel.css";
 
 const SESSIONS = ["1교시", "2교시", "3교시", "4교시"];
 
+// ✅ 정식 과목 명칭 매핑 추가
+const FORMAL_SUBJECT_MAPPING = {
+  "간": "간계내과학",
+  "심": "심계내과학",
+  "비": "비계내과학",
+  "폐": "폐계내과학",
+  "신": "신계내과학",
+  "상한": "상한론",
+  "사상": "사상의학",
+  "침구": "침구의학",
+  "법규": "보건의약관계법규",
+  "외과": "외과학",
+  "신정": "신경정신과학",
+  "안이비": "안이비인후과학",
+  "부인": "부인과학",
+  "소아": "소아과학",
+  "예방": "예방의학",
+  "생리": "한방생리학",
+  "본초": "본초학",
+  "기타": "기타 과목" 
+};
+
 // ✅ 정확한 과목 매핑 정의 (회차별로 다름)
 const SUBJECT_MAPPINGS = {
   "1차": {
@@ -128,6 +150,15 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     "1교시": new Set(), "2교시": new Set(), "3교시": new Set(), "4교시": new Set(),
   });
   const [loading, setLoading] = useState(false);
+
+  // ✅ 모달 제목을 구성하는 함수 추가 (정식 명칭 + "특별 해설")
+  const getModalTitle = useCallback(() => {
+    // activeSubject가 FORMAL_SUBJECT_MAPPING에 있으면 정식 명칭을, 없으면 원래 이름을 사용합니다.
+    const formalSubject = FORMAL_SUBJECT_MAPPING[activeSubject] || activeSubject || '';
+    // 요청하신 형식: "1차 1교시 간계내과학 특별 해설"
+    return `${roundLabel} ${activeSession} ${formalSubject} 특별 해설`;
+  }, [roundLabel, activeSession, activeSubject]);
+
 
   const getHighErrorRateQuestions = useCallback(async (rLabel) => {
     try {
@@ -534,8 +565,8 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
         onClose={() => setPdfOpen(false)}
         filePath={pdfPath}
         sid={sid}
-        // 👇 선택된 과목명을 제목 문자열에 추가
-        title={`${roundLabel} ${activeSession} ${activeSubject || ''} 많이 틀린 문항 해설`}
+        // 👇 수정된 모달 제목 사용
+        title={getModalTitle()}
       />
     </div>
   );
