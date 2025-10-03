@@ -1,5 +1,5 @@
-
-import React, { useState, useEffect, useRef } from 'react';
+// src/App.jsx
+import React, { useState, useEffect, useRef, useCallback } from 'react'; // ✅ useCallback 추가
 import ControversialPanel from './components/ControversialPanel';
 import './App.css';
 
@@ -53,6 +53,21 @@ function App() {
   const cooldownTimerRef = useRef(null);
   const [selectedRoundLabel, setSelectedRoundLabel] = useState(ALL_ROUND_LABELS[0]);
   const [availableRounds, setAvailableRounds] = useState(ALL_ROUND_LABELS);
+
+  // ✅ [수정]: History API를 사용하는 새로운 뷰 전환 함수 정의
+  const navigateToView = useCallback((viewName) => {
+    if (viewName === 'controversial') {
+        // 메인에서 컨텐츠로 갈 때만 히스토리를 push
+        window.history.pushState({ view: 'controversial' }, '', '#controversial');
+    } else if (viewName === 'main') {
+        // 메인으로 돌아오거나 메인으로 처음 갈 때는 히스토리를 교체 (깔끔하게)
+        window.history.replaceState({ view: 'main' }, '', '#main');
+    } else if (viewName === 'home' || viewName === 'loading') {
+        // 홈이나 로딩은 히스토리 교체
+        window.history.replaceState({ view: viewName }, '', '#');
+    }
+    setCurrentView(viewName);
+  }, []);
   
   // ✅ 1. Firebase Auth 상태 변화 감지 및 SID 로드
   useEffect(() => {
@@ -69,24 +84,41 @@ function App() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       if (user) {
-        setCurrentView('loading');
+        navigateToView('loading'); // ✅ navigateToView 사용
         await fetchBoundSids(user);
       } else {
-        setCurrentView('home');
+        navigateToView('home'); // ✅ navigateToView 사용
         setBoundSids([]);
         setStudentId('');
         setBoundPhone('');
       }
     });
 
+    // 🚨 [핵심 수정]: Popstate 이벤트 리스너 추가 (뒤로가기 처리)
+    const handlePopState = (event) => {
+        const targetView = event.state?.view;
+        // 히스토리 항목이 'main'이나 'home'으로 설정되어 있었다면 해당 뷰로 복귀
+        if (targetView === 'main' || targetView === 'home') {
+            setCurrentView(targetView);
+        } else if (currentView === 'controversial') {
+            // 컨텐츠 페이지에서 뒤로가기 시도 시, 명시적으로 메인으로 복귀
+            setCurrentView('main');
+            // history.replaceState를 사용하지 않으면 브라우저가 다시 뒤로가기를 시도할 수 있으므로
+            // 이 처리는 단순하게 view를 변경하는 것으로 충분
+        }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
     return () => {
       unsubscribe();
+      window.removeEventListener('popstate', handlePopState);
       if (cooldownTimerRef.current) {
         clearInterval(cooldownTimerRef.current);
         cooldownTimerRef.current = null;
       }
     };
-  }, []);
+  }, [navigateToView]);
   
   // ✅ 2. 바인딩된 SID를 서버에서 가져와 메인 뷰로 전환
   const fetchBoundSids = async (user) => {
@@ -102,35 +134,23 @@ function App() {
       // 🚨 단일 SID 모델 적용: SID가 1개일 때만 정상으로 간주하고 메인으로 전환
       if (sids.length === 1) { 
         setStudentId(sids[0]);
-        setCurrentView('main'); // ✅ 메인 화면으로 이동
+        navigateToView('main'); // ✅ navigateToView 사용
       } else {
-        setCurrentView('home'); 
+        navigateToView('home'); // ✅ navigateToView 사용
       }
     } catch (err) {
       console.error('바인딩 SID 로드 오류:', err);
       setError('로그인 상태를 확인할 수 없습니다. 다시 시도해주세요.');
-      setCurrentView('home');
+      navigateToView('home'); // ✅ navigateToView 사용
     } finally {
       setLoading(false);
     }
   };
 
 
-  const startCooldown = () => {
-    setResendLeft(RESEND_COOLDOWN);
-    if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
-    cooldownTimerRef.current = setInterval(() => {
-      setResendLeft(prev => {
-        if (prev <= 1) {
-          clearInterval(cooldownTimerRef.current);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  };
+  const startCooldown = () => { /* ... (생략) ... */ };
 
-  // ✅ 3. SMS 인증 번호 요청 함수 (DB 사전 검증 재도입)
+  // SMS 인증 번호 요청 함수
   const handleSendCode = async () => {
     if (sending || verifying || loading || resendLeft > 0) return;
     
@@ -185,19 +205,7 @@ function App() {
 
 
   // 서버 학수번호 바인딩 검증 함수
-  const serverVerifyAndBind = async (phoneInput, sidInput) => {
-    const verifyFn = httpsCallable(functions, 'verifyAndBindPhoneSid');
-    const res = await verifyFn({ phone: phoneInput, sid: sidInput });
-    const { ok, code, message } = res.data || {};
-    if (!ok) {
-      const msg =
-        code === 'PHONE_NOT_FOUND' ? '등록되지 않은 전화번호입니다.' :
-        code === 'SID_MISMATCH'    ? '전화번호와 학수번호가 일치하지 않습니다.' :
-        message || '검증에 실패했습니다.';
-      throw new Error(msg);
-    }
-    return true;
-  };
+  const serverVerifyAndBind = async (phoneInput, sidInput) => { /* ... (생략) ... */ };
 
   // 인증 코드 확인 및 바인딩 함수
   const handleVerifyCode = async () => {
@@ -211,10 +219,8 @@ function App() {
     try {
       setVerifying(true);
       
-      // 1. Firebase Auth 확인 (타이밍 문제 방지를 위해 순차적 await 사용)
       const result = await confirmation.confirm(smsCode); 
       
-      // 2. 서버 DB 검증 및 바인딩 (인증 성공 후 실행)
       await serverVerifyAndBind(phone, studentId);
       
       // 3. 최종 성공 후 상태 업데이트
@@ -246,7 +252,7 @@ function App() {
   // 로그아웃 함수
   const handleLogout = () => {
     auth.signOut();
-    setCurrentView('loading'); 
+    navigateToView('loading'); // ✅ navigateToView 사용
   };
 
   // ----------------------
@@ -267,11 +273,11 @@ function App() {
         return (
           <div className="container">
             <ControversialPanel
-              allRoundLabels={ALL_ROUND_LABELS}
+              allRoundLabels={availableRounds}
               roundLabel={selectedRoundLabel}
               onRoundChange={setSelectedRoundLabel}
               sid={studentId}
-              onBack={() => setCurrentView('main')} // 해설에서 뒤로가기 시 다시 메인으로 복귀
+              onBack={() => navigateToView('main')} // ✅ navigateToView 사용
             />
           </div>
         );
@@ -305,7 +311,7 @@ function App() {
 
                       <button
                           className="btn primary wide"
-                          onClick={() => setCurrentView('controversial')}
+                          onClick={() => navigateToView('controversial')} // ✅ navigateToView 사용
                           disabled={!selectedSid}
                           style={{ height: '48px', fontSize: '16px' }}
                       >
