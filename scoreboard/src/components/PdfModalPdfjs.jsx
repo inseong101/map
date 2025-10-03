@@ -199,6 +199,36 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     state.translateY = 0;
     applyCanvasTransform(1, 0, 0);
   }, [applyCanvasTransform]);
+  
+  // ✅ [FIX]: Ctrl + Wheel을 PDF 모달 내부 줌 기능으로 재정의 (노트북 핀치 줌 활성화)
+  const handleWheel = useCallback((e) => {
+    const isZoomGesture = e.ctrlKey || e.metaKey; // Ctrl 또는 Meta 키가 눌렸는지 확인 (윈도우/맥)
+    
+    if (isZoomGesture) {
+        e.preventDefault(); // 브라우저의 전역 확대/축소 기본 동작 차단
+        e.stopPropagation();
+        
+        const state = touchState.current;
+        const zoomSpeed = 0.05; // 줌 속도 설정
+        
+        let newScale = state.scale;
+        
+        // 휠 방향에 따라 확대/축소
+        if (e.deltaY < 0) {
+            newScale += zoomSpeed; // 확대
+        } else if (e.deltaY > 0) {
+            newScale -= zoomSpeed; // 축소
+        }
+        
+        newScale = Math.max(1, Math.min(4, newScale));
+        
+        if (newScale !== state.scale) {
+            state.scale = newScale;
+            // 줌 변경 시 translateX/Y는 유지하여 현재 보고 있는 영역 중심으로 줌
+            applyCanvasTransform(state.scale, state.translateX, state.translateY);
+        }
+    }
+  }, [applyCanvasTransform]);
 
   // 고화질 렌더링 (화질 문제 해결)
   const renderPage = useCallback(async (doc, num) => {
@@ -211,13 +241,11 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext("2d", { alpha: false });
 
-      const { width: containerWidth, height: containerHeight } = getContainerSize();
+      const { width: containerWidth } = getContainerSize();
       const baseViewport = page.getViewport({ scale: 1 });
       
-      // 화면 맞춤 스케일 계산
-      const scaleX = containerWidth / baseViewport.width;
-      const scaleY = containerHeight / baseViewport.height;
-      const baseFitScale = Math.min(scaleX, scaleY);
+      // ✅ [FIX]: 화면 맞춤 스케일 계산 - 폭 기준으로만 계산 (세로 스크롤 허용)
+      const baseFitScale = containerWidth / baseViewport.width;
       
       // 고해상도 렌더링을 위한 스케일
       const isMobile = window.innerWidth <= 768;
@@ -231,7 +259,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       canvas.width = Math.floor(renderViewport.width);
       canvas.height = Math.floor(renderViewport.height);
       
-      // 표시 크기 설정 (화면에 맞춤)
+      // 표시 크기 설정 (화면에 맞춤 - 폭은 100%, 높이는 실제 높이)
       const displayWidth = Math.floor(baseViewport.width * baseFitScale);
       const displayHeight = Math.floor(baseViewport.height * baseFitScale);
       canvas.style.width = `${displayWidth}px`;
@@ -294,7 +322,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
           return;
         }
 
-        const functions = getFunctions(undefined, "asia-northeast3");
+        const functions = getFunctions(undefined, "asia-northeast3"); // ✅ FIX: 지역 통일
         const serve = httpsCallable(functions, "serveWatermarkedPdf");
         const res = await serve({ filePath, sid });
         const base64 = res?.data;
@@ -381,34 +409,26 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
           </button>
         </div>
 
-        <div ref={holderRef} style={viewerStyle}>
+        <div ref={holderRef} style={viewerStyleScrollable}> {/* ✅ [FIX]: 스크롤 가능 스타일 적용 */}
           {loading && (
             <div style={centerStyle}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-                {/* ✅ [FIXED]: 로딩 스피너 위에 로고 이미지 추가 (public/logo.png 사용) */}
-                <img 
-                    src="/logo.png" 
-                    alt="전졸협 로고" 
-                    style={{ 
-                        height: '50px', // 로딩 화면에 맞게 크기 조정
-                        marginBottom: '8px' 
-                    }} 
-                />
+                
                 <div style={{ 
                   width: '50px', 
                   height: '50px', 
                   border: '4px solid #333', 
-                  borderTop: '4px solid #7ea2ff', 
+                  borderTop: '4px solid var(--primary)', 
                   borderRadius: '50%', 
                   animation: 'spin 1s linear infinite' 
                 }}></div>
-                <div style={{ fontSize: '16px', fontWeight: '700', color: '#7ea2ff' }}>
-                  불러오는 중...
+                <div style={{ fontSize: '16px', fontWeight: '700', color: 'var(--ink)' }}>
+                  불러오는 중
                 </div>
               </div>
             </div>
           )}
-          {err && <div style={{ ...centerStyle, color: "#ef4444" }}>{String(err)}</div>}
+          {err && <div style={{ ...centerStyle, color: "var(--bad)" }}>{String(err)}</div>}
           {!loading && !err && (
             <canvas
               ref={canvasRef}
@@ -416,18 +436,20 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
               onMouseDown={handleMouseDown} // <-- 마우스 드래그 시작
+              onWheel={handleWheel} // ✅ 휠 이벤트 핸들러 추가
               onMouseLeave={handleMouseUp}  // <-- 마우스가 영역을 벗어나면 드래그 해제
               onDoubleClick={handleDoubleClick}
               style={{
                 display: "block",
                 margin: "0 auto",
                 userSelect: "none",
-                maxWidth: "100%",
-                maxHeight: "100%",
+                maxWidth: "100%", // 폭을 100%로 설정하여 캔버스가 컨테이너 폭을 채움
+                maxHeight: "none", // 높이 제한을 해제하여 세로 스크롤 가능
                 objectFit: "contain",
                 imageRendering: "high-quality",
                 touchAction: "none",
-                cursor: isZoomed ? 'grab' : 'pointer'
+                cursor: isZoomed ? 'grab' : 'pointer',
+                transformOrigin: 'top center', // ✅ 스크롤 시 상단을 기준으로 줌
               }}
             />
           )}
@@ -559,6 +581,21 @@ const closeBtnStyle = {
   color: "#e5e7eb",
   fontSize: 16,
   lineHeight: 1,
+};
+
+// 🚨 [FIX]: 스크롤 가능하도록 overflow-y: auto, align-items: flex-start으로 변경
+const viewerStyleScrollable = {
+  flex: 1,
+  background: "#111",
+  position: "relative",
+  overflowY: "auto", /* 세로 스크롤 허용 */
+  overflowX: "hidden", /* 가로 스크롤 방지 */
+  padding: "15px",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center", /* 캔버스가 중앙에 오도록 함 */
+  justifyContent: "flex-start",
+  touchAction: "none"
 };
 
 const viewerStyle = {
