@@ -200,6 +200,38 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     applyCanvasTransform(1, 0, 0);
   }, [applyCanvasTransform]);
 
+  // ✅ [NEW] 휠 이벤트 핸들러: Ctrl + Wheel을 PDF 줌 기능으로 재정의
+  const handleWheel = useCallback((e) => {
+    const isZoomGesture = e.ctrlKey || e.metaKey; // Ctrl 또는 Meta 키가 눌렸는지 확인 (윈도우/맥)
+    
+    if (isZoomGesture) {
+        e.preventDefault(); // 브라우저의 전역 확대/축소 기본 동작 차단
+        e.stopPropagation();
+        
+        const state = touchState.current;
+        const zoomSpeed = 0.05; // 줌 속도 설정
+        
+        let newScale = state.scale;
+        
+        // e.deltaY 값이 줌 방향을 나타냅니다. (일반적으로 음수: 확대, 양수: 축소)
+        if (e.deltaY < 0) {
+            newScale += zoomSpeed; // 확대
+        } else if (e.deltaY > 0) {
+            newScale -= zoomSpeed; // 축소
+        }
+        
+        // 최소/최대 줌 범위 제한 (1배~4배)
+        newScale = Math.max(1, Math.min(4, newScale));
+        
+        if (newScale !== state.scale) {
+            state.scale = newScale;
+            // 줌 변경 시 translateX/Y는 유지하여 현재 보고 있는 영역 중심으로 줌
+            applyCanvasTransform(state.scale, state.translateX, state.translateY);
+        }
+    }
+    // 일반적인 스크롤(Ctrl/Meta 키 X)은 기본 동작(모달 내부 스크롤)을 따릅니다.
+  }, [applyCanvasTransform]);
+
   // 고화질 렌더링 (화질 문제 해결)
   const renderPage = useCallback(async (doc, num) => {
     if (!doc || !canvasRef.current || !holderRef.current || renderedRef.current) return;
@@ -334,7 +366,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       cancelled = true;
       renderedRef.current = false;
     };
-  }, [open, filePath, sid, renderFirstPage, pdfDoc]);
+  }, [open, filePath, sid, renderFirstPage, pdfDoc, pdfDoc]);
 
   // 키보드 이벤트 (Esc 키 닫기 기능만 유지)
   useEffect(() => {
@@ -414,8 +446,11 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
               onMouseDown={handleMouseDown} // <-- 마우스 드래그 시작
+              onMouseMove={handleMouseMove} // <-- 마우스 이동 (드래그)
+              onMouseUp={handleMouseUp}     // <-- 마우스 버튼 해제
               onMouseLeave={handleMouseUp}  // <-- 마우스가 영역을 벗어나면 드래그 해제
               onDoubleClick={handleDoubleClick}
+              onWheel={handleWheel} // 🚨 [NEW] 휠 이벤트 핸들러 추가
               style={{
                 display: "block",
                 margin: "0 auto",
