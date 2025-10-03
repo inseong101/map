@@ -30,10 +30,10 @@ function mapAuthError(err) {
 }
 
 // ✅ [통일된 로고 + 이름 + 로그인 정보 헤더 정의]
-// [MODIFICATION 1] currentView를 prop으로 받도록 수정
+// currentView prop을 받아 'home'일 때 우측 정보를 숨깁니다.
 const SiteIdentifier = ({ selectedSid, handleLogout, currentView }) => {
     
-    // [MODIFICATION 2] 학수번호가 설정되어 있고, 현재 뷰가 'home'이 아닐 때만 우측 정보를 표시합니다.
+    // [MODIFIED] 학수번호가 설정되어 있고, 현재 뷰가 'home'이 아닐 때만 로그아웃 버튼을 표시합니다.
     const isRightSideVisible = !!selectedSid && currentView !== 'home';
     
     return (
@@ -68,8 +68,14 @@ const SiteIdentifier = ({ selectedSid, handleLogout, currentView }) => {
                 </h1>
             </div>
             
-            {/* 우측: 학수번호 + 로그아웃 버튼 (줄바꿈 없이 한 줄로) */}
+            {/* [MODIFIED] 우측: 학수번호 제거 후 로그아웃 버튼만 표시 */}
             {isRightSideVisible && (
+                <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center',
+                    justifyContent: 'flex-end', // 로그아웃 버튼을 오른쪽 끝으로 정렬
+                }}>
+                    {/* 학수번호 텍스트 제거됨 */}
                     <button onClick={handleLogout} className="btn secondary" style={{ fontSize: '12px', padding: '3px 6px', height: 'auto', fontWeight: 600 }}>
                         로그아웃
                     </button>
@@ -483,12 +489,11 @@ function App() {
       
       <div className="container">
           {/* SiteIdentifier는 로딩 뷰를 제외하고 항상 상단 왼쪽에 표시 */}
-          {/* [MODIFICATION 3] currentView prop을 추가하여 SiteIdentifier로 전달 */}
           {currentView !== 'loading' && (
             <SiteIdentifier 
                 selectedSid={studentId} 
                 handleLogout={handleLogout} 
-                currentView={currentView}
+                currentView={currentView} // currentView prop을 전달
             />
           )}
           {renderContent()}
