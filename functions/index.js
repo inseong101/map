@@ -1,3 +1,4 @@
+// functions/index.js
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const { PDFDocument, rgb, degrees, StandardFonts } = require("pdf-lib");
@@ -32,7 +33,7 @@ async function writeAudit({ uid, sid, filePath, action, meta = {}, req }) {
 
 // Storage에 phones_seed.xlsx 업로드 시 자동 실행
 exports.onPhonesFileUploaded = functions
-  .region('asia-northeast3')
+  .region('asia-northeast3') // ✅ 8GB가 적용되지 않는 Storage 트리거지만, 지역은 통일
   .storage.object().onFinalize(async (object) => {
   const filePath = object.name;
   
@@ -60,7 +61,7 @@ exports.onPhonesFileUploaded = functions
     const XLSX = require('xlsx');
     console.log('XLSX 파싱 시작...');
     const workbook = XLSX.read(fileBuffer);
-    const sheetName = workbook.SheetNames[0];
+    const sheetName = workbook.Sheets[workbook.SheetNames[0]];
     console.log('시트명:', sheetName);
     
     const worksheet = workbook.Sheets[sheetName];
@@ -109,44 +110,28 @@ exports.onPhonesFileUploaded = functions
   }
 });
 
-// ✅ [새로 추가된 함수]: SMS 발송 전 전화번호/학수번호의 DB 등록 여부만 확인
-exports.checkPhoneSidExists = functions
-  .region('asia-northeast3') // ✅ 지역 설정
-  .https.onCall(async (data, context) => {
-  const { phone, sid } = data || {};
-  const e164 = toKRE164(phone);
-  
-  // 유효하지 않은 입력은 Firebase SDK에서 대부분 걸러지나, 여기서 최종 확인
-  if (!e164 || !/^\d{6}$/.test(String(sid || '').trim())) {
-    return { ok: false };
-  }
-
-  // 1. 전화번호가 DB에 있는지 확인
-  const snap = await db.collection('phones').doc(e164).get();
-  if (!snap.exists) {
-    return { ok: false }; // 등록되지 않은 번호
-  }
-  
-  // 2. 해당 학수번호가 전화번호에 바인딩되어 있는지 확인
-  const sids = snap.data()?.sids || [];
-  const cleanSid = String(sid).trim();
-
-  if (!sids.includes(cleanSid)) {
-    return { ok: false }; // 학수번호 불일치
-  }
-
-  return { ok: true };
-});
-
 exports.serveWatermarkedPdf = functions
-  .region('asia-northeast3')
+  .region('asia-northeast3') // ✅ 지역 설정
+  .runWith({ memory: '8GB', timeoutSeconds: 180 }) // ✅ 8GB 메모리 설정
   .https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
+  }
+
+  const { filePath, sid } = data || {};
+  if (!filePath || !sid) {
+    throw new functions.https.HttpsError("invalid-argument", "filePath, sid가 필요합니다.");
+  }
+
+  const bucket = admin.storage().bucket();
+  const [bytes] = await bucket.file(filePath).download();
+
   const pdfDoc = await PDFDocument.load(bytes);
   const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
   const text = String(sid);
   const fontSize = 64; // ✅ 크기를 64로 증가
-  const angle = degrees(45); // ✅ 45도 기울임 복원
+  const angle = degrees(45); // ✅ 45도 기울임
   const color = rgb(0.6, 0.6, 0.6);
   const opacity = 0.12;
 
@@ -156,14 +141,13 @@ exports.serveWatermarkedPdf = functions
     const textWidth = font.widthOfTextAtSize(text, fontSize);
     
     // ✅ X축 정중앙 시작점 계산: (페이지 너비 - 텍스트 너비) / 2
-    // 텍스트 길이를 고려하여 X축의 정중앙에 텍스트가 시작되도록 보정합니다.
-    const centerX = (width - textWidth) / 2;
+    const centerX = (width - textWidth) / 2; 
     
     const textHeight = fontSize;
     const stepY = textHeight * 3.5; // Y축 반복 간격 (띄엄띄엄 배치)
 
     // Y축 중앙을 기준으로 위아래로 반복 배치
-    for (let y = -height * 0.5; y < height * 1.5; y += stepY) { 
+    for (let y = -height * 0.5; y < height * 2.5; y += stepY) { // Y축 범위를 더 넓혀 짤림 방지
       page.drawText(text, {
         x: centerX, // ✅ X축 정중앙 시작점에 고정
         y: y, 
@@ -178,7 +162,6 @@ exports.serveWatermarkedPdf = functions
 
   const out = await pdfDoc.save();
 
-    
   await writeAudit({
     uid: context.auth.uid,
     sid,
@@ -192,6 +175,7 @@ exports.serveWatermarkedPdf = functions
 
 exports.logPdfAction = functions
   .region('asia-northeast3')
+  .runWith({ memory: '8GB', timeoutSeconds: 180 })
   .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -214,6 +198,7 @@ exports.logPdfAction = functions
 // 해설 인덱스 조회 (Storage 기반)
 exports.getExplanationIndex = functions
   .region('asia-northeast3')
+  .runWith({ memory: '8GB', timeoutSeconds: 180 })
   .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -246,6 +231,7 @@ exports.getExplanationIndex = functions
 // 많이 틀린 문항 조회 - 단순화된 더미 데이터
 exports.getHighErrorRateQuestions = functions
   .region('asia-northeast3')
+  .runWith({ memory: '8GB', timeoutSeconds: 180 })
   .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -261,14 +247,15 @@ exports.getHighErrorRateQuestions = functions
     "소아": [], "예방": [], "생리": [], "본초": []
   };
   
-  // ... (랜덤 데이터 생성 로직 생략) ...
+  // 각 과목마다 랜덤하게 문제들 생성 (프론트엔드에서 과목별로 필터링됨)
   const sessions = ["1교시", "2교시", "3교시", "4교시"];
   const sessionRanges = { "1교시": 80, "2교시": 100, "3교시": 80, "4교시": 80 };
   
   Object.keys(dummyData).forEach(subject => {
     sessions.forEach(session => {
       const maxQ = sessionRanges[session];
-      const questionCount = Math.floor(Math.random() * 10) + 5;
+      // 각 세션에서 랜덤하게 문제들 생성
+      const questionCount = Math.floor(Math.random() * 10) + 5; 
       for (let i = 0; i < questionCount; i++) {
         const qNum = Math.floor(Math.random() * maxQ) + 1;
         dummyData[subject].push({
@@ -279,6 +266,7 @@ exports.getHighErrorRateQuestions = functions
       }
     });
     
+    // 중복 제거 및 정렬
     const uniqueQuestions = Array.from(
       new Map(dummyData[subject].map(q => [q.questionNum + q.session, q])).values()
     );
@@ -290,6 +278,7 @@ exports.getHighErrorRateQuestions = functions
 
 exports.verifyAndBindPhoneSid = functions
   .region('asia-northeast3')
+  .runWith({ memory: '8GB', timeoutSeconds: 180 })
   .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -304,7 +293,6 @@ exports.verifyAndBindPhoneSid = functions
     throw new functions.https.HttpsError("invalid-argument", "학수번호는 6자리 숫자여야 합니다.");
   }
 
-  // ✅ [보안 검증]: DB에 등록된 번호인지 확인
   const snap = await db.collection('phones').doc(e164).get();
   if (!snap.exists) {
     return { ok: false, code: 'PHONE_NOT_FOUND', message: '등록되지 않은 전화번호입니다.' };
@@ -313,13 +301,11 @@ exports.verifyAndBindPhoneSid = functions
   if (!sids.includes(cleanSid)) {
     return { ok: false, code: 'SID_MISMATCH', message: '전화번호와 학수번호가 일치하지 않습니다.' };
   }
-  // ✅ [보안 검증] 끝: DB에 등록된 번호이며, 학수번호와 일치함.
 
   const uid = context.auth.uid;
   const bindRef = db.collection('bindings').doc(uid);
-  // 단일 SID 모델이므로 기존 배열을 덮어씁니다.
   await bindRef.set({
-    sids: [cleanSid], 
+    sids: admin.firestore.FieldValue.arrayUnion(cleanSid),
     phone: e164,
     updatedAt: admin.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
@@ -329,6 +315,7 @@ exports.verifyAndBindPhoneSid = functions
 
 exports.getMyBindings = functions
   .region('asia-northeast3')
+  .runWith({ memory: '8GB', timeoutSeconds: 180 })
   .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -343,7 +330,7 @@ exports.getMyBindings = functions
 
 exports.warmupPdfService = functions
   .region('asia-northeast3')
-  .runWith({ memory: '512MB', timeoutSeconds: 10 })
+  .runWith({ memory: '8GB', timeoutSeconds: 180 })
   .https.onCall(async (data, context) => {
     console.log('PDF 서비스 워밍업');
     try {
