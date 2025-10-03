@@ -20,6 +20,7 @@ function mapAuthError(err) {
       return '전화번호 형식이 올바르지 않습니다. (예: +821012345678)';
     case 'auth/missing-phone-number':
     case 'auth/code-expired':
+      return '인증번호가 만료되었습니다. 다시 요청해주세요.'; // ✅ 오류 메시지 수정: 만료 시 재요청 유도
     case 'functions/internal':
     case 'functions/invalid-argument':
       return '서버 검증 중 오류가 발생했습니다. 정보를 확인하고 다시 시도해주세요.';
@@ -35,7 +36,7 @@ function App() {
   const [currentView, setCurrentView] = useState('loading');
   const [user, setUser] = useState(null); 
   const [studentId, setStudentId] = useState(''); 
-  const [boundSids, setBoundSids] = useState([]); // 서버 응답 호환성을 위해 유지
+  const [boundSids, setBoundSids] = useState([]); 
   const [boundPhone, setBoundPhone] = useState(''); 
 
   const [phone, setPhone] = useState(''); 
@@ -99,9 +100,10 @@ function App() {
       // 🚨 단일 SID 모델 적용: SID가 1개일 때만 정상으로 간주하고 메인으로 전환
       if (sids.length === 1) { 
         setStudentId(sids[0]);
-        setCurrentView('main'); // ✅ 메인 화면으로 이동 (직행X)
+        setCurrentView('main'); // ✅ 메인 화면으로 이동
       } else {
-        setCurrentView('home'); // SID가 없거나 2개 이상이면 홈으로
+        // SID가 0개거나 2개 이상이면 에러로 간주하고 홈으로
+        setCurrentView('home');
       }
     } catch (err) {
       console.error('바인딩 SID 로드 오류:', err);
@@ -113,12 +115,27 @@ function App() {
   };
 
 
-  const startCooldown = () => { /* ... (로직은 이전과 동일) ... */ };
-  
+  const startCooldown = () => {
+    setResendLeft(RESEND_COOLDOWN);
+    if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
+    cooldownTimerRef.current = setInterval(() => {
+      setResendLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(cooldownTimerRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
   // SMS 인증 번호 요청 함수
   const handleSendCode = async () => {
     if (sending || verifying || loading || resendLeft > 0) return;
+    
+    // ✅ [강화]: 새로운 요청 시작 시 이전 상태 초기화
     setError('');
+    setConfirmation(null); 
 
     const cleanPhone = String(phone).trim().replace(/-/g, '');
     const formattedPhone = cleanPhone.startsWith('010') ? `+82${cleanPhone.substring(1)}` : cleanPhone;
@@ -185,6 +202,7 @@ function App() {
     } catch (err) {
       console.error('코드/바인딩 검증 오류:', err);
       setError(mapAuthError(err));
+      setConfirmation(null); // ✅ [강화]: 실패 시 confirmation 객체 초기화 (재시도 시 새로운 코드 요청 유도)
       return false;
     } finally {
       setVerifying(false);
@@ -236,7 +254,7 @@ function App() {
         
       case 'main':
         {
-          const selectedSid = studentId; // 단일 SID 모델에서는 studentId가 곧 선택된 SID
+          const selectedSid = studentId; 
           const displayPhone = boundPhone || user?.phoneNumber || '알 수 없음';
           
           return (
@@ -261,15 +279,13 @@ function App() {
 
                       <hr className="sep" />
 
-                      {/* 🚨 단일 SID 모델이므로 학수번호 선택 드롭다운은 제거됨 */}
-
                       <button
                           className="btn primary wide"
                           onClick={() => setCurrentView('controversial')}
                           disabled={!selectedSid}
                           style={{ height: '48px', fontSize: '16px' }}
                       >
-                          선택된 학수번호 해설 페이지로 이동
+                          해설 페이지로 이동
                       </button>
 
                       <hr className="sep" />
