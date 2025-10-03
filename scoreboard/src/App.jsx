@@ -35,7 +35,7 @@ function App() {
   const [currentView, setCurrentView] = useState('loading');
   const [user, setUser] = useState(null); 
   const [studentId, setStudentId] = useState(''); 
-  const [boundSids, setBoundSids] = useState([]); // 🚨 단일 SID 모델이지만, getMyBindings 호환성을 위해 유지
+  const [boundSids, setBoundSids] = useState([]); // 서버 응답 호환성을 위해 유지
   const [boundPhone, setBoundPhone] = useState(''); 
 
   const [phone, setPhone] = useState(''); 
@@ -53,7 +53,7 @@ function App() {
   
   // ✅ 1. Firebase Auth 상태 변화 감지 및 SID 로드
   useEffect(() => {
-    // Recaptcha 초기화
+    // Recaptcha 초기화 (컨테이너가 DOM에 항상 존재하도록 보장)
     if (!window.recaptchaVerifier) {
       window.recaptchaVerifier = new RecaptchaVerifier(
         auth,
@@ -85,7 +85,7 @@ function App() {
     };
   }, []);
   
-  // ✅ 2. 바인딩된 SID를 서버에서 가져와 곧바로 콘텐츠 뷰로 전환
+  // ✅ 2. 바인딩된 SID를 서버에서 가져와 메인 뷰로 전환
   const fetchBoundSids = async (user) => {
     try {
       setLoading(true);
@@ -96,13 +96,12 @@ function App() {
       setBoundSids(sids);
       setBoundPhone(fetchedPhone || ''); 
 
-      // 🚨 단일 SID 모델 적용: SID가 1개일 때만 정상으로 간주하고 컨텐츠로 직행
+      // 🚨 단일 SID 모델 적용: SID가 1개일 때만 정상으로 간주하고 메인으로 전환
       if (sids.length === 1) { 
         setStudentId(sids[0]);
-        setCurrentView('controversial'); // ✅ 메인 화면 스킵, 컨텐츠로 직행
+        setCurrentView('main'); // ✅ 메인 화면으로 이동 (직행X)
       } else {
-        // SID가 0개거나 2개 이상이면 에러로 간주하고 홈으로 돌려보냄
-        setCurrentView('home');
+        setCurrentView('home'); // SID가 없거나 2개 이상이면 홈으로
       }
     } catch (err) {
       console.error('바인딩 SID 로드 오류:', err);
@@ -115,11 +114,55 @@ function App() {
 
 
   const startCooldown = () => { /* ... (로직은 이전과 동일) ... */ };
-  const handleSendCode = async () => { /* ... (로직은 이전과 동일) ... */ };
-  const serverVerifyAndBind = async (phoneInput, sidInput) => { /* ... (로직은 이전과 동일) ... */ };
+  
+  // SMS 인증 번호 요청 함수
+  const handleSendCode = async () => {
+    if (sending || verifying || loading || resendLeft > 0) return;
+    setError('');
+
+    const cleanPhone = String(phone).trim().replace(/-/g, '');
+    const formattedPhone = cleanPhone.startsWith('010') ? `+82${cleanPhone.substring(1)}` : cleanPhone;
+
+    if (!formattedPhone) {
+      setError('전화번호를 입력해주세요.');
+      return;
+    }
+
+    try {
+      setSending(true);
+      const appVerifier = window.recaptchaVerifier;
+      await appVerifier.render(); // reCAPTCHA 위젯 렌더링 강제
+      
+      const conf = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
+      setConfirmation(conf);
+      startCooldown();
+      alert('인증번호가 전송되었습니다.');
+    } catch (err) {
+      console.error('SMS 전송 오류:', err);
+      setError(mapAuthError(err));
+      window.recaptchaVerifier.clear();
+    } finally {
+      setSending(false);
+    }
+  };
 
 
-  // SMS 인증 코드 확인 및 바인딩 함수
+  // 서버 학수번호 바인딩 검증 함수
+  const serverVerifyAndBind = async (phoneInput, sidInput) => {
+    const verifyFn = httpsCallable(functions, 'verifyAndBindPhoneSid');
+    const res = await verifyFn({ phone: phoneInput, sid: sidInput });
+    const { ok, code, message } = res.data || {};
+    if (!ok) {
+      const msg =
+        code === 'PHONE_NOT_FOUND' ? '등록되지 않은 전화번호입니다.' :
+        code === 'SID_MISMATCH'    ? '전화번호와 학수번호가 일치하지 않습니다.' :
+        message || '검증에 실패했습니다.';
+      throw new Error(msg);
+    }
+    return true;
+  };
+
+  // 인증 코드 확인 및 바인딩 함수
   const handleVerifyCode = async () => {
     if (verifying) return false;
     setError('');
@@ -132,13 +175,11 @@ function App() {
       setVerifying(true);
       const result = await confirmation.confirm(smsCode); 
       
-      // 서버에서 바인딩 및 SID 확인
       await serverVerifyAndBind(phone, studentId);
       
       // 로그인 및 바인딩 성공 후 상태 업데이트
       setUser(result.user);
-      setStudentId(studentId); // 입력한 학수번호를 현재 학수번호로 설정
-      setCurrentView('controversial'); // ✅ 인증 성공 후 컨텐츠로 직행
+      await fetchBoundSids(result.user); // 바인딩된 SID를 가져와 'main'으로 전환
       
       return true;
     } catch (err) {
@@ -167,7 +208,7 @@ function App() {
   };
 
   // ----------------------
-  // 뷰 렌더링 (단일 블록으로 통합)
+  // 뷰 렌더링
   // ----------------------
 
   const renderContent = () => {
@@ -188,13 +229,58 @@ function App() {
               roundLabel={selectedRoundLabel}
               onRoundChange={setSelectedRoundLabel}
               sid={studentId}
-              onBack={handleLogout} // ✅ 뒤로가기 버튼을 누르면 로그아웃 (메인 화면이 없으므로)
+              onBack={() => setCurrentView('main')} // 해설에서 뒤로가기 시 다시 메인으로 복귀
             />
           </div>
         );
         
-      // 🚨 case 'main': 블록 전체가 제거됨.
-      
+      case 'main':
+        {
+          const selectedSid = studentId; // 단일 SID 모델에서는 studentId가 곧 선택된 SID
+          const displayPhone = boundPhone || user?.phoneNumber || '알 수 없음';
+          
+          return (
+              <div className="container">
+                  <h1 style={{ marginBottom: '16px' }}>환영합니다!</h1>
+                  <div className="card narrow">
+                      <h2 style={{ fontSize: '20px' }}>로그인 정보</h2>
+                      
+                      {/* 로그인 인증 정보 표시 */}
+                      <div className="group-grid" style={{ marginBottom: '20px' }}>
+                          <div className="group-box span-12">
+                              <p style={{ margin: 0, fontWeight: 800 }}>인증된 전화번호</p>
+                              <p style={{ margin: 0, fontSize: '18px', color: 'var(--primary)', fontWeight: 700 }}>{displayPhone}</p>
+                          </div>
+                          <div className="group-box span-12">
+                              <p style={{ margin: 0, fontWeight: 800 }}>현재 학수번호</p>
+                              <p className="kpi" style={{ margin: 0 }}>
+                                  <span className="num" style={{ fontSize: '28px' }}>{selectedSid || '오류'}</span>
+                              </p>
+                          </div>
+                      </div>
+
+                      <hr className="sep" />
+
+                      {/* 🚨 단일 SID 모델이므로 학수번호 선택 드롭다운은 제거됨 */}
+
+                      <button
+                          className="btn primary wide"
+                          onClick={() => setCurrentView('controversial')}
+                          disabled={!selectedSid}
+                          style={{ height: '48px', fontSize: '16px' }}
+                      >
+                          선택된 학수번호 해설 페이지로 이동
+                      </button>
+
+                      <hr className="sep" />
+                      <button onClick={handleLogout} className="btn secondary wide">
+                          로그아웃
+                      </button>
+                  </div>
+              </div>
+          );
+        }
+
       case 'home':
       default:
         {
@@ -269,6 +355,7 @@ function App() {
 
   return (
     <div className="app-root-container">
+      {/* reCAPTCHA 컨테이너를 모든 뷰에서 항상 DOM에 존재하도록 고정 */}
       <div 
         id="recaptcha-container" 
         style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }} 
