@@ -416,19 +416,22 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
           const hasExp = q.hasExp;
           const rate = q.rate; // This is a number or null
 
+          // ✅ FIX: rate를 숫자로 변환하여 계산 오류 방지
+          const numericRate = (typeof rate === 'number' && !isNaN(rate)) ? rate : Number(rate);
+
           let color, shadowColor, bgColor, cursor, clickHandler, rateText, styleMods = {};
           let cls = `qbtn`;
           
           if (hasExp) {
               // Dynamic Red Styling (Difficulty)
-              const clampedRate = Math.min(100, Math.max(0, rate)); 
+              const clampedRate = Math.min(100, Math.max(0, numericRate)); 
               const clampedDifficulty = 100 - clampedRate; // 0 (쉬움) to 100 (어려움)
 
               const hue = 0; // Red Hue (Fixed)
               const saturation = 90; // High Saturation (Fixed) - 채도는 높게 고정
 
-              // FIX 1: 배경 밝기: 15% (쉬움) -> 5% (어려움). 난이도 높을수록 배경이 어두워져 대비 극대화
-              const bgLightness = Math.min(15, Math.max(5, Math.round(15 - clampedDifficulty * 0.1)));
+              // FIX 1: 배경 밝기: 15% (쉬움) -> 3% (어려움). 난이도 높을수록 배경이 어두워져 대비 극대화
+              const bgLightness = Math.min(15, Math.max(3, Math.round(15 - clampedDifficulty * 0.12)));
               
               // FIX 2: 강조 밝기: 40% (쉬움) -> 90% (어려움). 난이도 높을수록 발광이 밝아져 대비 극대화
               const accentLightness = Math.min(90, Math.max(40, Math.round(40 + clampedDifficulty * 0.5)));
@@ -443,7 +446,7 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
               cursor = "pointer";
               // openExplanation 함수에 rate를 그대로 전달 (toFixed는 표시용)
               clickHandler = (e) => { e.stopPropagation(); openExplanation(session, qNum, rate); };
-              rateText = `${rate.toFixed(1)}%`; // 소수점 한 자리 표시
+              rateText = `${numericRate.toFixed(1)}%`; // 소수점 한 자리 표시
               
               // Apply dynamic styles
               styleMods = {
@@ -508,7 +511,7 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
                   if (hasExp) {
                       e.currentTarget.style.transform = 'translateY(-1px) scale(1.02)';
                       // Hover 시 그림자 강도를 동적으로 더 강하게
-                      const clampedDifficulty = 100 - Math.min(100, Math.max(0, rate)); 
+                      const clampedDifficulty = 100 - Math.min(100, Math.max(0, numericRate)); 
                       e.currentTarget.style.boxShadow = `0 0 ${12 + clampedDifficulty * 0.1}px ${shadowColor}, 0 0 ${24 + clampedDifficulty * 0.2}px ${shadowColor}60`;
                   }
               }}
