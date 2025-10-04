@@ -664,7 +664,7 @@ const centerStyle = {
 };
 
 const footerStyle = {
-  borderTop: "1px solid "#2d333b",
+  borderTop: "1px solid #2d333b",
   padding: "8px 12px",
   display: "flex",
   justifyContent: "space-between",
