@@ -369,7 +369,7 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     }, 100); // 100ms 지연
   };
 
-  // ✅ MODIFIED: renderButtons 함수 전체 수정 (해설 없는 문항 포함, 정답률 toFixed(1))
+  // ✅ MODIFIED: renderButtons 함수 전체 수정 (색상 차이 최대화 로직 적용)
   const renderButtons = () => {
     if (!activeSubject || !highErrorQuestions[activeSubject]) {
       console.log("버튼 렌더링 불가:", { activeSubject, hasData: !!highErrorQuestions[activeSubject] });
@@ -421,41 +421,40 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
           
           if (hasExp) {
               // Dynamic Red Styling (Difficulty)
-              // Clamp rate to ensure it's between 0 and 100 for color calculation safety
               const clampedRate = Math.min(100, Math.max(0, rate)); 
               const clampedDifficulty = 100 - clampedRate; // 0 (쉬움) to 100 (어려움)
 
-              // ✅ MODIFIED COLOR LOGIC: 채도/밝기 변화 폭 확대
-              // Saturation: 50% (쉬움) to 100% (어려움)
-              const saturation = Math.min(100, Math.max(50, Math.round(50 + clampedDifficulty * 0.5)));
-              // Accent Lightness (Border/Shadow): 45% (쉬움) to 25% (어려움)
-              const accentLightness = Math.min(45, Math.max(25, Math.round(45 - clampedDifficulty * 0.2)));
-              // Background Lightness (Button Fill): 12% (쉬움) to 8% (어려움)
-              const bgLightness = Math.min(12, Math.max(8, Math.round(12 - clampedDifficulty * 0.04)));
-              
               const hue = 0; // Red Hue
+
+              // FIX 1: 채도 변화를 30% (쉬움) ~ 100% (어려움)로 넓힘
+              const saturation = Math.min(100, Math.max(30, Math.round(30 + clampedDifficulty * 0.7))); 
               
-              color = `hsl(${hue}, ${saturation}%, 70%)`; // 텍스트 색상: 밝은 빨간색
-              shadowColor = `hsl(${hue}, ${saturation}%, ${accentLightness}%)`; // 테두리/그림자 색상: 깊은 빨간색
-              bgColor = `hsl(${hue}, ${saturation}%, ${bgLightness}%)`; // 배경 색상: 매우 어두운, 미묘한 빨간색
+              // FIX 2: 테두리/그림자 밝기 변화를 20% (쉬움) ~ 75% (어려움)로 넓힘
+              const accentLightness = Math.min(75, Math.max(20, Math.round(20 + clampedDifficulty * 0.55)));
+              
+              // FIX 3: 배경 밝기 변화를 15% (쉬움) ~ 3% (어려움)로 설정 (난이도 높을수록 어두워짐)
+              const bgLightness = Math.min(15, Math.max(3, Math.round(15 - clampedDifficulty * 0.12)));
+              
+              // Text Lightness: 80% 고정 (가독성 확보)
+              const textLightness = 80; 
+              
+              color = `hsl(${hue}, ${saturation}%, ${textLightness}%)`; // 텍스트 색상
+              shadowColor = `hsl(${hue}, ${saturation}%, ${accentLightness}%)`; // 테두리/그림자 색상
+              bgColor = `hsl(${hue}, ${saturation}%, ${bgLightness}%)`; // 배경 색상
               
               cursor = "pointer";
               // openExplanation 함수에 rate를 그대로 전달 (toFixed는 표시용)
               clickHandler = (e) => { e.stopPropagation(); openExplanation(session, qNum, rate); };
-              rateText = `${rate.toFixed(1)}%`; // ✅ FIX: toFixed(1) for one decimal place
+              rateText = `${rate.toFixed(1)}%`; // 소수점 한 자리 표시
               
               // Apply dynamic styles
               styleMods = {
                 color: color,
                 borderColor: shadowColor,
                 background: bgColor,
-                boxShadow: `0 0 8px ${shadowColor}, 0 0 16px ${shadowColor}40`,
+                // 그림자 강도를 난이도에 비례하게 설정 (어려울수록 더 밝게 빛남)
+                boxShadow: `0 0 ${8 + clampedDifficulty * 0.15}px ${shadowColor}, 0 0 ${16 + clampedDifficulty * 0.3}px ${shadowColor}40`,
                 cursor: cursor,
-                // Hover effect with dynamic colors (optional, but good practice)
-                ":hover": {
-                    transform: 'translateY(-1px) scale(1.02)',
-                    boxShadow: `0 0 12px ${shadowColor}, 0 0 24px ${shadowColor}60`,
-                }
               };
               cls += ` qbtn-rate`; 
 
@@ -482,7 +481,7 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
           
           const label = hasExp 
               ? `문항 ${qNum} · 정답률 ${rateText} · 특별 해설`
-              : `문항 ${qNum} · 해설 없음`;
+              : `문항 ${qNum}`; // 툴팁에서 해설 없음 문구 제거
 
           return (
             <button
@@ -492,6 +491,7 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
               title={label}
               aria-label={label}
               onClick={clickHandler}
+              disabled={!hasExp} // 해설 없는 문항은 비활성화
               // ✅ Apply combined styles and hover property
               style={{
                 width: `${cellW}px`,
@@ -505,11 +505,13 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
                 boxSizing: 'border-box',
                 ...styleMods // Apply calculated styles
               }}
-              // CSS-in-JS로 hover 효과 적용 (cursor는 styleMods에서 정의됨)
+              // CSS-in-JS로 hover 효과 적용
               onMouseEnter={(e) => {
                   if (hasExp) {
                       e.currentTarget.style.transform = 'translateY(-1px) scale(1.02)';
-                      e.currentTarget.style.boxShadow = `0 0 12px ${shadowColor}, 0 0 24px ${shadowColor}60`;
+                      // Hover 시 그림자 강도를 동적으로 더 강하게
+                      const clampedDifficulty = 100 - Math.min(100, Math.max(0, rate)); 
+                      e.currentTarget.style.boxShadow = `0 0 ${12 + clampedDifficulty * 0.1}px ${shadowColor}, 0 0 ${24 + clampedDifficulty * 0.2}px ${shadowColor}60`;
                   }
               }}
               onMouseLeave={(e) => {
@@ -518,7 +520,6 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
                       e.currentTarget.style.boxShadow = styleMods.boxShadow;
                   }
               }}
-              disabled={!hasExp} // 해설 없는 문항은 비활성화
             >
               {qNum}
               {/* ✅ 정답률 텍스트 표시 (해설 있는 경우) */}
@@ -536,20 +537,8 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
                   </span>
               )}
               
-              {/* ✅ 해설 없음 텍스트 표시 (해설 없는 경우) */}
-              {!hasExp && (
-                  <span style={{ 
-                      position: 'absolute', 
-                      bottom: '2px', 
-                      fontSize: '9px', 
-                      fontWeight: 600,
-                      color: 'var(--muted)',
-                      opacity: 0.7,
-                      lineHeight: 1 
-                  }}>
-                    해설 없음
-                  </span>
-              )}
+              {/* 해설 없는 문항은 하단 텍스트를 표시하지 않음 */}
+              
             </button>
           );
         })}
