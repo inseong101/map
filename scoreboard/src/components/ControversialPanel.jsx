@@ -25,7 +25,7 @@ const FORMAL_SUBJECT_MAPPING = {
   "예방": "예방의학",
   "생리": "한방생리학",
   "본초": "본초학",
-  "기타": "기타 과목" 
+  "기타": "기타 과목"
 };
 
 // ✅ 정확한 과목 매핑 정의 (회차별로 다름)
@@ -369,7 +369,7 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     }, 100); // 100ms 지연
   };
 
-  // ✅ MODIFIED: renderButtons 함수 전체 수정 (정답률 표시 및 동적 스타일링)
+  // ✅ MODIFIED: renderButtons 함수 전체 수정 (해설 없는 문항 포함, 정답률 toFixed(1))
   const renderButtons = () => {
     if (!activeSubject || !highErrorQuestions[activeSubject]) {
       console.log("버튼 렌더링 불가:", { activeSubject, hasData: !!highErrorQuestions[activeSubject] });
@@ -379,17 +379,19 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     const questions = highErrorQuestions[activeSubject];
     const expQuestions = fireBySession[activeSession] || []; // { qNum, rate } 배열
     
-    // 현재 과목의 문항 중 해설이 있는 문항만 필터링하고 정답률 정보를 병합
-    const questionsToRender = questions
+    // 현재 과목의 모든 문항을 렌더링하도록 수정 (필터링 제거)
+    const sortedQuestions = questions
         .map(q => {
             // 정답률 객체 찾기
             const exp = expQuestions.find(exp => exp.qNum === q.questionNum);
-            return exp ? { ...q, rate: exp.rate, hasExp: true } : { ...q, hasExp: false };
+            // rate는 number이거나 null
+            return exp 
+                ? { ...q, rate: exp.rate, hasExp: true } 
+                : { ...q, rate: null, hasExp: false };
         })
-        .filter(q => q.hasExp) // 해설이 있는 문항만 렌더링
-        .sort((a, b) => a.questionNum - b.questionNum);
+        .sort((a, b) => a.questionNum - b.questionNum); // 순서대로 정렬 유지
     
-    console.log("버튼 렌더링:", { activeSubject, questions: questionsToRender.length, gridStyle });
+    console.log("버튼 렌더링:", { activeSubject, questions: sortedQuestions.length, gridStyle });
     
     const { cols, rows, cellW, cellH } = gridStyle;
     
@@ -408,71 +410,123 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
           overflow: 'visible'
         }}
       >
-        {questionsToRender.map((q) => {
+        {sortedQuestions.map((q) => { // Loop over ALL questions
           const qNum = q.questionNum;
           const session = q.session;
-          const rate = q.rate;
+          const hasExp = q.hasExp;
+          const rate = q.rate; // This is a number or null
+
+          let color, shadowColor, bgColor, cursor, clickHandler, rateText, styleMods = {};
+          let cls = `qbtn`;
           
-          // ✅ 동적 빨간색 강조 계산: 정답률이 낮을수록 (난이도가 높을수록) 강한 빨간색
-          const difficulty = 100 - rate; // 0 (쉬움) to 100 (어려움)
+          if (hasExp) {
+              // Dynamic Red Styling (Difficulty)
+              // Clamp rate to ensure it's between 0 and 100 for color calculation safety
+              const clampedRate = Math.min(100, Math.max(0, rate)); 
+              const clampedDifficulty = 100 - clampedRate;
+
+              // Saturation: 50% (쉬움) to 100% (어려움)
+              const saturation = Math.min(100, Math.max(50, Math.round(50 + clampedDifficulty * 0.5)));
+              // Lightness: 25% (어려움) to 45% (쉬움). 
+              const lightness = Math.min(45, Math.max(25, Math.round(45 - clampedDifficulty * 0.2)));
+              
+              const hue = 0; // Red Hue
+              
+              color = `hsl(${hue}, ${saturation}%, 65%)`; // 텍스트 색상: 밝은 빨간색
+              shadowColor = `hsl(${hue}, ${saturation}%, ${lightness}%)`; // 테두리/그림자 색상: 깊은 빨간색
+              bgColor = `hsl(${hue}, ${saturation}%, 10%)`; // 배경 색상: 매우 어두운, 미묘한 빨간색
+              
+              cursor = "pointer";
+              clickHandler = (e) => { e.stopPropagation(); openExplanation(session, qNum, rate); };
+              rateText = `${rate.toFixed(1)}%`; // ✅ FIX: toFixed(1) for one decimal place
+              
+              // Apply dynamic styles
+              styleMods = {
+                color: color,
+                borderColor: shadowColor,
+                background: bgColor,
+                boxShadow: `0 0 8px ${shadowColor}, 0 0 16px ${shadowColor}40`,
+                cursor: cursor,
+              };
+              cls += ` qbtn-rate`; 
+
+          } else {
+              // Default "No Explanation" Style
+              color = 'var(--muted)';
+              shadowColor = 'var(--line)'; // Default border
+              bgColor = 'rgba(255,255,255,0.02)'; // Lighter background for no exp
+              cursor = "default";
+              clickHandler = undefined;
+              rateText = null; 
+              
+              // Apply static styles
+              styleMods = {
+                color: color,
+                borderColor: shadowColor,
+                background: bgColor,
+                opacity: 0.7, 
+                cursor: cursor,
+                boxShadow: 'none',
+                pointerEvents: 'none' // Ensure it's not clickable
+              };
+              cls += ` no-explanation`; 
+          }
           
-          // Saturation: 50% (쉬움) to 100% (어려움)
-          const saturation = Math.min(100, Math.max(50, Math.round(50 + difficulty * 0.5)));
-          // Lightness: 25% (어려움) to 45% (쉬움). 어두운 배경에서 어두운 색상은 더 강하게 보임.
-          const lightness = Math.min(45, Math.max(25, Math.round(45 - difficulty * 0.2)));
-          
-          const hue = 0; // 고정된 빨간색 Hue
-          
-          const color = `hsl(${hue}, ${saturation}%, 65%)`; // 텍스트 색상: 밝은 빨간색
-          const shadowColor = `hsl(${hue}, ${saturation}%, ${lightness}%)`; // 테두리/그림자 색상: 깊은 빨간색
-          const bgColor = `hsl(${hue}, ${saturation}%, 10%)`; // 배경 색상: 매우 어두운, 미묘한 빨간색
-          
-          const cls = `qbtn qbtn-rate`; // 새로운 범용 클래스 적용
+          const label = hasExp 
+              ? `문항 ${qNum} · 정답률 ${rateText} · 특별 해설`
+              : `문항 ${qNum} · 해설 없음`;
 
           return (
             <button
               key={qNum}
               type="button"
               className={cls}
-              title={`문항 ${qNum} · 정답률 ${rate}%`}
-              aria-label={`문항 ${qNum} · 정답률 ${rate}%`}
-              onClick={(e) => { 
-                  e.stopPropagation(); 
-                  // openExplanation 함수에 rate 전달
-                  openExplanation(session, qNum, rate); 
-              }}
+              title={label}
+              aria-label={label}
+              onClick={clickHandler}
               style={{
                 width: `${cellW}px`,
                 height: `${cellH}px`,
-                cursor: "pointer",
                 fontSize: `${Math.max(8, Math.min(12, cellW / 5))}px`,
-                // 동적 HSL 색상 적용
-                color: color,
-                borderColor: shadowColor,
-                background: bgColor,
-                // 빨간색 강조 Box Shadow
-                boxShadow: `0 0 8px ${shadowColor}, 0 0 16px ${shadowColor}40`,
                 position: 'relative', 
                 fontWeight: 700,
                 transition: 'all 0.2s ease',
                 minWidth: 0,
                 minHeight: 0,
-                boxSizing: 'border-box'
+                boxSizing: 'border-box',
+                ...styleMods // Apply calculated styles
               }}
             >
               {qNum}
-              {/* ✅ 정답률 텍스트 표시 */}
-              <span style={{ 
-                position: 'absolute', 
-                bottom: '2px', 
-                fontSize: '10px', 
-                fontWeight: 600,
-                color: color,
-                opacity: 0.9,
-                lineHeight: 1 
-              }}>
-                {rate}%
-              </span>
+              {/* ✅ 정답률 텍스트 표시 (해설 있는 경우) */}
+              {hasExp && (
+                  <span style={{ 
+                    position: 'absolute', 
+                    bottom: '2px', 
+                    fontSize: '10px', 
+                    fontWeight: 600,
+                    color: color,
+                    opacity: 0.9,
+                    lineHeight: 1 
+                  }}>
+                    {rateText}
+                  </span>
+              )}
+              
+              {/* ✅ 해설 없음 텍스트 표시 (해설 없는 경우) */}
+              {!hasExp && (
+                  <span style={{ 
+                      position: 'absolute', 
+                      bottom: '2px', 
+                      fontSize: '9px', 
+                      fontWeight: 600,
+                      color: 'var(--muted)',
+                      opacity: 0.7,
+                      lineHeight: 1 
+                  }}>
+                    해설 없음
+                  </span>
+              )}
             </button>
           );
         })}
