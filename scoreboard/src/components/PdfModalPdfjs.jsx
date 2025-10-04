@@ -288,71 +288,85 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
 
   // 고화질 렌더링 (화질 문제 해결)
   const renderPage = useCallback(async (doc, num) => {
-    if (!doc || !canvasRef.current || !holderRef.current || renderedRef.current) return;
+  if (!doc || !canvasRef.current || !holderRef.current || renderedRef.current) return;
+  
+  try {
+    renderedRef.current = true;
     
-    try {
-      renderedRef.current = true;
-      
-      const page = await doc.getPage(num);
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext("2d", { alpha: false });
+    const page = await doc.getPage(num);
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d", { alpha: false });
 
-      const { width: containerWidth, height: containerHeight } = getContainerSize();
-      const baseViewport = page.getViewport({ scale: 1 });
-      
-      // ✅ [규칙 1. 초기 줌/최대 줌]: 가로 맞춤 스케일 계산 (Max Zoom Limit)
-      const initialScale = containerWidth / baseViewport.width;
-      
-      // ✅ [규칙 1. 최소 축소]: 세로 길이 맞춤 스케일 계산 (Min Zoom Limit)
-      const heightFitScale = containerHeight / baseViewport.height;
-
-      // 최대 확대는 가로 맞춤 스케일 (규칙 1)
-      initialScaleRef.current = initialScale; 
-      
-      // 최소 축소는 세로 맞춤 스케일 (규칙 1), 하지만 0.1 이하로 내려가지 않도록 하드 캡 적용
-      minScaleRef.current = Math.max(MIN_ZOOM_HARD_CAP, heightFitScale); 
-      
-      // 고해상도 렌더링을 위한 스케일
-      const isMobile = window.innerWidth <= 768;
-      const qualityMultiplier = isMobile ? 3.0 : 4.0;
-      const renderScale = initialScale * qualityMultiplier; // 초기 스케일 기준으로 고해상도 렌더링 스케일 계산
-      
-      // 렌더링 뷰포트
-      const renderViewport = page.getViewport({ scale: renderScale });
-      
-      // 캔버스 크기 설정 (고해상도)
-      canvas.width = Math.floor(renderViewport.width);
-      canvas.height = Math.floor(renderViewport.height);
-      
-      // 표시 크기 설정 (화면에 맞춤 - 폭은 100%, 높이는 실제 높이)
-      const displayWidth = Math.floor(baseViewport.width * initialScale);
-      const displayHeight = Math.floor(baseViewport.height * initialScale);
-      canvas.style.width = `${displayWidth}px`;
-      canvas.style.height = `${displayHeight}px`;
-      
-      // 컨텍스트 초기화
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      // 고해상도로 렌더링
-      await page.render({ 
-        canvasContext: ctx, 
-        viewport: renderViewport,
-        intent: 'display',
-        renderInteractiveForms: false
-      }).promise;
-
-      // 줌 상태 초기화 (페이지 변경 시)
-      resetZoom();
-      
-    } catch (error) {
-      console.error("PDF 렌더링 오류:", error);
-    } finally {
-      setTimeout(() => {
-        renderedRef.current = false;
-      }, 100);
+    const { width: containerWidth, height: containerHeight } = getContainerSize();
+    const baseViewport = page.getViewport({ scale: 1 });
+    
+    console.log(`📦 컨테이너: ${containerWidth}x${containerHeight}`);
+    console.log(`📄 PDF 원본: ${baseViewport.width.toFixed(1)}x${baseViewport.height.toFixed(1)}`);
+    
+    // ✅ 초기 스케일: 가로를 컨테이너에 정확히 맞춤
+    const initialScale = containerWidth / baseViewport.width;
+    
+    // ✅ 최소 축소: 세로 맞춤 (하드 캡 0.1)
+    const heightFitScale = containerHeight / baseViewport.height;
+    
+    initialScaleRef.current = initialScale; 
+    minScaleRef.current = Math.max(MIN_ZOOM_HARD_CAP, heightFitScale);
+    
+    console.log(`🔍 초기 스케일: ${initialScale.toFixed(3)} (가로 맞춤)`);
+    console.log(`🔍 최소 스케일: ${minScaleRef.current.toFixed(3)} (세로 맞춤)`);
+    
+    // 고해상도 렌더링 스케일
+    const isMobile = window.innerWidth <= 768;
+    const qualityMultiplier = isMobile ? 3.0 : 4.0;
+    const renderScale = initialScale * qualityMultiplier;
+    
+    const renderViewport = page.getViewport({ scale: renderScale });
+    
+    // 캔버스 실제 크기 (고해상도)
+    canvas.width = Math.floor(renderViewport.width);
+    canvas.height = Math.floor(renderViewport.height);
+    
+    console.log(`🎨 캔버스 실제 크기: ${canvas.width}x${canvas.height} (${qualityMultiplier}배 렌더링)`);
+    
+    // ✅ FIX: 표시 크기를 containerWidth에 정확히 맞춤
+    const displayHeight = baseViewport.height * initialScale;
+    
+    canvas.style.width = `${containerWidth}px`;  // 👈 정확히 컨테이너 너비
+    canvas.style.height = `${Math.floor(displayHeight)}px`;
+    
+    console.log(`🖼️  표시 크기: ${containerWidth}x${Math.floor(displayHeight)}`);
+    
+    // 가로가 정확히 맞는지 검증
+    const widthDiff = containerWidth - canvas.getBoundingClientRect().width;
+    if (Math.abs(widthDiff) > 1) {
+      console.warn(`⚠️  가로 크기 불일치: ${widthDiff.toFixed(2)}px`);
+    } else {
+      console.log(`✅ 가로 크기 정확히 맞음!`);
     }
-  }, [resetZoom, MIN_ZOOM_HARD_CAP]);
+    
+    // 컨텍스트 초기화
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // 고해상도 렌더링
+    await page.render({ 
+      canvasContext: ctx, 
+      viewport: renderViewport,
+      intent: 'display',
+      renderInteractiveForms: false
+    }).promise;
+
+    // 줌 상태 초기화
+    resetZoom();
+    
+  } catch (error) {
+    console.error("❌ PDF 렌더링 오류:", error);
+  } finally {
+    setTimeout(() => {
+      renderedRef.current = false;
+    }, 100);
+  }
+}, [resetZoom, MIN_ZOOM_HARD_CAP]);
 
   const renderFirstPage = useCallback(async (doc) => {
     if (!doc) return;
