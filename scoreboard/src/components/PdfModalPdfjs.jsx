@@ -168,8 +168,9 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
 
   // ---------- 가상 스크롤(휠/트랙패드) ----------
   const handleWheel = useCallback((e) => {
-    if (e.ctrlKey || e.metaKey) return;
-    e.preventDefault();
+    // 여기서는 기본 스크롤을 막고(바디/페이지 스크롤 금지) 우리가 translateY로 이동 처리
+    if (e.ctrlKey || e.metaKey) return; // 전역에서 Ctrl/⌘ + wheel은 이미 막음
+    if (e.cancelable) e.preventDefault();
 
     const step = e.deltaY;
     let ty = touchState.current.translateY - step;
@@ -180,7 +181,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     tick();
   }, [zoom, applyCanvasTransform, clampTranslateY, tick]);
 
-  // ---------- 드래그/터치 ----------
+  // ---------- 터치/마우스 드래그 ----------
   const handleTouchStart = useCallback((e) => {
     const t = e.touches;
     if (t.length === 1) {
@@ -200,6 +201,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       newY = clampTranslateY(newY, zoom);
       touchState.current.translateY = newY;
       touchState.current.lastTouchY = t[0].clientY;
+      if (e.cancelable) e.preventDefault();
       applyCanvasTransform(zoom, newY, false);
       tick();
     }
@@ -404,6 +406,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       }
     };
 
+    // 브라우저 전역 줌(CTRL/⌘ + 휠) 차단
     const preventAllZoom = (e) => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
@@ -425,6 +428,22 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     };
   }, [open, onClose, loading, handleMouseMove, handleMouseUp, applyCanvasTransform, clampTranslateY, zoom, tick]);
 
+  // ---------- holder에 non-passive wheel 리스너 부착 ----------
+  useEffect(() => {
+    if (!open) return;
+    const el = holderRef.current;
+    if (!el) return;
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => el.removeEventListener("wheel", handleWheel);
+  }, [open, handleWheel]);
+
+  // 창 크기 변화 시 썸 재계산
+  useEffect(() => {
+    const onResize = () => tick();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [tick]);
+
   if (!open) return null;
 
   const maxScale = 1.0;
@@ -436,11 +455,11 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   const canvas = canvasRef.current;
   const baseCssHeight = parseFloat(canvas?.style.height || "0");
   const scaled = baseCssHeight * zoom;
-  const trackH = viewH; // 진행 트랙 높이
+  const trackH = viewH; // 트랙 = holder 높이
   const MIN_THUMB = 18; // 최소 썸 높이(px)
   const thumbH = !scaled || scaled <= trackH
     ? 0
-    : Math.max(MIN_THUMB, Math.round((trackH / scaled) * trackH)); // 비율에 따른 높이
+    : Math.max(MIN_THUMB, Math.round((trackH / scaled) * trackH)); // 보이는 비율에 따른 높이
   const travel = Math.max(0, trackH - thumbH);
   const thumbTop = Math.round(pr * travel);
   const showProgress = isScrollableNow() && !loading && !err;
@@ -487,8 +506,8 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
           <button onClick={onClose} style={closeBtnStyle} aria-label="닫기">✕</button>
         </div>
 
-        {/* 뷰어(네이티브 스크롤 없음, 가상 스크롤 onWheel) */}
-        <div ref={holderRef} style={viewerStyleScrollable} onWheel={handleWheel}>
+        {/* 뷰어(네이티브 스크롤 없음) */}
+        <div ref={holderRef} style={viewerStyleScrollable}>
           {loading && (
             <div style={centerStyle}>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
@@ -520,7 +539,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
                 maxHeight: "none",
                 objectFit: "contain",
                 imageRendering: "high-quality",
-                touchAction: "none",
+                touchAction: "none", // 제스처는 우리가 처리
                 cursor: mouseState.current.isDragging || touchState.current.isDragging ? "grabbing" : "grab"
               }}
             />
@@ -698,7 +717,7 @@ const progressTrackStyle = {
   position: "absolute",
   top: 0,
   bottom: 0,
-  right: 3,         // 트랙이 우측에 붙도록
+  right: 3,
   width: 4,
   background: "rgba(255,255,255,0.10)",
   borderRadius: 2
