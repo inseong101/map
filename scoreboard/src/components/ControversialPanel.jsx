@@ -278,7 +278,7 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     return () => { cancelled = true; };
   }, [roundLabel, getExplanationIndex]);
 
-  // 단순화된 그리드 계산 함수 - 고정 크기, 세로 확장
+  // 단순화된 그리드 크기 계산 (한 번만 계산)
   useEffect(() => {
     const el = gridWrapRef.current;
     if (!el) return;
