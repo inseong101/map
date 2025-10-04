@@ -103,6 +103,8 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   }, []);
 
   const handleTouchMove = useCallback((e) => {
+    // 🚨 FIX: onTouchMove={handleTouchMove()}와 같은 실수 방지 및 e.preventDefault() 호출
+    if (!e) return; 
     e.preventDefault();
     e.stopPropagation();
     
@@ -496,7 +498,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
             <canvas
               ref={canvasRef}
               onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove} // Removed function call wrapper
+              onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
               onMouseDown={handleMouseDown} // <-- 마우스 드래그 시작
               onWheel={handleWheel} // ✅ 휠 이벤트 핸들러 추가
