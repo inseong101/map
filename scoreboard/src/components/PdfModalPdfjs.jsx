@@ -84,33 +84,27 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     const containerWidth = container.getBoundingClientRect().width - 30; 
     const translateX = (containerWidth - scaledWidth) / 2;
     
-    // Y축 클램핑
-    const clampedTranslateY = clampTranslateY(translateY, currentZoom);
-    touchState.current.translateY = clampedTranslateY;
-    
     // transform 적용: scale은 currentZoom만 사용 (CSS 크기가 이미 Fit-to-Width 기준)
-    const transform = `translate(${translateX}px, ${clampedTranslateY}px) scale(${currentZoom})`;
+    const transform = `translate(${translateX}px, ${translateY}px) scale(${currentZoom})`;
     
     canvas.style.setProperty('transform', transform, 'important');
     canvas.style.setProperty('transform-origin', 'top left', 'important');
     canvas.style.setProperty('transition', withTransition ? 'transform 0.3s ease' : 'none', 'important');
-  }, [clampTranslateY]);
+  }, []);
 
   const handleZoomChange = useCallback((newZoom) => {
     if (!holderRef.current || !canvasRef.current) {
+      const clamped = clampTranslateY(0, newZoom);
+      touchState.current.translateY = clamped;
       setZoom(newZoom);
-      applyCanvasTransform(newZoom, 0, true);
+      applyCanvasTransform(newZoom, clamped, true);
       return;
     }
 
     const container = holderRef.current;
     const canvas = canvasRef.current;
     const containerRect = container.getBoundingClientRect();
-    const containerHeight = containerRect.height - 30; // 패딩 제외
-    
-    const canvasBaseHeight = parseFloat(canvas.style.height);
-    const oldScaledHeight = canvasBaseHeight * zoom;
-    const newScaledHeight = canvasBaseHeight * newZoom;
+    const containerHeight = containerRect.height - 30;
     
     // 최소 줌일 때는 무조건 상단 정렬
     if (newZoom <= minScaleRef.current) {
@@ -120,22 +114,40 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       return;
     }
     
-    // 현재 뷰포트 중심이 문서의 어느 지점을 보고 있는지 계산
-    const viewportCenterY = containerHeight / 2;
+    // 현재 상태
+    const canvasBaseHeight = parseFloat(canvas.style.height) || 0;
+    if (canvasBaseHeight === 0) {
+      touchState.current.translateY = 0;
+      setZoom(newZoom);
+      applyCanvasTransform(newZoom, 0, true);
+      return;
+    }
+    
+    const oldScaledHeight = canvasBaseHeight * zoom;
+    const newScaledHeight = canvasBaseHeight * newZoom;
     const currentTranslateY = touchState.current.translateY;
     
-    // 문서 좌표계에서 뷰포트 중심이 가리키는 지점 (비율로 계산)
-    const documentPointY = (viewportCenterY - currentTranslateY) / oldScaledHeight;
+    // 뷰포트 중앙 Y 좌표
+    const viewportCenterY = containerHeight / 2;
     
-    // 새 줌에서 같은 문서 지점이 뷰포트 중심에 오도록 translateY 계산
-    const newTranslateY = viewportCenterY - (documentPointY * newScaledHeight);
+    // 현재 뷰포트 중앙이 가리키는 문서상의 Y 좌표 (픽셀 단위)
+    const documentY = viewportCenterY - currentTranslateY;
     
-    // 클램핑 적용
-    const clampedY = clampTranslateY(newTranslateY, newZoom);
+    // 문서 내 비율 (0~1)
+    const ratio = documentY / oldScaledHeight;
     
-    touchState.current.translateY = clampedY;
+    // 새 줌에서 같은 비율 지점의 문서 Y 좌표
+    const newDocumentY = ratio * newScaledHeight;
+    
+    // 그 지점이 뷰포트 중앙에 오도록 translateY 계산
+    let newTranslateY = viewportCenterY - newDocumentY;
+    
+    // 클램핑
+    newTranslateY = clampTranslateY(newTranslateY, newZoom);
+    
+    touchState.current.translateY = newTranslateY;
     setZoom(newZoom);
-    applyCanvasTransform(newZoom, clampedY, true);
+    applyCanvasTransform(newZoom, newTranslateY, true);
   }, [zoom, applyCanvasTransform, clampTranslateY]);
 
   const handleZoomIn = useCallback(() => {
