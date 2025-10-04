@@ -357,8 +357,14 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
   const openExplanation = (session, qNum, rate) => {
     const rNum = parseInt(String(roundLabel).replace(/\D/g, ""), 10) || 1;
     const sNum = parseInt(String(session).replace(/\D/g, ""), 10) || 1;
+    
+    // 👇 FIX: rate(숫자)를 소수점 첫째 자리까지 고정하여 문자열로 변환합니다.
+    const rateStr = (typeof rate === 'number' && !isNaN(rate)) 
+      ? rate.toFixed(1) // 37 -> "37.0", 37.4 -> "37.4"
+      : String(rate); // 안전장치 (rate가 숫자가 아닐 경우)
+      
     // 파일명에 정답률 포함
-    const path = `explanation/${rNum}-${sNum}-${qNum}-${rate}.pdf`;
+    const path = `explanation/${rNum}-${sNum}-${qNum}-${rateStr}.pdf`; // 수정된 rateStr 사용
     
     console.log("PDF 열기:", path);
     
