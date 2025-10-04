@@ -223,27 +223,36 @@ exports.getExplanationIndex = functions
   const bucket = admin.storage().bucket();
 
   const [files] = await bucket.getFiles({ prefix: "explanation/" });
+  // 반환값 구조를 변경: { qNum, rate } 객체 배열을 저장
   const bySession = { "1교시": [], "2교시": [], "3교시": [], "4교시": [] };
 
   files.forEach(f => {
-    const m = f.name.match(/^explanation\/(\d+)-(\d+)-(\d+)\.pdf$/);
+    // MODIFIED REGEX: R-S-Q-RATE.pdf 패턴에 맞게 수정
+    const m = f.name.match(/^explanation\/(\d+)-(\d+)-(\d+)-(\d+\.?\d*)\.pdf$/);
     if (!m) return;
-    const [_, r, s, q] = m;
+    const [_, r, s, q, rateStr] = m;
     const rLabel = `${parseInt(r,10)}차`;
     const sLabel = `${parseInt(s,10)}교시`;
     const qNum   = parseInt(q, 10);
+    const rate   = parseFloat(rateStr); // 정답률을 숫자로 파싱
+
     if (roundLabel && roundLabel !== rLabel) return;
-    if (bySession[sLabel]) bySession[sLabel].push(qNum);
+    
+    if (bySession[sLabel]) {
+      bySession[sLabel].push({ qNum, rate }); // 문항 번호와 정답률을 함께 저장
+    }
   });
 
+  // 중복된 문항 번호를 제거하고 문항 번호 순으로 정렬하여 반환
   Object.keys(bySession).forEach(k => {
-    const set = new Set(bySession[k]);
-    bySession[k] = Array.from(set).sort((a,b)=>a-b);
+    const uniqueMap = new Map();
+    bySession[k].forEach(item => uniqueMap.set(item.qNum, item));
+    
+    bySession[k] = Array.from(uniqueMap.values()).sort((a,b)=>a.qNum-b.qNum);
   });
 
   return bySession;
 });
-
 // 많이 틀린 문항 조회 - 단순화된 더미 데이터
 exports.getHighErrorRateQuestions = functions
   .region('asia-northeast3')
