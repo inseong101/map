@@ -6,19 +6,19 @@ import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/build/pdf";
 GlobalWorkerOptions.workerSrc = "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
 
 export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
-  // --- 설정값 ---
-  const MIN_ZOOM_HARD_CAP = 0.1; // 최소 배율 하드캡(과도한 제한 방지)
-  const MAX_ZOOM = 1.0;          // 최대 100%(가로맞춤)
+  // --- 설정 ---
+  const MIN_ZOOM_HARD_CAP = 0.1;  // 최소 배율 하드캡(먹통 방지)
+  const MAX_ZOOM = 1.0;           // 최대 100%(가로맞춤)
 
   // --- refs ---
-  const holderRef = useRef(null); // 스크롤 영역 컨테이너
-  const stageRef  = useRef(null); // Y-translate 전용 래퍼
-  const scaledRef = useRef(null); // X-중앙 + scale 적용 래퍼
+  const holderRef = useRef(null); // 스크롤 영역(overflow hidden, 휠로 이동)
+  const stageRef  = useRef(null); // Y-translate 전용
+  const scaledRef = useRef(null); // X-중앙 + scale
   const canvasRef = useRef(null);
 
   const lastKeyRef   = useRef(null);
   const renderedRef  = useRef(false);
-  const minScaleRef  = useRef(MIN_ZOOM_HARD_CAP); // 동적 하한(필요시 조정)
+  const minScaleRef  = useRef(MIN_ZOOM_HARD_CAP); // 동적 하한 (필요 시만 수정)
   const baseCssWRef  = useRef(0); // zoom=1 기준 CSS 폭
   const baseCssHRef  = useRef(0); // zoom=1 기준 CSS 높이
 
@@ -34,7 +34,10 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   const touchState = useRef({ isDragging: false, lastY: 0, translateY: 0 });
   const mouseState = useRef({ isDragging: false, lastY: 0 });
 
-  // ---------- 유틸: 컨테이너 내부 사이즈(패딩 제외) ----------
+  // 진행 썸 상태 (우측 작은 스크롤바)
+  const [progress, setProgress] = useState({ show:false, thumbH:0, thumbTop:0 });
+
+  // ---------- 컨테이너 내부 사이즈(패딩 제외) ----------
   const getInnerBox = useCallback(() => {
     const el = holderRef.current;
     if (!el) return { innerW: 600, innerH: 400 };
@@ -56,14 +59,35 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     return Math.max(minY, Math.min(0, ty));
   }, [getInnerBox]);
 
+  // ---------- 진행 썸 갱신(translateY, zoom 기반) ----------
+  const updateProgress = useCallback((ty, z) => {
+    const { innerH } = getInnerBox();
+    const scaledH = baseCssHRef.current * z;
+    if (scaledH <= innerH + 0.5) {
+      setProgress(p => (p.show ? { show:false, thumbH:0, thumbTop:0 } : p));
+      return;
+    }
+    const minY = innerH - scaledH;            // 음수
+    const travel = 0 - minY;                  // 전체 이동 가능 거리(양수)
+    const offset = 0 - ty;                    // 현재 위에서부터 이동(양수)
+    const ratio = travel > 0 ? offset / travel : 0; // 0~1
+
+    const trackH = innerH - 30;               // 상/하 여백 조금 띄움(시각)
+    const minThumb = 24;
+    const visibleRatio = innerH / scaledH;
+    const thumbH = Math.max(minThumb, Math.round(trackH * visibleRatio));
+    const thumbTop = Math.round((trackH - thumbH) * ratio) + 15;
+
+    setProgress({ show:true, thumbH, thumbTop });
+  }, [getInnerBox]);
+
   // ---------- 변환 적용: stage(Y), scaled(X+scale) ----------
   const applyTransforms = useCallback((z, ty, withTransition = false) => {
-    const holder = holderRef.current;
     const stage  = stageRef.current;
     const scaled = scaledRef.current;
-    if (!holder || !stage || !scaled) return;
+    if (!stage || !scaled) return;
 
-    // 1) 세로 이동 (scale의 영향에서 분리)
+    // 1) 세로 이동
     stage.style.setProperty("transform", `translateY(${ty}px)`, "important");
     stage.style.setProperty("transition", withTransition ? "transform .16s ease" : "none", "important");
 
@@ -78,7 +102,8 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
 
   const syncApply = useCallback((z, ty, withTransition = false) => {
     applyTransforms(z, ty, withTransition);
-  }, [applyTransforms]);
+    updateProgress(ty, z); // ✅ 변환 적용할 때마다 진행 썸 갱신
+  }, [applyTransforms, updateProgress]);
 
   // ---------- 줌 변경(현재 시야 중앙 고정) ----------
   const handleZoomChange = useCallback((nextZoomRaw) => {
@@ -88,7 +113,6 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     const oldScaledH = baseCssHRef.current * zoom;
     const newScaledH = baseCssHRef.current * newZoom;
 
-    // 화면 중앙 기준 앵커
     const viewportCenter = innerH / 2;
     const oldTY = touchState.current.translateY;
     const oldDocY = viewportCenter - oldTY;                            // 문서 좌표
@@ -147,7 +171,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     if (!open || !holderRef.current) return;
     const el = holderRef.current;
     const onWheel = (e) => {
-      if (e.ctrlKey || e.metaKey) return; // (전역에서 브라우저 줌 차단)
+      if (e.ctrlKey || e.metaKey) return; // 브라우저 줌은 전역에서 따로 차단
       e.preventDefault();
       let ty = touchState.current.translateY - e.deltaY;
       ty = clampTranslateY(ty, zoom);
@@ -218,7 +242,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext("2d", { alpha: false });
 
-      const { innerW, innerH } = getInnerBox();
+      const { innerW } = getInnerBox();
       const baseViewport = page.getViewport({ scale: 1 });
 
       // zoom=1에서 가로 꽉차게
@@ -252,11 +276,10 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         renderInteractiveForms: false
       }).promise;
 
-      // 최소 배율 하한(필요하면 fit-height 하한을 추가로 걸 수 있음)
-      // 여기서는 하드캡만 유지 → 축소 버튼 먹통 방지
+      // 하한은 하드캡만
       minScaleRef.current = MIN_ZOOM_HARD_CAP;
 
-      // 초기 상태: 100%, 위쪽부터
+      // 초기 상태: 100%, 맨 위
       touchState.current.translateY = 0;
       setZoom(1.0);
       syncApply(1.0, 0, false);
@@ -289,7 +312,6 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         const functions = getFunctions(undefined, "asia-northeast3");
         const serve = httpsCallable(functions, "serveWatermarkedPdf");
 
-        // 함수 호출
         const res = await serve({ filePath, sid }).catch((e) => {
           const msg = (e?.message || "").toLowerCase();
           if (msg.includes("internal") || msg.includes("500")) {
@@ -388,6 +410,14 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
               )}
             </div>
           </div>
+
+          {/* 우측 진행 썸(작은 스크롤바) */}
+          {progress.show && (
+            <div style={progressWrap}>
+              <div style={progressTrack} />
+              <div style={{ ...progressThumb, height: `${progress.thumbH}px`, transform: `translateY(${progress.thumbTop}px)` }} />
+            </div>
+          )}
         </div>
 
         {/* 페이지 네비(여러 페이지일 때) */}
@@ -539,4 +569,35 @@ const navBtnStyle = {
   padding: "8px 12px",
   cursor: "pointer",
   fontWeight: 600,
+};
+
+// 진행 썸(우측 작은 스크롤바)
+const progressWrap = {
+  position: "absolute",
+  top: 15,
+  bottom: 15,
+  right: 6,
+  width: 8,
+  pointerEvents: "none",
+  zIndex: 2,
+};
+const progressTrack = {
+  position: "absolute",
+  top: 0,
+  bottom: 0,
+  right: 0,
+  width: 4,
+  background: "rgba(255,255,255,0.10)",
+  borderRadius: 2,
+};
+const progressThumb = {
+  position: "absolute",
+  right: 0,
+  width: 4,
+  background: "rgba(126,162,255,0.95)",
+  borderRadius: 2,
+  boxShadow: "0 1px 6px rgba(0,0,0,0.35)",
+  pointerEvents: "none",
+  userSelect: "none",
+  willChange: "transform,height",
 };
