@@ -424,16 +424,14 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
               const clampedRate = Math.min(100, Math.max(0, rate)); 
               const clampedDifficulty = 100 - clampedRate; // 0 (쉬움) to 100 (어려움)
 
-              const hue = 0; // Red Hue
+              const hue = 0; // Red Hue (Fixed)
+              const saturation = 90; // High Saturation (Fixed) - 채도는 높게 고정
 
-              // FIX 1: 채도 변화를 30% (쉬움) ~ 100% (어려움)로 넓힘
-              const saturation = Math.min(100, Math.max(30, Math.round(30 + clampedDifficulty * 0.7))); 
+              // FIX 1: 배경 밝기: 15% (쉬움) -> 5% (어려움). 난이도 높을수록 배경이 어두워져 대비 극대화
+              const bgLightness = Math.min(15, Math.max(5, Math.round(15 - clampedDifficulty * 0.1)));
               
-              // FIX 2: 테두리/그림자 밝기 변화를 20% (쉬움) ~ 75% (어려움)로 넓힘
-              const accentLightness = Math.min(75, Math.max(20, Math.round(20 + clampedDifficulty * 0.55)));
-              
-              // FIX 3: 배경 밝기 변화를 15% (쉬움) ~ 3% (어려움)로 설정 (난이도 높을수록 어두워짐)
-              const bgLightness = Math.min(15, Math.max(3, Math.round(15 - clampedDifficulty * 0.12)));
+              // FIX 2: 강조 밝기: 40% (쉬움) -> 90% (어려움). 난이도 높을수록 발광이 밝아져 대비 극대화
+              const accentLightness = Math.min(90, Math.max(40, Math.round(40 + clampedDifficulty * 0.5)));
               
               // Text Lightness: 80% 고정 (가독성 확보)
               const textLightness = 80; 
