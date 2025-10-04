@@ -1,4 +1,4 @@
-// src/components/PdfModalPdfjs.jsx (Full Code - X축 중앙 고정 핀치줌)
+// src/components/PdfModalPdfjs.jsx - UI 버튼 줌 컨트롤
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/build/pdf";
@@ -6,12 +6,10 @@ import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/build/pdf";
 GlobalWorkerOptions.workerSrc = "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
 
 export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
-  const FIXED_ZOOM_STEP = 0.05;
   const MIN_ZOOM_HARD_CAP = 0.1;
   
   const holderRef = useRef(null);
   const canvasRef = useRef(null);
-  const modalRef = useRef(null); // ✅ 모달 ref 추가
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
   const [pdfDoc, setPdfDoc] = useState(null);
@@ -22,13 +20,10 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   const initialScaleRef = useRef(1);
   const minScaleRef = useRef(MIN_ZOOM_HARD_CAP);
 
-  const [isZoomed, setIsZoomed] = useState(false);
+  const [zoom, setZoom] = useState(1.0); // UI 상태
   const touchState = useRef({
-    scale: 1,
-    translateY: 0, // X축 제거
-    initialDistance: 0,
+    translateY: 0,
     lastTouchY: 0,
-    isScaling: false,
     isDragging: false
   });
   
@@ -47,220 +42,99 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     };
   };
 
-  const getTouchDistance = (touch1, touch2) => {
-    const dx = touch1.clientX - touch2.clientX;
-    const dy = touch1.clientY - touch2.clientY;
-    return Math.sqrt(dx * dx + dy * dy);
-  };
-
-  // ✅ X축 중앙 고정 transform (translateX 계산)
+  // ✅ X축 중앙 고정 transform
   const applyCanvasTransform = useCallback((scale, translateY) => {
     if (!canvasRef.current || !holderRef.current) return;
     
     const canvas = canvasRef.current;
     const container = holderRef.current;
     
-    // 캔버스 원본 너비
     const canvasWidth = parseFloat(canvas.style.width);
-    
-    // scale 적용 후 너비
     const scaledWidth = canvasWidth * scale;
-    
-    // 컨테이너 너비
     const containerWidth = container.getBoundingClientRect().width;
-    
-    // 중앙 정렬을 위한 translateX 계산
     const translateX = (containerWidth - scaledWidth) / 2;
     
     const transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
     
     canvas.style.setProperty('transform', transform, 'important');
     canvas.style.setProperty('transform-origin', 'top left', 'important');
-    
-    const isInteracting = touchState.current.isScaling || touchState.current.isDragging || mouseState.current.isDragging;
-    canvas.style.setProperty('transition', isInteracting ? 'none' : 'transform 0.3s ease', 'important');
-    
-    setIsZoomed(scale > 1.001);
+    canvas.style.setProperty('transition', 'transform 0.3s ease', 'important');
   }, []);
 
+  // ✅ 줌 버튼 핸들러
+  const handleZoomIn = useCallback(() => {
+    const maxScale = 1.0;
+    const newZoom = Math.min(zoom + 0.1, maxScale);
+    setZoom(newZoom);
+    touchState.current.translateY = 0;
+    applyCanvasTransform(newZoom, 0);
+  }, [zoom, applyCanvasTransform]);
+
+  const handleZoomOut = useCallback(() => {
+    const minScale = minScaleRef.current / initialScaleRef.current;
+    const newZoom = Math.max(zoom - 0.1, minScale);
+    setZoom(newZoom);
+    touchState.current.translateY = 0;
+    applyCanvasTransform(newZoom, 0);
+  }, [zoom, applyCanvasTransform]);
+
+  const handleZoomReset = useCallback(() => {
+    setZoom(1.0);
+    touchState.current.translateY = 0;
+    if (canvasRef.current) {
+      canvasRef.current.style.removeProperty('transform');
+      canvasRef.current.style.removeProperty('transform-origin');
+    }
+  }, []);
+
+  // 터치 드래그 (Y축만)
   const handleTouchStart = useCallback((e) => {
-    e.preventDefault();
     const touches = e.touches;
-    const state = touchState.current;
-    
-    if (touches.length === 2) {
-      state.isScaling = true;
-      state.isDragging = false;
-      state.initialDistance = getTouchDistance(touches[0], touches[1]);
-    } else if (touches.length === 1 && state.scale > minScaleRef.current) {
-      state.isDragging = true;
-      state.isScaling = false;
-      state.lastTouchY = touches[0].clientY;
-      if(canvasRef.current) canvasRef.current.style.transition = 'none';
+    if (touches.length === 1) {
+      touchState.current.isDragging = true;
+      touchState.current.lastTouchY = touches[0].clientY;
     }
   }, []);
 
   const handleTouchMove = useCallback((e) => {
-    if (!e) return; 
-    e.preventDefault();
-    e.stopPropagation();
+    if (!touchState.current.isDragging) return;
     
     const touches = e.touches;
-    const state = touchState.current;
-    const currentMaxScale = 1.0;
-    const currentMinScale = minScaleRef.current / initialScaleRef.current;
-
-    if (touches.length === 2 && state.isScaling) {
-      const currentDistance = getTouchDistance(touches[0], touches[1]);
-      const scaleChange = currentDistance / state.initialDistance;
-      const prevScale = state.scale;
-      let newScale = prevScale * scaleChange;
+    if (touches.length === 1) {
+      const deltaY = touches[0].clientY - touchState.current.lastTouchY;
+      touchState.current.translateY += deltaY;
+      touchState.current.lastTouchY = touches[0].clientY;
       
-      newScale = Math.max(currentMinScale, newScale); 
-      newScale = Math.min(currentMaxScale, newScale); 
-      
-      if (Math.abs(newScale - prevScale) > 0.01) {
-        const canvas = canvasRef.current;
-        const rect = canvas.getBoundingClientRect();
-        
-        // ✅ Y축만 핀치 중심 계산
-        const centerClientY = (touches[0].clientY + touches[1].clientY) / 2;
-        const pointY = (centerClientY - rect.top - state.translateY) / prevScale;
-        
-        // ✅ Y축만 업데이트
-        state.translateY -= (newScale - prevScale) * pointY;
-
-        if (newScale >= currentMaxScale - 0.001 || newScale <= currentMinScale + 0.001) {
-          state.translateY = 0; 
-        }
-        
-        state.scale = newScale;
-        applyCanvasTransform(state.scale, state.translateY);
-        state.initialDistance = currentDistance;
-      }
-      
-    } else if (touches.length === 1 && state.isDragging && state.scale > currentMinScale) {
-      const deltaY = touches[0].clientY - state.lastTouchY;
-      
-      if (Math.abs(deltaY) > 1) {
-        state.translateY += deltaY;
-        state.lastTouchY = touches[0].clientY;
-        
-        applyCanvasTransform(state.scale, state.translateY);
-      }
+      applyCanvasTransform(zoom, touchState.current.translateY);
     }
-  }, [applyCanvasTransform]);
+  }, [zoom, applyCanvasTransform]);
 
   const handleTouchEnd = useCallback(() => {
-    const state = touchState.current;
-    state.isScaling = false;
-    state.isDragging = false;
-    state.initialDistance = 0;
-    if(canvasRef.current) canvasRef.current.style.transition = 'transform 0.3s ease';
+    touchState.current.isDragging = false;
   }, []);
   
+  // 마우스 드래그 (Y축만)
   const handleMouseDown = useCallback((e) => {
-    if (e.button !== 0 || touchState.current.scale <= minScaleRef.current) return; 
-
+    if (e.button !== 0) return;
     e.preventDefault();
-    const state = mouseState.current;
-    state.isDragging = true;
-    state.lastMouseY = e.clientY;
     
-    if(canvasRef.current) canvasRef.current.style.transition = 'none';
+    mouseState.current.isDragging = true;
+    mouseState.current.lastMouseY = e.clientY;
   }, []);
 
   const handleMouseMove = useCallback((e) => {
-    const mState = mouseState.current;
-    const tState = touchState.current;
+    if (!mouseState.current.isDragging) return;
     
-    if (!mState.isDragging || tState.scale <= minScaleRef.current) return;
+    const deltaY = e.clientY - mouseState.current.lastMouseY;
+    touchState.current.translateY += deltaY;
+    mouseState.current.lastMouseY = e.clientY;
     
-    const deltaY = e.clientY - mState.lastMouseY;
-    
-    tState.translateY += deltaY;
-    mState.lastMouseY = e.clientY;
-    
-    applyCanvasTransform(tState.scale, tState.translateY);
-  }, [applyCanvasTransform]);
+    applyCanvasTransform(zoom, touchState.current.translateY);
+  }, [zoom, applyCanvasTransform]);
 
   const handleMouseUp = useCallback(() => {
-    const mState = mouseState.current;
-    if (!mState.isDragging) return;
-    
-    mState.isDragging = false;
-    
-    if(canvasRef.current) canvasRef.current.style.transition = 'transform 0.3s ease';
+    mouseState.current.isDragging = false;
   }, []);
-
-  const handleDoubleClick = useCallback(() => {
-    const state = touchState.current;
-    state.scale = 1.0;
-    state.translateY = 0;
-    
-    if (canvasRef.current) {
-      canvasRef.current.style.removeProperty('transform');
-      canvasRef.current.style.removeProperty('transform-origin');
-    }
-  }, []);
-
-  const resetZoom = useCallback(() => {
-    const state = touchState.current;
-    state.scale = 1.0;
-    state.translateY = 0;
-    
-    if (canvasRef.current) {
-      canvasRef.current.style.removeProperty('transform');
-      canvasRef.current.style.removeProperty('transform-origin');
-    }
-  }, []);
-  
-  const handleWheel = useCallback((e) => {
-    const isZoomGesture = e.ctrlKey || e.metaKey;
-    
-    if (isZoomGesture) {
-        // ✅ 브라우저 줌 완전 차단
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        
-        const state = touchState.current;
-        const zoomStep = FIXED_ZOOM_STEP;
-        const prevScale = state.scale;
-        let newScale = prevScale;
-        
-        if (e.deltaY < 0) {
-            newScale += zoomStep; 
-        } else if (e.deltaY > 0) {
-            newScale -= zoomStep; 
-        }
-        
-        const currentMaxScale = 1.0;
-        const currentMinScale = minScaleRef.current / initialScaleRef.current;
-
-        if (newScale > currentMaxScale) newScale = currentMaxScale;
-        if (newScale < currentMinScale) newScale = currentMinScale;
-        
-        // ✅ 최대/최소 줌 도달 시에도 preventDefault 유지 (브라우저 줌 방지)
-        if (newScale !== prevScale) {
-            const canvas = canvasRef.current;
-            const rect = canvas.getBoundingClientRect();
-            
-            const pointY = (e.clientY - rect.top - state.translateY) / prevScale;
-            
-            state.translateY -= (newScale - prevScale) * pointY;
-            
-            if (newScale >= currentMaxScale - 0.001 || newScale <= currentMinScale + 0.001) { 
-                state.translateY = 0;
-            } 
-            
-            state.scale = newScale;
-            applyCanvasTransform(state.scale, state.translateY);
-        }
-        
-        return false;
-    }
-  }, [applyCanvasTransform, FIXED_ZOOM_STEP]);
 
   const renderPage = useCallback(async (doc, num) => {
     if (!doc || !canvasRef.current || !holderRef.current || renderedRef.current) return;
@@ -302,7 +176,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         renderInteractiveForms: false
       }).promise;
 
-      touchState.current.scale = 1.0;
+      setZoom(1.0);
       touchState.current.translateY = 0;
       
       if (canvasRef.current) {
@@ -405,38 +279,85 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       }
     };
     
+    // ✅ 모든 줌 제스처 차단
+    const preventAllZoom = (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+    };
+    
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
     window.addEventListener("keydown", handler, { capture: true });
+    window.addEventListener("wheel", preventAllZoom, { passive: false, capture: true });
     
     return () => {
       window.removeEventListener("keydown", handler, { capture: true });
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("wheel", preventAllZoom, { capture: true });
     }
   }, [open, onClose, loading, handleMouseMove, handleMouseUp]);
   
   if (!open) return null;
 
+  const maxScale = 1.0;
+  const minScale = minScaleRef.current / initialScaleRef.current;
+
   return (
     <div style={backdropStyle} onClick={loading ? undefined : onClose}>
       <div
-        ref={modalRef}
         style={modalStyle}
         onClick={(e) => e.stopPropagation()}
         onContextMenu={(e) => e.preventDefault()}
-        onWheel={handleWheel}
       >
         <div style={headerStyle}>
           <div style={{ fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {title || "특별해설"}
           </div>
+          
+          {/* ✅ 줌 컨트롤 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button 
+              onClick={handleZoomOut}
+              disabled={zoom <= minScale}
+              style={{
+                ...zoomBtnStyle,
+                opacity: zoom <= minScale ? 0.3 : 1,
+                cursor: zoom <= minScale ? 'not-allowed' : 'pointer'
+              }}
+            >
+              −
+            </button>
+            <span style={{ fontSize: '12px', fontWeight: 600, minWidth: '45px', textAlign: 'center' }}>
+              {Math.round(zoom * 100)}%
+            </span>
+            <button 
+              onClick={handleZoomIn}
+              disabled={zoom >= maxScale}
+              style={{
+                ...zoomBtnStyle,
+                opacity: zoom >= maxScale ? 0.3 : 1,
+                cursor: zoom >= maxScale ? 'not-allowed' : 'pointer'
+              }}
+            >
+              +
+            </button>
+            {zoom !== 1.0 && (
+              <button onClick={handleZoomReset} style={resetBtnStyle}>
+                초기화
+              </button>
+            )}
+          </div>
+          
           <button onClick={onClose} style={closeBtnStyle} aria-label="닫기">
             ✕
           </button>
         </div>
 
-        <div ref={holderRef} style={viewerStyleScrollable} onWheel={handleWheel}>
+        <div ref={holderRef} style={viewerStyleScrollable}>
           {loading && (
             <div style={centerStyle}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
@@ -462,9 +383,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
               onMouseDown={handleMouseDown}
-              onWheel={handleWheel}
               onMouseLeave={handleMouseUp}
-              onDoubleClick={handleDoubleClick}
               style={{
                 display: "block",
                 margin: "0 auto",
@@ -473,8 +392,8 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
                 maxHeight: "none",
                 objectFit: "contain",
                 imageRendering: "high-quality",
-                touchAction: "none",
-                cursor: isZoomed ? 'grab' : 'pointer',
+                touchAction: "pan-y",
+                cursor: 'grab',
               }}
             />
           )}
@@ -506,44 +425,6 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
               }}
             >
               다음 →
-            </button>
-          </div>
-        )}
-
-        {isZoomed && (
-          <div style={{
-            position: 'absolute',
-            top: '60px',
-            right: '12px',
-            background: 'rgba(0,0,0,0.8)',
-            color: 'white',
-            padding: '6px 12px',
-            borderRadius: '16px',
-            fontSize: '12px',
-            fontWeight: '600',
-            zIndex: 10,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px'
-          }}>
-            <span>확대 중</span>
-            <button
-              onClick={resetZoom}
-              style={{
-                background: 'rgba(255,255,255,0.3)',
-                border: 'none',
-                color: 'white',
-                borderRadius: '50%',
-                width: '18px',
-                height: '18px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                fontSize: '10px'
-              }}
-            >
-              ×
             </button>
           </div>
         )}
@@ -593,7 +474,8 @@ const headerStyle = {
   padding: "0 12px",
   borderBottom: "1px solid #2d333b",
   background: "linear-gradient(#1c1f24, #1a1d22)",
-  flexShrink: 0
+  flexShrink: 0,
+  gap: '12px'
 };
 
 const closeBtnStyle = {
@@ -607,6 +489,31 @@ const closeBtnStyle = {
   lineHeight: 1,
 };
 
+const zoomBtnStyle = {
+  border: "1px solid #2d333b",
+  borderRadius: 6,
+  background: "rgba(126,162,255,.12)",
+  padding: "4px 10px",
+  cursor: "pointer",
+  color: "#e5e7eb",
+  fontSize: 18,
+  lineHeight: 1,
+  fontWeight: 'bold',
+  minWidth: '32px',
+  height: '32px'
+};
+
+const resetBtnStyle = {
+  border: "1px solid #2d333b",
+  borderRadius: 6,
+  background: "transparent",
+  padding: "4px 8px",
+  cursor: "pointer",
+  color: "#e5e7eb",
+  fontSize: 11,
+  fontWeight: 600
+};
+
 const viewerStyleScrollable = {
   flex: 1,
   background: "#111",
@@ -618,7 +525,7 @@ const viewerStyleScrollable = {
   flexDirection: "column",
   alignItems: "center",
   justifyContent: "flex-start",
-  touchAction: "none"
+  touchAction: "pan-y"
 };
 
 const centerStyle = {
