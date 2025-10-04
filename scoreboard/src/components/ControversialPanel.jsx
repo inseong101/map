@@ -428,13 +428,19 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
               const clampedDifficulty = 100 - clampedRate; // 0 (쉬움) to 100 (어려움)
 
               const hue = 0; // Red Hue (Fixed)
-              const saturation = 90; // High Saturation (Fixed) - 채도는 높게 고정
-
-              // FIX 1: 배경 밝기: 15% (쉬움) -> 3% (어려움). 난이도 높을수록 배경이 어두워져 대비 극대화
-              const bgLightness = Math.min(15, Math.max(3, Math.round(15 - clampedDifficulty * 0.12)));
               
-              // FIX 2: 강조 밝기: 40% (쉬움) -> 90% (어려움). 난이도 높을수록 발광이 밝아져 대비 극대화
-              const accentLightness = Math.min(90, Math.max(40, Math.round(40 + clampedDifficulty * 0.5)));
+              // **난이도 변화에 따른 극단적 대비를 위한 HSL 계산**
+              
+              // FIX 1: 채도 (Saturation): 30% (쉬움) ~ 100% (어려움)
+              const saturation = Math.min(100, Math.max(30, Math.round(30 + clampedDifficulty * 0.7))); 
+
+              // FIX 2: 배경 밝기 (Background Lightness): 15% (쉬움) -> 1% (어려움)
+              // 난이도가 높을수록 배경이 어두워져 발광 대비가 극대화됩니다.
+              const bgLightness = Math.min(15, Math.Max(1, Math.round(15 - clampedDifficulty * 0.14)));
+              
+              // FIX 3: 강조 밝기 (Accent Lightness): 30% (쉬움) -> 95% (어려움)
+              // 난이도가 높을수록 발광이 밝아져 시각적 자극이 극대화됩니다.
+              const accentLightness = Math.min(95, Math.Max(30, Math.round(30 + clampedDifficulty * 0.65)));
               
               // Text Lightness: 80% 고정 (가독성 확보)
               const textLightness = 80; 
@@ -454,7 +460,7 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
                 borderColor: shadowColor,
                 background: bgColor,
                 // 그림자 강도를 난이도에 비례하게 설정 (어려울수록 더 밝게 빛남)
-                boxShadow: `0 0 ${8 + clampedDifficulty * 0.15}px ${shadowColor}, 0 0 ${16 + clampedDifficulty * 0.3}px ${shadowColor}40`,
+                boxShadow: `0 0 ${8 + clampedDifficulty * 0.25}px ${shadowColor}, 0 0 ${16 + clampedDifficulty * 0.5}px ${shadowColor}40`,
                 cursor: cursor,
               };
               cls += ` qbtn-rate`; 
