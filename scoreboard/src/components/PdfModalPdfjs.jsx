@@ -1,4 +1,4 @@
-// src/components/PdfModalPdfjs.jsx - UI 버튼 줌 컨트롤
+// src/components/PdfModalPdfjs.jsx - 완전 수정본
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/build/pdf";
@@ -20,7 +20,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   const initialScaleRef = useRef(1);
   const minScaleRef = useRef(MIN_ZOOM_HARD_CAP);
 
-  const [zoom, setZoom] = useState(0.5); // ✅ 기본 50%
+  const [zoom, setZoom] = useState(0.5);
   const touchState = useRef({
     translateY: 0,
     lastTouchY: 0,
@@ -42,7 +42,6 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     };
   };
 
-  // ✅ translateY 제한 계산 (zoom을 실제 scale로 변환)
   const clampTranslateY = useCallback((translateY, zoom) => {
     if (!canvasRef.current || !holderRef.current) return translateY;
     
@@ -55,27 +54,22 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     const scaledHeight = canvasHeight * actualScale;
     const containerHeight = container.getBoundingClientRect().height;
     
-    // 문서가 viewport보다 작으면 항상 0
     if (scaledHeight <= containerHeight) {
       return 0;
     }
     
-    // 위로: 0 이상 불가
     const maxTranslateY = 0;
-    // 아래로: 문서 끝이 viewport 끝보다 위에 있으면 안 됨
     const minTranslateY = containerHeight - scaledHeight;
     
     return Math.max(minTranslateY, Math.min(maxTranslateY, translateY));
   }, []);
 
-  // ✅ X축 중앙 고정 transform (zoom을 실제 scale로 변환)
   const applyCanvasTransform = useCallback((zoom, translateY) => {
     if (!canvasRef.current || !holderRef.current) return;
     
     const canvas = canvasRef.current;
     const container = holderRef.current;
     
-    // ✅ 실제 scale = zoom * widthFitScale
     const actualScale = zoom * initialScaleRef.current;
     
     const canvasWidth = parseFloat(canvas.style.width);
@@ -83,8 +77,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     const containerWidth = container.getBoundingClientRect().width;
     const translateX = (containerWidth - scaledWidth) / 2;
     
-    // ✅ translateY 제한 적용
-    const clampedTranslateY = clampTranslateY(translateY, actualScale);
+    const clampedTranslateY = clampTranslateY(translateY, zoom);
     touchState.current.translateY = clampedTranslateY;
     
     const transform = `translate(${translateX}px, ${clampedTranslateY}px) scale(${actualScale})`;
@@ -94,7 +87,6 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     canvas.style.setProperty('transition', 'transform 0.3s ease', 'important');
   }, [clampTranslateY]);
 
-  // ✅ 줌 버튼 핸들러 - viewport 중심 기준
   const handleZoomIn = useCallback(() => {
     const maxZoom = 1.0;
     const newZoom = Math.min(zoom + 0.1, maxZoom);
@@ -105,7 +97,6 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       return;
     }
     
-    // viewport 중심 계산
     const container = holderRef.current;
     const containerRect = container.getBoundingClientRect();
     const viewportCenterY = containerRect.height / 2;
@@ -148,13 +139,6 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     applyCanvasTransform(newZoom, newTranslateY);
   }, [zoom, applyCanvasTransform]);
 
-  const handleZoomReset = useCallback(() => {
-    setZoom(0.5);
-    touchState.current.translateY = 0;
-    applyCanvasTransform(0.5, 0);
-  }, [applyCanvasTransform]);
-
-  // 터치 드래그 (Y축만)
   const handleTouchStart = useCallback((e) => {
     const touches = e.touches;
     if (touches.length === 1) {
@@ -180,7 +164,6 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     touchState.current.isDragging = false;
   }, []);
   
-  // 마우스 드래그 (Y축만)
   const handleMouseDown = useCallback((e) => {
     if (e.button !== 0) return;
     e.preventDefault();
@@ -221,25 +204,12 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       
       initialScaleRef.current = widthFitScale;
       
-      // ✅ UI zoom 기준으로 최소값 계산
-      // zoom = 1.0 → scale(1.0) = 가로 맞춤
-      // 여백 방지 조건: canvasHeight * zoom >= containerHeight
-      // 즉, zoom >= heightFitScale / widthFitScale
-      const minZoomRatio = heightFitScale / widthFitScale;
-      minScaleRef.current = Math.max(MIN_ZOOM_HARD_CAP, minZoomRatio);
+      const minZoom = heightFitScale / widthFitScale;
+      minScaleRef.current = Math.max(MIN_ZOOM_HARD_CAP, minZoom);
       
-      // ✅ 초기 줌: 50% 또는 최소값 중 큰 값
-      const initialZoom = Math.max(0.5, minZoomRatio);
-      setZoom(initialZoom);
-      touchState.current.translateY = 0;
+      const initialZoom = Math.max(0.5, minScaleRef.current);
       
-      // ✅ 초기 줌 적용
-      applyCanvasTransform(initialZoom, 0);
-      
-      // ✅ 초기 줌 적용
-      setTimeout(() => {
-        applyCanvasTransform(initialZoom, 0);
-      }, 10);
+      const isMobile = window.innerWidth <= 768;
       const qualityMultiplier = isMobile ? 3.0 : 4.0;
       const renderScale = widthFitScale * qualityMultiplier;
       const renderViewport = page.getViewport({ scale: renderScale });
@@ -260,11 +230,9 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         renderInteractiveForms: false
       }).promise;
 
-      setZoom(0.5);
+      setZoom(initialZoom);
       touchState.current.translateY = 0;
-      
-      // ✅ 초기 50% 줌 적용
-      applyCanvasTransform(0.5, 0);
+      applyCanvasTransform(initialZoom, 0);
       
     } catch (error) {
       console.error("PDF 렌더링 오류:", error);
@@ -273,7 +241,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         renderedRef.current = false;
       }, 100);
     }
-  }, [MIN_ZOOM_HARD_CAP]);
+  }, [applyCanvasTransform, MIN_ZOOM_HARD_CAP]);
 
   const renderFirstPage = useCallback(async (doc) => {
     if (!doc) return;
@@ -361,7 +329,6 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       }
     };
     
-    // ✅ 모든 줌 제스처 차단
     const preventAllZoom = (e) => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
@@ -386,13 +353,12 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   if (!open) return null;
 
   const maxScale = 1.0;
-  const minScale = minScaleRef.current / initialScaleRef.current;
+  const minScale = minScaleRef.current;
 
   return (
     <div 
       style={backdropStyle} 
       onMouseDown={(e) => {
-        // backdrop을 직접 클릭했을 때만 닫기 (드래그 중 아님)
         if (e.target === e.currentTarget && !loading && !mouseState.current.isDragging) {
           onClose();
         }
@@ -408,7 +374,6 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
             {title || "특별해설"}
           </div>
           
-          {/* ✅ 줌 컨트롤 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button 
               onClick={handleZoomOut}
