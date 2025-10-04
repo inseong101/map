@@ -125,36 +125,54 @@ exports.serveWatermarkedPdf = functions
 
   const bucket = admin.storage().bucket();
   const [bytes] = await bucket.file(filePath).download();
+
   const pdfDoc = await PDFDocument.load(bytes);
   const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
   const text = String(sid);
   const fontSize = 64; 
+  const angle = degrees(45);
   const color = rgb(0.6, 0.6, 0.6);
   const opacity = 0.12;
 
   const pages = pdfDoc.getPages();
   
-  for (const page of pages) {
-    const { width, height } = page.getSize();
+  for (let i = 0; i < pages.length; i++) {
+    const page = pages[i];
+    
+    // ✅ FIX: CropBox 사용 (실제 보이는 영역)
+    const cropBox = page.getCropBox();
+    const { x: cropX, y: cropY, width: cropWidth, height: cropHeight } = cropBox;
+    
     const textWidth = font.widthOfTextAtSize(text, fontSize);
+    const textHeight = fontSize;
     
-    // ✅ 간단하게: 가로 중앙에 배치 (회전 없음으로 먼저 테스트)
-    const x = (width - textWidth) / 2;  // 정중앙
+    console.log(`페이지 ${i+1}:`);
+    console.log(`  CropBox: x=${cropX}, y=${cropY}, w=${cropWidth}, h=${cropHeight}`);
     
-    const stepY = fontSize * 3.5;
+    // ✅ CropBox의 중앙 계산
+    const cropCenterX = cropX + (cropWidth / 2);
+    const cropCenterY = cropY + (cropHeight / 2);
     
-    for (let offsetY = -height * 0.5; offsetY < height * 2.5; offsetY += stepY) { 
-      const y = (height / 2) + offsetY;
-      
+    // 텍스트를 CropBox 중앙에 배치
+    const x = cropCenterX - (textWidth / 2);
+    const y = cropCenterY - (textHeight / 2);
+    
+    console.log(`  워터마크 중앙: (${cropCenterX.toFixed(1)}, ${cropCenterY.toFixed(1)})`);
+    console.log(`  워터마크 시작: (${x.toFixed(1)}, ${y.toFixed(1)})`);
+    
+    // Y축으로 반복 배치
+    const stepY = textHeight * 3.5;
+    
+    for (let offsetY = -cropHeight * 0.5; offsetY < cropHeight * 2.5; offsetY += stepY) {
       page.drawText(text, {
         x: x,
-        y: y,
+        y: cropCenterY + offsetY - (textHeight / 2),
         size: fontSize,
         font,
         color,
         opacity,
-        rotate: degrees(45),
+        rotate: angle,
       });
     }
   }
@@ -168,7 +186,6 @@ exports.serveWatermarkedPdf = functions
     action: "view",
     req: context.rawRequest,
   });
-
   return Buffer.from(out).toString("base64");
 });
 exports.logPdfAction = functions
