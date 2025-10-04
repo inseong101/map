@@ -405,36 +405,14 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       }
     };
     
-    // ✅ 브라우저 줌 완전 차단 (최우선 처리)
-    const preventBrowserZoom = (e) => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        return false;
-      }
-    };
-    
-    // ✅ 모달 컨테이너에도 직접 이벤트 리스너 추가 (React 합성 이벤트보다 빠름)
-    const modalEl = document.querySelector('[style*="position: fixed"]'); // 모달 찾기
-    if (modalEl) {
-      modalEl.addEventListener('wheel', preventBrowserZoom, { passive: false, capture: true });
-    }
-    
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
     window.addEventListener("keydown", handler, { capture: true });
-    window.addEventListener("wheel", preventBrowserZoom, { capture: true, passive: false });
     
     return () => {
       window.removeEventListener("keydown", handler, { capture: true });
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
-      window.removeEventListener("wheel", preventBrowserZoom, { capture: true });
-      
-      if (modalEl) {
-        modalEl.removeEventListener('wheel', preventBrowserZoom, { capture: true });
-      }
     }
   }, [open, onClose, loading, handleMouseMove, handleMouseUp]);
   
@@ -443,6 +421,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   return (
     <div style={backdropStyle} onClick={loading ? undefined : onClose}>
       <div
+        ref={modalRef}
         style={modalStyle}
         onClick={(e) => e.stopPropagation()}
         onContextMenu={(e) => e.preventDefault()}
