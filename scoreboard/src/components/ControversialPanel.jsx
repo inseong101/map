@@ -1,4 +1,4 @@
-// src/components/ControversialPanel.jsx (수정된 코드 전체)
+// src/components/ControversialPanel.jsx (FIXED CODE)
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import PdfModalPdfjs from "./PdfModalPdfjs";
 import { getFunctions, httpsCallable } from "firebase/functions";
@@ -425,22 +425,23 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
           if (hasExp) {
               // Dynamic Red Styling (Difficulty)
               const clampedRate = Math.min(100, Math.max(0, numericRate)); 
-              const clampedDifficulty = 100 - clampedRate; // 0 (쉬움) to 100 (어려움)
+              // 난이도(Difficulty): 100 - Rate. 0% Rate -> 100 Difficulty (가장 어려움)
+              const clampedDifficulty = 100 - clampedRate; 
 
               const hue = 0; // Red Hue (Fixed)
               
-              // **난이도 변화에 따른 극단적 대비를 위한 HSL 계산**
+              // **난이도 변화에 따른 극단적 대비를 위한 HSL 계산 (다크 모드 최적화)**
               
               // FIX 1: 채도 (Saturation): 30% (쉬움) ~ 100% (어려움)
               const saturation = Math.min(100, Math.max(30, Math.round(30 + clampedDifficulty * 0.7))); 
 
               // FIX 2: 배경 밝기 (Background Lightness): 15% (쉬움) -> 1% (어려움)
               // 난이도가 높을수록 배경이 어두워져 발광 대비가 극대화됩니다.
-              const bgLightness = Math.min(15, Math.Max(1, Math.round(15 - clampedDifficulty * 0.14)));
+              const bgLightness = Math.min(15, Math.max(1, Math.round(15 - clampedDifficulty * 0.14)));
               
               // FIX 3: 강조 밝기 (Accent Lightness): 30% (쉬움) -> 95% (어려움)
               // 난이도가 높을수록 발광이 밝아져 시각적 자극이 극대화됩니다.
-              const accentLightness = Math.min(95, Math.Max(30, Math.round(30 + clampedDifficulty * 0.65)));
+              const accentLightness = Math.min(95, Math.max(30, Math.round(30 + clampedDifficulty * 0.65)));
               
               // Text Lightness: 80% 고정 (가독성 확보)
               const textLightness = 80; 
