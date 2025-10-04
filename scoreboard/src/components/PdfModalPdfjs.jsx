@@ -304,11 +304,10 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       // ✅ [규칙 1. 최소 축소]: 세로 길이 맞춤 스케일 계산 (Min Zoom Limit)
       const heightFitScale = containerHeight / baseViewport.height;
 
-      // 최대 확대는 가로 맞춤 스케일 (1x)
+      // 최대 확대는 가로 맞춤 스케일 (규칙 1)
       initialScaleRef.current = initialScale; 
       
       // 최소 축소는 세로 맞춤 스케일 (규칙 1), 하지만 0.1 이하로 내려가지 않도록 하드 캡 적용
-      // heightFitScale이 initialScale보다 크더라도, 축소 한계는 heightFitScale입니다.
       minScaleRef.current = Math.max(MIN_ZOOM_HARD_CAP, heightFitScale); 
       
       // 고해상도 렌더링을 위한 스케일
@@ -497,7 +496,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
             <canvas
               ref={canvasRef}
               onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove(null)} // Re-using old code style but logic is updated
+              onTouchMove={handleTouchMove} // Removed function call wrapper
               onTouchEnd={handleTouchEnd}
               onMouseDown={handleMouseDown} // <-- 마우스 드래그 시작
               onWheel={handleWheel} // ✅ 휠 이벤트 핸들러 추가
