@@ -1,4 +1,4 @@
-// src/components/PdfModalPdfjs.jsx - 최종 수정본 (Fit-to-Width = 1.0)
+// src/components/PdfModalPdfjs.jsx - 수정본
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/build/pdf";
@@ -62,13 +62,16 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       return 0;
     }
     
+    // 위쪽 한계: 0 (캔버스 상단이 컨테이너 상단과 일치)
     const maxTranslateY = 0; 
+    // 아래쪽 한계: 캔버스 하단이 컨테이너 하단과 일치할 때
     const minTranslateY = containerHeight - scaledHeight;
     
+    // 엄격하게 클램핑하여 여백 밑으로 내려가는 것 방지
     return Math.max(minTranslateY, Math.min(maxTranslateY, translateY));
   }, []);
 
-  const applyCanvasTransform = useCallback((currentZoom, translateY) => {
+  const applyCanvasTransform = useCallback((currentZoom, translateY, withTransition = true) => {
     if (!canvasRef.current || !holderRef.current) return;
     
     const canvas = canvasRef.current;
@@ -91,20 +94,26 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     // 캔버스 변환 적용
     canvas.style.setProperty('transform', transform, 'important');
     canvas.style.setProperty('transform-origin', 'top left', 'important');
-    canvas.style.setProperty('transition', 'transform 0.3s ease', 'important');
+    
+    // 드래그 중에는 transition 제거, 줌 변경 시에만 적용
+    if (withTransition) {
+      canvas.style.setProperty('transition', 'transform 0.3s ease', 'important');
+    } else {
+      canvas.style.setProperty('transition', 'none', 'important');
+    }
   }, [clampTranslateY]);
 
   const handleZoomChange = useCallback((newZoom) => {
     if (!holderRef.current || !canvasRef.current) {
       setZoom(newZoom);
-      applyCanvasTransform(newZoom, 0);
+      applyCanvasTransform(newZoom, 0, true);
       return;
     }
 
     // 줌 레벨 변화에 따른 Y좌표 고정점 계산 로직
     const container = holderRef.current;
     const containerRect = container.getBoundingClientRect();
-    const viewportCenterY = containerRect.height / 2;
+    const viewportCenterY = (containerRect.height - 30) / 2; // 패딩 제외
     
     const currentY = touchState.current.translateY;
     const currentScale = zoom * initialScaleRef.current;
@@ -116,15 +125,15 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
 
     // 최소 줌 레벨 도달 시 Y좌표를 0으로 고정 (상단 정렬)
     if (newZoom <= minScaleRef.current) {
-        newTranslateY = 0;
+      newTranslateY = 0;
     } else {
-        // 최소 줌 이상일 경우에만 계산된 newTranslateY를 클램핑
-        newTranslateY = clampTranslateY(newTranslateY, newZoom);
+      // 최소 줌 이상일 경우에만 계산된 newTranslateY를 클램핑
+      newTranslateY = clampTranslateY(newTranslateY, newZoom);
     }
     
     touchState.current.translateY = newTranslateY;
     setZoom(newZoom);
-    applyCanvasTransform(newZoom, newTranslateY);
+    applyCanvasTransform(newZoom, newTranslateY, true);
   }, [zoom, applyCanvasTransform, clampTranslateY]);
 
   const handleZoomIn = useCallback(() => {
@@ -141,7 +150,6 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     handleZoomChange(newZoom);
   }, [zoom, handleZoomChange]);
 
-  // ... (handleTouchStart, handleTouchMove, handleTouchEnd, handleMouseDown, handleMouseMove, handleMouseUp 함수는 그대로 유지)
   const handleTouchStart = useCallback((e) => {
     const touches = e.touches;
     if (touches.length === 1) {
@@ -158,12 +166,16 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     const touches = e.touches;
     if (touches.length === 1) {
       const deltaY = touches[0].clientY - touchState.current.lastTouchY;
-      touchState.current.translateY += deltaY;
+      let newTranslateY = touchState.current.translateY + deltaY;
+      
+      // 드래그 중에도 클램핑 적용
+      newTranslateY = clampTranslateY(newTranslateY, zoom);
+      touchState.current.translateY = newTranslateY;
       touchState.current.lastTouchY = touches[0].clientY;
       
-      applyCanvasTransform(zoom, touchState.current.translateY);
+      applyCanvasTransform(zoom, newTranslateY, false); // transition 없이
     }
-  }, [zoom, applyCanvasTransform]);
+  }, [zoom, applyCanvasTransform, clampTranslateY]);
 
   const handleTouchEnd = useCallback(() => {
     touchState.current.isDragging = false;
@@ -183,11 +195,15 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     if (!mouseState.current.isDragging) return;
     
     const deltaY = e.clientY - mouseState.current.lastMouseY;
-    touchState.current.translateY += deltaY;
+    let newTranslateY = touchState.current.translateY + deltaY;
+    
+    // 드래그 중에도 클램핑 적용
+    newTranslateY = clampTranslateY(newTranslateY, zoom);
+    touchState.current.translateY = newTranslateY;
     mouseState.current.lastMouseY = e.clientY;
     
-    applyCanvasTransform(zoom, touchState.current.translateY);
-  }, [zoom, applyCanvasTransform]);
+    applyCanvasTransform(zoom, newTranslateY, false); // transition 없이
+  }, [zoom, applyCanvasTransform, clampTranslateY]);
 
   const handleMouseUp = useCallback(() => {
     mouseState.current.isDragging = false;
@@ -212,13 +228,13 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       
       // 2. Fit-to-Height를 달성하기 위한 줌 레벨 계산 (이것이 최소 줌)
       const heightFitScale = containerHeight / baseViewport.height; 
-      // 캔버스 CSS 스케일(fitWidthScale)을 기준으로 캔버스 높이가 컨테이너 높이와 같아지도록 하는 줌 값
+      // 줌 1.0 = Fit-to-Width 기준으로, 높이도 맞추려면 필요한 줌 레벨
       const minZoom = heightFitScale / fitWidthScale; 
       minScaleRef.current = Math.max(MIN_ZOOM_HARD_CAP, minZoom);
       
-      // 3. 초기 줌 설정: 너비 맞춤(1.0)과 최소 줌 레벨 중 큰 값.
-      // 사용자의 정의: 1.0은 Fit-to-Width. 
-      const initialZoom = Math.max(1.0, minScaleRef.current);
+      // 3. 초기 줌은 무조건 1.0 (Fit-to-Width)
+      // 사용자 정의: 줌 1.0 = 모달 가로와 문서 가로가 일치하는 상태
+      const initialZoom = 1.0;
       
       // PDFjs의 렌더링 품질을 위한 내부 스케일 (화질 개선)
       const isMobile = window.innerWidth <= 768;
@@ -245,7 +261,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
 
       setZoom(initialZoom);
       touchState.current.translateY = 0;
-      applyCanvasTransform(initialZoom, 0);
+      applyCanvasTransform(initialZoom, 0, true);
       
     } catch (error) {
       console.error("PDF 렌더링 오류:", error);
@@ -261,10 +277,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     await renderPage(doc, 1);
   }, [renderPage]);
 
-  // ... (이하 useEffect 및 UI 렌더링 코드는 동일하게 유지)
-
   useEffect(() => {
-    // ... (PDF 로드 및 초기화 로직)
     let cancelled = false;
 
     (async () => {
