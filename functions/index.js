@@ -110,6 +110,8 @@ exports.onPhonesFileUploaded = functions
   }
 });
 
+
+
 exports.serveWatermarkedPdf = functions
   .region('asia-northeast3')
   .runWith({ memory: '8GB', timeoutSeconds: 180 })
@@ -125,60 +127,59 @@ exports.serveWatermarkedPdf = functions
 
   const bucket = admin.storage().bucket();
   const [bytes] = await bucket.file(filePath).download();
-
   const pdfDoc = await PDFDocument.load(bytes);
   const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
   const text = String(sid);
-  const fontSize = 64; 
-  const angle = degrees(45);
+  const fontSize = 64;
   const color = rgb(0.6, 0.6, 0.6);
   const opacity = 0.12;
 
   const pages = pdfDoc.getPages();
   
-  for (let i = 0; i < pages.length; i++) {
-    const page = pages[i];
-    
-    // ✅ FIX: CropBox 사용 (실제 보이는 영역)
+  for (const page of pages) {
     const cropBox = page.getCropBox();
     const { x: cropX, y: cropY, width: cropWidth, height: cropHeight } = cropBox;
     
     const textWidth = font.widthOfTextAtSize(text, fontSize);
-    const textHeight = fontSize;
     
-    console.log(`페이지 ${i+1}:`);
-    console.log(`  CropBox: x=${cropX}, y=${cropY}, w=${cropWidth}, h=${cropHeight}`);
+    // 페이지 중심
+    const centerX = cropX + cropWidth / 2;
+    const centerY = cropY + cropHeight / 2;
     
-    // ✅ CropBox의 중앙 계산
-    const cropCenterX = cropX + (cropWidth / 2);
-    const cropCenterY = cropY + (cropHeight / 2);
+    // 텍스트 중심 (왼쪽 아래 기준점으로부터)
+    const cx = textWidth / 2;
+    const cy = fontSize / 2;
     
-    // 텍스트를 CropBox 중앙에 배치
-    const x = cropCenterX - (textWidth / 2);
-    const y = cropCenterY - (textHeight / 2);
+    // 45도 회전 시 텍스트 중심이 이동하는 거리
+    const angle = Math.PI / 4;
+    const cos45 = Math.cos(angle);
+    const sin45 = Math.sin(angle);
     
-    console.log(`  워터마크 중앙: (${cropCenterX.toFixed(1)}, ${cropCenterY.toFixed(1)})`);
-    console.log(`  워터마크 시작: (${x.toFixed(1)}, ${y.toFixed(1)})`);
+    const rotatedCenterX = cx * cos45 - cy * sin45;
+    const rotatedCenterY = cx * sin45 + cy * cos45;
+    
+    // 시작점 계산
+    const startX = centerX - rotatedCenterX;
+    const startY = centerY - rotatedCenterY;
     
     // Y축으로 반복 배치
-    const stepY = textHeight * 3.5;
+    const stepY = fontSize * 3.5;
     
-    for (let offsetY = -cropHeight * 0.5; offsetY < cropHeight * 2.5; offsetY += stepY) {
+    for (let offsetY = -cropHeight; offsetY < cropHeight * 2; offsetY += stepY) {
       page.drawText(text, {
-        x: x,
-        y: cropCenterY + offsetY - (textHeight / 2),
+        x: startX,
+        y: startY + offsetY,
         size: fontSize,
         font,
         color,
         opacity,
-        rotate: angle,
+        rotate: degrees(45),
       });
     }
   }
 
   const out = await pdfDoc.save();
-
   await writeAudit({
     uid: context.auth.uid,
     sid,
