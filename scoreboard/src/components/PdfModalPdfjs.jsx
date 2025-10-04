@@ -6,164 +6,278 @@ import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/build/pdf";
 GlobalWorkerOptions.workerSrc = "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
 
 export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
-  const MIN_ZOOM = 0.1;
-  const MAX_ZOOM = 1.0;
+  // --- 설정값 ---
+  const MIN_ZOOM_HARD_CAP = 0.1; // 최소 배율 하드캡(과도한 제한 방지)
+  const MAX_ZOOM = 1.0;          // 최대 100%(가로맞춤)
 
-  const holderRef = useRef(null);   // overflow: auto; padding: 15px
-  const sizerRef  = useRef(null);   // 레이아웃 높이(스크롤 범위)를 제공
-  const canvasRef = useRef(null);   // 실제 렌더되는 캔버스(absolute + scale)
+  // --- refs ---
+  const holderRef = useRef(null); // 스크롤 영역 컨테이너
+  const stageRef  = useRef(null); // Y-translate 전용 래퍼
+  const scaledRef = useRef(null); // X-중앙 + scale 적용 래퍼
+  const canvasRef = useRef(null);
 
+  const lastKeyRef   = useRef(null);
+  const renderedRef  = useRef(false);
+  const minScaleRef  = useRef(MIN_ZOOM_HARD_CAP); // 동적 하한(필요시 조정)
+  const baseCssWRef  = useRef(0); // zoom=1 기준 CSS 폭
+  const baseCssHRef  = useRef(0); // zoom=1 기준 CSS 높이
+
+  // --- state ---
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
   const [pdfDoc, setPdfDoc] = useState(null);
   const [pageNum, setPageNum] = useState(1);
   const [numPages, setNumPages] = useState(0);
-  const lastKeyRef = useRef(null);
-
-  // 기준(CSS) 크기(zoom=1에서 컨테이너 내부 폭에 맞춤)
-  const baseCss = useRef({ width: 0, height: 0 });
   const [zoom, setZoom] = useState(1.0);
 
-  // 컨테이너 내부(패딩 제외) 사이즈
+  // 입력 상태
+  const touchState = useRef({ isDragging: false, lastY: 0, translateY: 0 });
+  const mouseState = useRef({ isDragging: false, lastY: 0 });
+
+  // ---------- 유틸: 컨테이너 내부 사이즈(패딩 제외) ----------
   const getInnerBox = useCallback(() => {
     const el = holderRef.current;
-    if (!el) return { innerW: 600, innerH: 400, clientH: 400 };
+    if (!el) return { innerW: 600, innerH: 400 };
     const cs = getComputedStyle(el);
-    const padL = parseFloat(cs.paddingLeft || "0");
-    const padR = parseFloat(cs.paddingRight || "0");
-    const padT = parseFloat(cs.paddingTop || "0");
-    const padB = parseFloat(cs.paddingBottom || "0");
-    const clientW = el.clientWidth;   // padding 포함, 스크롤바 제외
-    const clientH = el.clientHeight;  // padding 포함
-    const innerW = Math.max(0, clientW - padL - padR);
-    const innerH = Math.max(0, clientH - padT - padB);
-    return { innerW, innerH, clientH };
+    const padX = parseFloat(cs.paddingLeft || "0") + parseFloat(cs.paddingRight || "0");
+    const padY = parseFloat(cs.paddingTop  || "0") + parseFloat(cs.paddingBottom || "0");
+    return {
+      innerW: Math.max(320, el.clientWidth  - padX),
+      innerH: Math.max(300, el.clientHeight - padY),
+    };
   }, []);
 
-  // 레이아웃 적용: sizer(height), canvas(center+scale)
-  const applyLayout = useCallback(() => {
-    const holder = holderRef.current;
-    const sizer  = sizerRef.current;
-    const canvas = canvasRef.current;
-    if (!holder || !sizer || !canvas) return;
+  // ---------- 세로 이동 클램프 ----------
+  const clampTranslateY = useCallback((ty, z) => {
+    const { innerH } = getInnerBox();
+    const scaledH = baseCssHRef.current * z;
+    if (scaledH <= innerH + 0.5) return 0; // 한 화면이면 이동 불필요
+    const minY = innerH - scaledH; // 음수
+    return Math.max(minY, Math.min(0, ty));
+  }, [getInnerBox]);
 
+  // ---------- 변환 적용: stage(Y), scaled(X+scale) ----------
+  const applyTransforms = useCallback((z, ty, withTransition = false) => {
+    const holder = holderRef.current;
+    const stage  = stageRef.current;
+    const scaled = scaledRef.current;
+    if (!holder || !stage || !scaled) return;
+
+    // 1) 세로 이동 (scale의 영향에서 분리)
+    stage.style.setProperty("transform", `translateY(${ty}px)`, "important");
+    stage.style.setProperty("transition", withTransition ? "transform .16s ease" : "none", "important");
+
+    // 2) 가로 중앙 + 스케일
     const { innerW } = getInnerBox();
-    const scaledH = baseCss.current.height * zoom;
+    const scaledW = baseCssWRef.current * z;
+    const tx = (innerW - scaledW) / 2; // 항상 가운데
+    scaled.style.setProperty("transform-origin", "top left", "important");
+    scaled.style.setProperty("transform", `translateX(${tx}px) scale(${z})`, "important");
+    scaled.style.setProperty("transition", withTransition ? "transform .16s ease" : "none", "important");
+  }, [getInnerBox]);
 
-    // sizer는 스크롤 범위를 제공(폭은 innerW, 높이는 스케일 반영)
-    sizer.style.position = "relative";
-    sizer.style.width  = `${Math.ceil(innerW)}px`;
-    sizer.style.height = `${Math.ceil(scaledH)}px`;
+  const syncApply = useCallback((z, ty, withTransition = false) => {
+    applyTransforms(z, ty, withTransition);
+  }, [applyTransforms]);
 
-    // 캔버스는 sizer 안에서 '항상 가로 중앙'
-    // → left: 50% + translateX(-50%) + scale
-    canvas.style.position = "absolute";
-    canvas.style.top = "0px";
-    canvas.style.left = "50%";
-    canvas.style.transformOrigin = "top left";
-    canvas.style.transform = `translateX(-50%) scale(${zoom})`;
-  }, [getInnerBox, zoom]);
+  // ---------- 줌 변경(현재 시야 중앙 고정) ----------
+  const handleZoomChange = useCallback((nextZoomRaw) => {
+    const newZoom = Math.min(MAX_ZOOM, Math.max(minScaleRef.current, nextZoomRaw));
+    const { innerH } = getInnerBox();
 
-  // 줌 변경: 현재 화면 '중앙' 기준으로 유지
-  const changeZoomKeepingCenter = useCallback((nextZoomRaw) => {
-    const holder = holderRef.current;
-    if (!holder) return;
+    const oldScaledH = baseCssHRef.current * zoom;
+    const newScaledH = baseCssHRef.current * newZoom;
 
-    const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, nextZoomRaw));
+    // 화면 중앙 기준 앵커
+    const viewportCenter = innerH / 2;
+    const oldTY = touchState.current.translateY;
+    const oldDocY = viewportCenter - oldTY;                            // 문서 좌표
+    const ratio  = oldScaledH > 0 ? Math.min(1, Math.max(0, oldDocY / oldScaledH)) : 0.5;
+    const newDocY = ratio * newScaledH;
+    let newTY = viewportCenter - newDocY;
+    newTY = clampTranslateY(newTY, newZoom);
 
-    const oldH = baseCss.current.height * zoom;
-    const newH = baseCss.current.height * newZoom;
-
-    const viewportCenter = holder.clientHeight / 2;
-    const centerAbsOld = holder.scrollTop + viewportCenter;      // 현재 중앙의 절대 위치(스케일 반영)
-    const ratio = oldH > 0 ? centerAbsOld / oldH : 0.5;          // 0~1 사이
-
+    touchState.current.translateY = newTY;
     setZoom(newZoom);
+    syncApply(newZoom, newTY, true);
+  }, [zoom, clampTranslateY, getInnerBox, syncApply]);
 
-    // 레이아웃 갱신 후, 같은 '비율' 위치가 중앙에 오도록 scrollTop 재설정
-    requestAnimationFrame(() => {
-      applyLayout();
-      const centerAbsNew = ratio * newH;
-      const target = Math.max(0, centerAbsNew - viewportCenter);
-      const maxTop = Math.max(0, holder.scrollHeight - holder.clientHeight);
-      holder.scrollTop = Math.min(target, maxTop);
-    });
-  }, [applyLayout, zoom]);
+  const handleZoomIn  = useCallback(() => handleZoomChange(Math.round((zoom + 0.1) * 100) / 100), [zoom, handleZoomChange]);
+  const handleZoomOut = useCallback(() => handleZoomChange(Math.round((zoom - 0.1) * 100) / 100), [zoom, handleZoomChange]);
 
-  const handleZoomIn  = useCallback(() => changeZoomKeepingCenter(Math.round((zoom + 0.1) * 100) / 100), [zoom, changeZoomKeepingCenter]);
-  const handleZoomOut = useCallback(() => changeZoomKeepingCenter(Math.round((zoom - 0.1) * 100) / 100), [zoom, changeZoomKeepingCenter]);
+  // ---------- 터치/마우스 드래그 ----------
+  const onTouchStart = useCallback((e) => {
+    const t = e.touches;
+    if (t.length !== 1) return;
+    touchState.current.isDragging = true;
+    touchState.current.lastY = t[0].clientY;
+  }, []);
+  const onTouchMove = useCallback((e) => {
+    if (!touchState.current.isDragging) return;
+    const t = e.touches;
+    if (t.length !== 1) return;
+    const dy = t[0].clientY - touchState.current.lastY;
+    let ty = touchState.current.translateY + dy;
+    ty = clampTranslateY(ty, zoom);
+    touchState.current.translateY = ty;
+    touchState.current.lastY = t[0].clientY;
+    syncApply(zoom, ty, false);
+  }, [zoom, clampTranslateY, syncApply]);
+  const onTouchEnd = useCallback(() => { touchState.current.isDragging = false; }, []);
 
-  // 리사이즈 → 레이아웃 재적용
+  const onMouseDown = useCallback((e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    mouseState.current.isDragging = true;
+    mouseState.current.lastY = e.clientY;
+  }, []);
+  const onMouseMove = useCallback((e) => {
+    if (!mouseState.current.isDragging) return;
+    const dy = e.clientY - mouseState.current.lastY;
+    let ty = touchState.current.translateY + dy;
+    ty = clampTranslateY(ty, zoom);
+    touchState.current.translateY = ty;
+    mouseState.current.lastY = e.clientY;
+    syncApply(zoom, ty, false);
+  }, [zoom, clampTranslateY, syncApply]);
+  const onMouseUp = useCallback(() => { mouseState.current.isDragging = false; }, []);
+
+  // ---------- 휠 스크롤(Y 이동) ----------
+  useEffect(() => {
+    if (!open || !holderRef.current) return;
+    const el = holderRef.current;
+    const onWheel = (e) => {
+      if (e.ctrlKey || e.metaKey) return; // (전역에서 브라우저 줌 차단)
+      e.preventDefault();
+      let ty = touchState.current.translateY - e.deltaY;
+      ty = clampTranslateY(ty, zoom);
+      touchState.current.translateY = ty;
+      syncApply(zoom, ty, false);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel, { passive: false });
+  }, [open, zoom, clampTranslateY, syncApply]);
+
+  // ---------- 전역 키보드 ----------
   useEffect(() => {
     if (!open) return;
-    const onResize = () => applyLayout();
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [open, applyLayout]);
+    const onKey = (e) => {
+      if (e.key === "Escape" && !loading) onClose();
+      if ((e.ctrlKey || e.metaKey) && (e.key === "p" || e.key === "P")) { e.preventDefault(); e.stopPropagation(); }
+      const unit = 60, pageUnit = 400;
+      let moved = false;
+      let ty = touchState.current.translateY;
+      switch (e.key) {
+        case "ArrowDown": ty = clampTranslateY(ty - unit, zoom); moved = true; break;
+        case "ArrowUp":   ty = clampTranslateY(ty + unit, zoom); moved = true; break;
+        case "PageDown":  ty = clampTranslateY(ty - pageUnit, zoom); moved = true; break;
+        case "PageUp":    ty = clampTranslateY(ty + pageUnit, zoom); moved = true; break;
+        case "Home":      ty = clampTranslateY(0, zoom); moved = true; break;
+        case "End": {
+          const { innerH } = getInnerBox();
+          const scaledH = baseCssHRef.current * zoom;
+          ty = clampTranslateY(innerH - scaledH, zoom);
+          moved = true;
+          break;
+        }
+        default: break;
+      }
+      if (moved) {
+        e.preventDefault();
+        touchState.current.translateY = ty;
+        syncApply(zoom, ty, false);
+      }
+    };
 
-  // Ctrl/⌘+Wheel 브라우저 줌 방지(우리 줌만 사용)
-  useEffect(() => {
-    if (!open) return;
+    // 브라우저 줌 차단
     const preventPageZoom = (e) => {
       if (e.ctrlKey || e.metaKey) { e.preventDefault(); e.stopPropagation(); }
     };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    window.addEventListener("keydown", onKey, { capture: true });
     window.addEventListener("wheel", preventPageZoom, { passive: false, capture: true });
-    return () => window.removeEventListener("wheel", preventPageZoom, { capture: true });
-  }, [open]);
 
-  // PDF 페이지 렌더
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener("keydown", onKey, { capture: true });
+      window.removeEventListener("wheel", preventPageZoom, { capture: true });
+    };
+  }, [open, onMouseMove, onMouseUp, clampTranslateY, syncApply, getInnerBox, zoom, loading, onClose]);
+
+  // ---------- 페이지 렌더 ----------
   const renderPage = useCallback(async (doc, num) => {
-    if (!doc || !canvasRef.current || !holderRef.current) return;
-    const page = await doc.getPage(num);
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d", { alpha: false });
+    if (!doc || !canvasRef.current || !holderRef.current || renderedRef.current) return;
 
-    // 내부 폭(innerW)에 맞춰 '기준' 크기 산정 (zoom=1.0)
-    const { innerW } = getInnerBox();
-    const baseViewport = page.getViewport({ scale: 1 });
-    const fitWidthScale = innerW / baseViewport.width;
+    try {
+      renderedRef.current = true;
 
-    const cssW = innerW;
-    const cssH = baseViewport.height * fitWidthScale;
-    baseCss.current = { width: cssW, height: cssH };
+      const page = await doc.getPage(num);
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d", { alpha: false });
 
-    // CSS 기준 크기
-    canvas.style.width  = `${Math.round(cssW)}px`;
-    canvas.style.height = `${Math.round(cssH)}px`;
+      const { innerW, innerH } = getInnerBox();
+      const baseViewport = page.getViewport({ scale: 1 });
 
-    // 실제 렌더 해상도(고품질)
-    const isMobile = window.innerWidth <= 768;
-    const q = isMobile ? 3.0 : 4.0;
-    const renderScale = fitWidthScale * q;
-    const renderViewport = page.getViewport({ scale: renderScale });
+      // zoom=1에서 가로 꽉차게
+      const fitWidthScale = innerW / baseViewport.width;
+      const cssW = innerW;
+      const cssH = baseViewport.height * fitWidthScale;
 
-    canvas.width  = Math.floor(renderViewport.width);
-    canvas.height = Math.floor(renderViewport.height);
+      baseCssWRef.current = cssW;
+      baseCssHRef.current = cssH;
 
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // CSS 기준 크기
+      canvas.style.width  = `${Math.round(cssW)}px`;
+      canvas.style.height = `${Math.round(cssH)}px`;
 
-    await page.render({ canvasContext: ctx, viewport: renderViewport, intent: "display", renderInteractiveForms: false }).promise;
+      // 렌더 해상도 (고품질)
+      const isMobile = window.innerWidth <= 768;
+      const q = isMobile ? 3.0 : 4.0;
+      const renderScale = fitWidthScale * q;
+      const renderViewport = page.getViewport({ scale: renderScale });
 
-    // 레이아웃 적용 + 초기 스크롤 0
-    requestAnimationFrame(() => {
-      applyLayout();
-      const holder = holderRef.current;
-      if (holder) holder.scrollTop = 0;
-    });
-  }, [applyLayout, getInnerBox]);
+      canvas.width  = Math.floor(renderViewport.width);
+      canvas.height = Math.floor(renderViewport.height);
 
-  const renderFirstPage = useCallback(async (doc) => {
-    if (doc) await renderPage(doc, 1);
-  }, [renderPage]);
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // PDF 로드 (Cloud Functions 호출)
+      await page.render({
+        canvasContext: ctx,
+        viewport: renderViewport,
+        intent: "display",
+        renderInteractiveForms: false
+      }).promise;
+
+      // 최소 배율 하한(필요하면 fit-height 하한을 추가로 걸 수 있음)
+      // 여기서는 하드캡만 유지 → 축소 버튼 먹통 방지
+      minScaleRef.current = MIN_ZOOM_HARD_CAP;
+
+      // 초기 상태: 100%, 위쪽부터
+      touchState.current.translateY = 0;
+      setZoom(1.0);
+      syncApply(1.0, 0, false);
+    } catch (err) {
+      console.error("PDF 렌더 오류:", err);
+    } finally {
+      setTimeout(() => { renderedRef.current = false; }, 100);
+    }
+  }, [getInnerBox, syncApply]);
+
+  const renderFirstPage = useCallback(async (doc) => { if (doc) await renderPage(doc, 1); }, [renderPage]);
+
+  // ---------- PDF 로드 ----------
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!open || !filePath || !sid) return;
+      if (!open || !filePath || !sid) { renderedRef.current = false; return; }
       setLoading(true);
       setErr(null);
+      renderedRef.current = false;
+
       try {
         const key = `${filePath}::${sid}`;
         if (pdfDoc && lastKeyRef.current === key) {
@@ -175,22 +289,20 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         const functions = getFunctions(undefined, "asia-northeast3");
         const serve = httpsCallable(functions, "serveWatermarkedPdf");
 
-        let bytes;
-        try {
-          const res = await serve({ filePath, sid });
-          const base64 = res?.data;
-          if (!base64) throw new Error("빈 응답");
-          const bin = atob(base64);
-          bytes = new Uint8Array(bin.length);
-          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-        } catch (fnErr) {
-          // 함수 레벨 에러 메시지를 좀 더 친절하게 가공
-          const msg = (fnErr?.message || "").toLowerCase();
+        // 함수 호출
+        const res = await serve({ filePath, sid }).catch((e) => {
+          const msg = (e?.message || "").toLowerCase();
           if (msg.includes("internal") || msg.includes("500")) {
             throw new Error("서버(PDF 생성) 내부 오류(500). 파일 경로/권한/서버 로그를 확인하세요.");
           }
-          throw fnErr;
-        }
+          throw e;
+        });
+
+        const base64 = res?.data;
+        if (!base64) throw new Error("빈 응답");
+        const bin = atob(base64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
 
         const task = getDocument({ data: bytes, useSystemFonts: true, disableFontFace: false });
         const doc = await task.promise;
@@ -208,7 +320,8 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+
+    return () => { cancelled = true; renderedRef.current = false; };
   }, [open, filePath, sid, pdfDoc, renderFirstPage]);
 
   if (!open) return null;
@@ -216,7 +329,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   return (
     <div
       style={backdropStyle}
-      onMouseDown={(e) => { if (e.target === e.currentTarget && !loading) onClose(); }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget && !loading && !mouseState.current.isDragging) onClose(); }}
       className="pdf-modal-root"
     >
       <div style={modalStyle} onClick={(e) => e.stopPropagation()} onContextMenu={(e) => e.preventDefault()}>
@@ -231,11 +344,8 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
             <span style={{ fontSize: 12, fontWeight: 600, minWidth: 45, textAlign: "center" }}>
               {Math.round(zoom * 100)}%
             </span>
-            <button
-              onClick={handleZoomIn}
-              disabled={zoom >= MAX_ZOOM}
-              style={{ ...zoomBtnStyle, opacity: zoom >= MAX_ZOOM ? 0.3 : 1, cursor: zoom >= MAX_ZOOM ? "not-allowed" : "pointer" }}
-            >
+            <button onClick={handleZoomIn} disabled={zoom >= MAX_ZOOM}
+              style={{ ...zoomBtnStyle, opacity: zoom >= MAX_ZOOM ? 0.3 : 1, cursor: zoom >= MAX_ZOOM ? "not-allowed" : "pointer" }}>
               +
             </button>
           </div>
@@ -243,39 +353,50 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
           <button onClick={onClose} style={closeBtnStyle} aria-label="닫기">✕</button>
         </div>
 
-        {/* 뷰어(네이티브 스크롤) */}
-        <div ref={holderRef} style={viewerStyleScrollable}>
-          <div ref={sizerRef}>
-            {loading && (
-              <div style={centerStyle}>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-                  <div style={{ width: 50, height: 50, border: "4px solid #333", borderTop: "4px solid var(--primary)", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
-                  <div style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)" }}>불러오는 중</div>
+        {/* 뷰어: stage(Y) → scaled(X+scale) → canvas */}
+        <div ref={holderRef} style={viewerStyle}>
+          <div ref={stageRef} style={stageStyle}>
+            <div ref={scaledRef} style={scaledStyle}>
+              {loading && (
+                <div style={centerStyle}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 50, height: 50, border: '4px solid #333', borderTop: '4px solid var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--ink)' }}>불러오는 중</div>
+                  </div>
                 </div>
-              </div>
-            )}
-            {err && <div style={{ ...centerStyle, color: "var(--bad)" }}>{String(err)}</div>}
-            {!loading && !err && (
-              <canvas
-                ref={canvasRef}
-                style={{
-                  display: "block",
-                  userSelect: "none",
-                  imageRendering: "high-quality",
-                  willChange: "transform",
-                }}
-              />
-            )}
+              )}
+              {err && <div style={{ ...centerStyle, color: "var(--bad)" }}>{String(err)}</div>}
+              {!loading && !err && (
+                <canvas
+                  ref={canvasRef}
+                  onTouchStart={onTouchStart}
+                  onTouchMove={onTouchMove}
+                  onTouchEnd={onTouchEnd}
+                  onMouseDown={onMouseDown}
+                  onMouseLeave={onMouseUp}
+                  style={{
+                    display: "block",
+                    userSelect: "none",
+                    maxWidth: "100%",
+                    maxHeight: "none",
+                    objectFit: "contain",
+                    imageRendering: "high-quality",
+                    touchAction: "none",
+                    cursor: mouseState.current.isDragging || touchState.current.isDragging ? 'grabbing' : 'grab',
+                  }}
+                />
+              )}
+            </div>
           </div>
         </div>
 
-        {/* 페이지 네비(옵션) */}
+        {/* 페이지 네비(여러 페이지일 때) */}
         {numPages > 1 && !loading && (
           <div style={footerStyle}>
             <button
               style={navBtnStyle}
               onClick={async () => {
-                if (!pdfDoc || pageNum <= 1) return;
+                if (renderedRef.current || !pdfDoc || pageNum <= 1) return;
                 const prev = pageNum - 1;
                 setPageNum(prev);
                 await renderPage(pdfDoc, prev);
@@ -285,7 +406,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
             <button
               style={navBtnStyle}
               onClick={async () => {
-                if (!pdfDoc || pageNum >= numPages) return;
+                if (renderedRef.current || !pdfDoc || pageNum >= numPages) return;
                 const next = pageNum + 1;
                 setPageNum(next);
                 await renderPage(pdfDoc, next);
@@ -303,7 +424,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   );
 }
 
-/* ---------------- styles ---------------- */
+// ---------- styles ----------
 const backdropStyle = {
   position: "fixed",
   inset: 0,
@@ -325,7 +446,7 @@ const modalStyle = {
   flexDirection: "column",
   overflow: "hidden",
   boxShadow: "0 15px 50px rgba(0,0,0,.5)",
-  position: "relative",
+  position: "relative"
 };
 
 const headerStyle = {
@@ -334,7 +455,7 @@ const headerStyle = {
   alignItems: "center",
   justifyContent: "space-between",
   padding: "0 12px",
-  borderBottom: "1px solid #2333b",
+  borderBottom: "1px solid #2d333b",
   background: "linear-gradient(#1c1f24, #1a1d22)",
   flexShrink: 0,
   gap: 12,
@@ -365,15 +486,31 @@ const zoomBtnStyle = {
   height: 32,
 };
 
-const viewerStyleScrollable = {
+const viewerStyle = {
   flex: 1,
   background: "#111",
   position: "relative",
-  overflowY: "auto",
-  overflowX: "hidden",
+  overflow: "hidden",
   padding: "15px",
-  touchAction: "auto",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "stretch",
+  justifyContent: "flex-start",
+  touchAction: "none",
   overscrollBehavior: "contain",
+};
+
+// 세로 이동 전용(stage)
+const stageStyle = {
+  position: "relative",
+  willChange: "transform",
+  minHeight: 0,
+};
+
+// 가로 중앙 + scale 전용(scaled)
+const scaledStyle = {
+  position: "relative",
+  willChange: "transform",
 };
 
 const centerStyle = {
