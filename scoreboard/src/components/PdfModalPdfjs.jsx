@@ -11,6 +11,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   
   const holderRef = useRef(null);
   const canvasRef = useRef(null);
+  const modalRef = useRef(null); // ✅ 모달 ref 추가
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
   const [pdfDoc, setPdfDoc] = useState(null);
@@ -52,15 +53,29 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     return Math.sqrt(dx * dx + dy * dy);
   };
 
-  // ✅ X축 중앙 고정 transform
+  // ✅ X축 중앙 고정 transform (translateX 계산)
   const applyCanvasTransform = useCallback((scale, translateY) => {
-    if (!canvasRef.current) return;
+    if (!canvasRef.current || !holderRef.current) return;
     
-    const transform = `translate(0px, ${translateY}px) scale(${scale})`;
     const canvas = canvasRef.current;
+    const container = holderRef.current;
+    
+    // 캔버스 원본 너비
+    const canvasWidth = parseFloat(canvas.style.width);
+    
+    // scale 적용 후 너비
+    const scaledWidth = canvasWidth * scale;
+    
+    // 컨테이너 너비
+    const containerWidth = container.getBoundingClientRect().width;
+    
+    // 중앙 정렬을 위한 translateX 계산
+    const translateX = (containerWidth - scaledWidth) / 2;
+    
+    const transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
     
     canvas.style.setProperty('transform', transform, 'important');
-    canvas.style.setProperty('transform-origin', 'top center', 'important'); // ✅ 가로 중앙 기준
+    canvas.style.setProperty('transform-origin', 'top left', 'important');
     
     const isInteracting = touchState.current.isScaling || touchState.current.isDragging || mouseState.current.isDragging;
     canvas.style.setProperty('transition', isInteracting ? 'none' : 'transform 0.3s ease', 'important');
@@ -204,8 +219,10 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     const isZoomGesture = e.ctrlKey || e.metaKey;
     
     if (isZoomGesture) {
+        // ✅ 브라우저 줌 완전 차단
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation();
         
         const state = touchState.current;
         const zoomStep = FIXED_ZOOM_STEP;
@@ -224,11 +241,11 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         if (newScale > currentMaxScale) newScale = currentMaxScale;
         if (newScale < currentMinScale) newScale = currentMinScale;
         
+        // ✅ 최대/최소 줌 도달 시에도 preventDefault 유지 (브라우저 줌 방지)
         if (newScale !== prevScale) {
             const canvas = canvasRef.current;
             const rect = canvas.getBoundingClientRect();
             
-            // ✅ Y축만 커서 위치 기준
             const pointY = (e.clientY - rect.top - state.translateY) / prevScale;
             
             state.translateY -= (newScale - prevScale) * pointY;
@@ -240,6 +257,8 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
             state.scale = newScale;
             applyCanvasTransform(state.scale, state.translateY);
         }
+        
+        return false;
     }
   }, [applyCanvasTransform, FIXED_ZOOM_STEP]);
 
@@ -386,14 +405,36 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       }
     };
     
+    // ✅ 브라우저 줌 완전 차단 (최우선 처리)
+    const preventBrowserZoom = (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        return false;
+      }
+    };
+    
+    // ✅ 모달 컨테이너에도 직접 이벤트 리스너 추가 (React 합성 이벤트보다 빠름)
+    const modalEl = document.querySelector('[style*="position: fixed"]'); // 모달 찾기
+    if (modalEl) {
+      modalEl.addEventListener('wheel', preventBrowserZoom, { passive: false, capture: true });
+    }
+    
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
     window.addEventListener("keydown", handler, { capture: true });
+    window.addEventListener("wheel", preventBrowserZoom, { capture: true, passive: false });
     
     return () => {
       window.removeEventListener("keydown", handler, { capture: true });
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("wheel", preventBrowserZoom, { capture: true });
+      
+      if (modalEl) {
+        modalEl.removeEventListener('wheel', preventBrowserZoom, { capture: true });
+      }
     }
   }, [open, onClose, loading, handleMouseMove, handleMouseUp]);
   
@@ -405,6 +446,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         style={modalStyle}
         onClick={(e) => e.stopPropagation()}
         onContextMenu={(e) => e.preventDefault()}
+        onWheel={handleWheel}
       >
         <div style={headerStyle}>
           <div style={{ fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -415,7 +457,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
           </button>
         </div>
 
-        <div ref={holderRef} style={viewerStyleScrollable}>
+        <div ref={holderRef} style={viewerStyleScrollable} onWheel={handleWheel}>
           {loading && (
             <div style={centerStyle}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
