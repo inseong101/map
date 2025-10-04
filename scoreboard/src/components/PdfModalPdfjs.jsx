@@ -1,687 +1,717 @@
-// src/components/ControversialPanel.jsx (수정된 코드 전체)
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import PdfModalPdfjs from "./PdfModalPdfjs";
+// src/components/PdfModalPdfjs.jsx
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import "./WrongPanel.css";
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/build/pdf";
 
-const SESSIONS = ["1교시", "2교시", "3교시", "4교시"];
+GlobalWorkerOptions.workerSrc = "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
 
-// ✅ 정식 과목 명칭 매핑 추가
-const FORMAL_SUBJECT_MAPPING = {
-  "간": "간계내과학",
-  "심": "심계내과학",
-  "비": "비계내과학",
-  "폐": "폐계내과학",
-  "신": "신계내과학",
-  "상한": "상한론",
-  "사상": "사상의학",
-  "침구": "침구의학",
-  "법규": "보건의약관계법규",
-  "외과": "외과학",
-  "신정": "신경정신과학",
-  "안이비": "안이비인후과학",
-  "부인": "부인과학",
-  "소아": "소아과학",
-  "예방": "예방의학",
-  "생리": "한방생리학",
-  "본초": "본초학",
-  "기타": "기타 과목"
-};
+export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
+  const MIN_ZOOM_HARD_CAP = 0.1;
 
-// ✅ 정확한 과목 매핑 정의 (회차별로 다름)
-const SUBJECT_MAPPINGS = {
-  "1차": {
-    "1교시": [
-      "신", "신", "폐", "심", "심", "간", "폐", "폐", "폐", "간",
-      "비", "폐", "신", "신", "신", "간", "비", "비", "비", "비",
-      "심", "심", "심", "심", "간", "비", "비", "심", "심", "심",
-      "신", "신", "심", "폐", "심", "비", "비", "비", "비", "비",
-      "비", "폐", "폐", "폐", "폐", "간", "신", "간", "신", "간",
-      "간", "간", "폐", "신", "간", "심", "심", "심", "심", "심",
-      "폐", "폐", "폐", "폐", "비", "비", "비", "비", "간", "간",
-      "간", "간", "간", "신", "신", "신", "신", "신", "신", "간"
-    ],
-    "2교시": [
-      // 1-16: 상한
-      "상한", "상한", "상한", "상한", "상한", "상한", "상한", "상한", "상한", "상한", "상한", "상한", "상한", "상한", "상한", "상한",
-      // 17-32: 사상
-      "사상", "사상", "사상", "사상", "사상", "사상", "사상", "사상", "사상", "사상", "사상", "사상", "사상", "사상", "사상", "사상",
-      // 33-80: 침구
-      "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구",
-      "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구",
-      "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구", "침구",
-      // 81-100: 법규
-      "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규", "법규"
-    ],
-    "3교시": [
-      // 1-16: 외과
-      "외과", "외과", "외과", "외과", "외과", "외과", "외과", "외과", "외과", "외과", "외과", "외과", "외과", "외과", "외과", "외과",
-      // 17-32: 신정
-      "신정", "신정", "신정", "신정", "신정", "신정", "신정", "신정", "신정", "신정", "신정", "신정", "신정", "신정", "신정", "신정",
-      // 33-48: 안이비
-      "안이비", "안이비", "안이비", "안이비", "안이비", "안이비", "안이비", "안이비", "안이비", "안이비", "안이비", "안이비", "안이비", "안이비", "안이비", "안이비",
-      // 49-80: 부인
-      "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인",
-      "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인", "부인"
-    ],
-    "4교시": [
-      // 1-24: 소아
-      "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아", "소아",
-      // 25-48: 예방
-      "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방", "예방",
-      // 49-64: 생리
-      "생리", "생리", "생리", "생리", "생리", "생리", "생리", "생리", "생리", "생리", "생리", "생리", "생리", "생리", "생리", "생리",
-      // 65-80: 본초
-      "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초", "본초"
-    ]
-  }
-  // TODO: 2차, 3차, 4차, 5차, 6차, 7차, 8차 매핑 추가 예정
-};
-
-// ✅ 과목 순서 정의 (간심비폐신 순)
-const SUBJECT_ORDER = ["간", "심", "비", "폐", "신", "상한", "사상", "침구", "법규", "외과", "신정", "안이비", "부인", "소아", "예방", "생리", "본초"];
-
-// ✅ 과목 매핑 함수
-function getSubjectByQuestion(qNum, session, roundLabel) {
-  const mapping = SUBJECT_MAPPINGS[roundLabel]?.[session];
-  if (mapping && qNum >= 1 && qNum <= mapping.length) {
-    return mapping[qNum - 1];
-  }
-  return "기타";
-}
-
-// ✅ 해당 회차의 교시가 매핑이 있는지 확인
-function isSessionAvailable(roundLabel, session) {
-  return !!(SUBJECT_MAPPINGS[roundLabel]?.[session]);
-}
-
-// ✅ 해당 회차가 전체적으로 매핑이 있는지 확인
-function isRoundAvailable(roundLabel) {
-  return !!(SUBJECT_MAPPINGS[roundLabel]);
-}
-
-// 단순화된 그리드 계산 함수 - 고정 크기, 세로 확장
-function calculateSimpleGrid(questionCount, containerWidth) {
-  if (!questionCount || !containerWidth) {
-    return { cols: 8, rows: 1, cellW: 50, cellH: 50 };
-  }
-  
-  const isMobile = containerWidth < 600;
-  const isTablet = containerWidth >= 600 && containerWidth < 900;
-  
-  // 고정된 버튼 크기
-  const cellSize = isMobile ? 45 : isTablet ? 55 : 60;
-  const gap = isMobile ? 2 : 3;
-  const padding = isMobile ? 8 : 12;
-  
-  // 고정된 열 수 (화면 크기별)
-  let cols;
-  if (isMobile) {
-    cols = Math.floor((containerWidth - padding * 2) / (cellSize + gap));
-    cols = Math.max(6, Math.min(cols, 8)); // 6-8열로 제한
-  } else if (isTablet) {
-    cols = Math.floor((containerWidth - padding * 2) / (cellSize + gap));
-    cols = Math.max(8, Math.min(cols, 12)); // 8-12열로 제한
-  } else {
-    cols = Math.floor((containerWidth - padding * 2) / (cellSize + gap));
-    cols = Math.max(10, Math.min(cols, 16)); // 10-16열로 제한
-  }
-  
-  const rows = Math.ceil(questionCount / cols);
-  
-  return {
-    cols: cols,
-    rows: rows,
-    cellW: cellSize,
-    cellH: cellSize,
-    questionCount: questionCount
-  };
-}
-
-export default function ControversialPanel({ allRoundLabels, roundLabel, onRoundChange, sid }) {
-  const [activeSession, setActiveSession] = useState("1교시");
-  const [activeSubject, setActiveSubject] = useState(null);
-  const gridWrapRef = useRef(null);
-  const [gridStyle, setGridStyle] = useState({ cols: 8, cellW: 50, cellH: 50 });
-  const [pdfOpen, setPdfOpen] = useState(false);
-  const [pdfPath, setPdfPath] = useState(null);
-  const [highErrorQuestions, setHighErrorQuestions] = useState({});
-  // ✅ MODIFIED: Set 대신 { qNum, rate } 객체 배열로 변경
-  const [fireBySession, setFireBySession] = useState({
-    "1교시": [], "2교시": [], "3교시": [], "4교시": [],
-  });
+  const holderRef = useRef(null);
+  const canvasRef = useRef(null);
   const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState(null);
+  const [pdfDoc, setPdfDoc] = useState(null);
+  const [pageNum, setPageNum] = useState(1);
+  const [numPages, setNumPages] = useState(0);
+  const lastKeyRef = useRef(null);
+  const renderedRef = useRef(false);
 
-  // ✅ 모달 제목을 구성하는 함수 추가 (정식 명칭 + "특별 해설")
-  const getModalTitle = useCallback(() => {
-    // activeSubject가 FORMAL_SUBJECT_MAPPING에 있으면 정식 명칭을, 없으면 원래 이름을 사용합니다.
-    const formalSubject = FORMAL_SUBJECT_MAPPING[activeSubject] || activeSubject || '';
-    // 요청하신 형식: "1차 1교시 간계내과학 특별 해설"
-    return `${roundLabel} ${activeSession} ${formalSubject} 특별 해설`;
-  }, [roundLabel, activeSession, activeSubject]);
+  const minScaleRef = useRef(MIN_ZOOM_HARD_CAP);
+  const [zoom, setZoom] = useState(1.0);
 
+  const touchState = useRef({ translateY: 0, lastTouchY: 0, isDragging: false });
+  const mouseState = useRef({ isDragging: false, lastMouseY: 0 });
 
-  const getHighErrorRateQuestions = useCallback(async (rLabel) => {
-    try {
-      const functions = getFunctions(undefined, "asia-northeast3"); // ✅ FIX: 지역 통일
-      const getHighError = httpsCallable(functions, "getHighErrorRateQuestions");
-      const res = await getHighError({ roundLabel: rLabel });
-      return res.data?.data || {};
-    } catch (e) {
-      console.error("많이 틀린 문항 조회 실패:", e);
-      return {};
-    }
+  // 진행 UI 강제 갱신
+  const [, forceRender] = useState(0);
+  const tick = useCallback(() => forceRender(v => v + 1), []);
+
+  // ---------- utils ----------
+  function getInnerSize(el) {
+    if (!el) return { width: 600, height: 400, padX: 0, padY: 0 };
+    const rect = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    const padX = parseFloat(cs.paddingLeft || "0") + parseFloat(cs.paddingRight || "0");
+    const padY = parseFloat(cs.paddingTop || "0") + parseFloat(cs.paddingBottom || "0");
+    return {
+      width: Math.max(320, Math.floor(rect.width - padX)),
+      height: Math.max(300, Math.floor(rect.height - padY)),
+      padX, padY
+    };
+  }
+  const getContainerSize = () => holderRef.current ? getInnerSize(holderRef.current) : { width: 600, height: 400, padX: 0, padY: 0 };
+
+  // ---------- 위치 비율(0~1) ----------
+  const progressRatio = useCallback(() => {
+    const canvas = canvasRef.current, holder = holderRef.current;
+    if (!canvas || !holder) return 0;
+    const { height: h } = getInnerSize(holder);
+    const baseCssHeight = parseFloat(canvas.style.height || "0");
+    const scaled = baseCssHeight * zoom;
+    if (!scaled || scaled <= h) return 0;
+    const minY = h - scaled;                 // 최하단 translateY
+    const curY = touchState.current.translateY; // [minY, 0]
+    return Math.min(1, Math.max(0, 1 - (curY - minY) / (0 - minY))); // 위=0, 아래=1
+  }, [zoom]);
+
+  const isScrollableNow = () => {
+    const holder = holderRef.current, canvas = canvasRef.current;
+    if (!holder || !canvas) return false;
+    const { height: h } = getInnerSize(holder);
+    const baseCssHeight = parseFloat(canvas.style.height || "0");
+    return baseCssHeight * zoom > h + 0.5;
+  };
+
+  // ---------- Y 이동 클램프 ----------
+  const clampTranslateY = useCallback((translateY, currentZoom) => {
+    const canvas = canvasRef.current;
+    const container = holderRef.current;
+    if (!canvas || !container) return 0;
+
+    const { height: containerHeight } = getInnerSize(container);
+    const baseCssHeight = parseFloat(canvas.style.height) || 0;
+    if (!baseCssHeight) return 0;
+
+    const scaledHeight = baseCssHeight * currentZoom;
+    if (scaledHeight <= containerHeight) return 0;
+
+    const maxTranslateY = 0;
+    const minTranslateY = containerHeight - scaledHeight;
+    return Math.max(minTranslateY, Math.min(maxTranslateY, translateY));
   }, []);
 
-  const getExplanationIndex = useCallback(async (rLabel) => {
-    try {
-      const functions = getFunctions(undefined, "asia-northeast3"); // ✅ FIX: 지역 통일
-      const getIndex = httpsCallable(functions, "getExplanationIndex");
-      const res = await getIndex({ roundLabel: rLabel });
-      return res.data || {};
-    } catch (e) {
-      console.error("해설 인덱스 조회 실패:", e);
-      return {};
-    }
+  // ---------- 변환 적용(X 중앙 고정 + 주어진 Y) ----------
+  const applyCanvasTransform = useCallback((currentZoom, translateY, withTransition = true) => {
+    const canvas = canvasRef.current;
+    const container = holderRef.current;
+    if (!canvas || !container) return;
+
+    const { width: containerWidth } = getInnerSize(container);
+    const baseCssWidth = parseFloat(canvas.style.width) || 0;
+    const scaledWidth = baseCssWidth * currentZoom;
+    const translateX = (containerWidth - scaledWidth) / 2; // X 중앙
+
+    canvas.style.setProperty("transform-origin", "top left", "important");
+    canvas.style.setProperty("transform", `translate(${translateX}px, ${translateY}px) scale(${currentZoom})`, "important");
+    canvas.style.setProperty("transition", withTransition ? "transform 0.18s ease" : "none", "important");
   }, []);
 
+  // ---------- 확대/축소 (뷰포트 Y-중앙 유지) ----------
+  const handleZoomChange = useCallback((nextZoomRaw) => {
+    const container = holderRef.current;
+    const canvas = canvasRef.current;
+
+    const minAllowed = Math.min(1, minScaleRef.current);
+    const newZoom = Math.max(minAllowed, Math.min(1.0, nextZoomRaw));
+
+    if (!container || !canvas) {
+      const clampedY = clampTranslateY(0, newZoom);
+      touchState.current.translateY = clampedY;
+      setZoom(newZoom);
+      applyCanvasTransform(newZoom, clampedY, true);
+      tick();
+      return;
+    }
+
+    const { height: containerHeight } = getInnerSize(container);
+    const baseCssHeight = parseFloat(canvas.style.height) || 0;
+    if (!baseCssHeight) {
+      touchState.current.translateY = 0;
+      setZoom(newZoom);
+      applyCanvasTransform(newZoom, 0, true);
+      tick();
+      return;
+    }
+
+    const oldScaled = baseCssHeight * zoom;
+    const newScaled = baseCssHeight * newZoom;
+
+    const viewportCenterY = containerHeight / 2;
+    const currentTranslateY = touchState.current.translateY;
+    let docY = viewportCenterY - currentTranslateY;
+    docY = Math.max(0, Math.min(oldScaled, docY));
+
+    const ratio = oldScaled > 0 ? (docY / oldScaled) : 0;
+    const newDocY = ratio * newScaled;
+
+    let newTranslateY = viewportCenterY - newDocY;
+    newTranslateY = clampTranslateY(newTranslateY, newZoom);
+
+    touchState.current.translateY = newTranslateY;
+    setZoom(newZoom);
+    applyCanvasTransform(newZoom, newTranslateY, true);
+    tick();
+  }, [zoom, applyCanvasTransform, clampTranslateY, tick]);
+
+  const handleZoomIn = useCallback(() => {
+    const step = 0.1;
+    const target = Math.min(1.0, Math.round((zoom + step) * 100) / 100);
+    handleZoomChange(target);
+  }, [zoom, handleZoomChange]);
+
+  const handleZoomOut = useCallback(() => {
+    const step = 0.1;
+    const minAllowed = Math.min(1, minScaleRef.current);
+    const target = Math.max(minAllowed, Math.round((zoom - step) * 100) / 100);
+    handleZoomChange(target);
+  }, [zoom, handleZoomChange]);
+
+  // ---------- 드래그/터치 ----------
+  const handleTouchStart = useCallback((e) => {
+    const t = e.touches;
+    if (t.length === 1) {
+      if (zoom > Math.min(1, minScaleRef.current)) {
+        touchState.current.isDragging = true;
+      }
+      touchState.current.lastTouchY = t[0].clientY;
+    }
+  }, [zoom]);
+
+  const handleTouchMove = useCallback((e) => {
+    if (!touchState.current.isDragging) return;
+    const t = e.touches;
+    if (t.length === 1) {
+      const deltaY = t[0].clientY - touchState.current.lastTouchY;
+      let newY = touchState.current.translateY + deltaY;
+      newY = clampTranslateY(newY, zoom);
+      touchState.current.translateY = newY;
+      touchState.current.lastTouchY = t[0].clientY;
+      applyCanvasTransform(zoom, newY, false);
+      tick();
+    }
+  }, [zoom, applyCanvasTransform, clampTranslateY, tick]);
+
+  const handleTouchEnd = useCallback(() => {
+    touchState.current.isDragging = false;
+  }, []);
+
+  const handleMouseDown = useCallback((e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    if (zoom > Math.min(1, minScaleRef.current)) {
+      mouseState.current.isDragging = true;
+    }
+    mouseState.current.lastMouseY = e.clientY;
+  }, [zoom]);
+
+  const handleMouseMove = useCallback((e) => {
+    if (!mouseState.current.isDragging) return;
+    const deltaY = e.clientY - mouseState.current.lastMouseY;
+    let newY = touchState.current.translateY + deltaY;
+    newY = clampTranslateY(newY, zoom);
+    touchState.current.translateY = newY;
+    mouseState.current.lastMouseY = e.clientY;
+    applyCanvasTransform(zoom, newY, false);
+    tick();
+  }, [zoom, applyCanvasTransform, clampTranslateY, tick]);
+
+  const handleMouseUp = useCallback(() => {
+    mouseState.current.isDragging = false;
+  }, []);
+
+  // ---------- 페이지 렌더 ----------
+  const renderPage = useCallback(async (doc, num) => {
+    if (!doc || !canvasRef.current || !holderRef.current || renderedRef.current) return;
+
+    try {
+      renderedRef.current = true;
+
+      const page = await doc.getPage(num);
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d", { alpha: false });
+
+      const { width: containerWidth, height: containerHeight } = getContainerSize();
+      const baseViewport = page.getViewport({ scale: 1 });
+
+      const fitWidthScale = containerWidth / baseViewport.width;
+      const cssWidth = containerWidth;
+      const cssHeight = baseViewport.height * fitWidthScale;
+
+      canvas.style.width = `${cssWidth}px`;
+      canvas.style.height = `${cssHeight}px`;
+
+      const minZoomFitHeight = containerHeight / cssHeight;
+      minScaleRef.current = Math.min(1, Math.max(MIN_ZOOM_HARD_CAP, minZoomFitHeight));
+
+      const isMobile = window.innerWidth <= 768;
+      const qualityMultiplier = isMobile ? 3.0 : 4.0;
+      const renderScale = fitWidthScale * qualityMultiplier;
+      const renderViewport = page.getViewport({ scale: renderScale });
+
+      canvas.width = Math.floor(renderViewport.width);
+      canvas.height = Math.floor(renderViewport.height);
+
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      await page.render({
+        canvasContext: ctx,
+        viewport: renderViewport,
+        intent: "display",
+        renderInteractiveForms: false
+      }).promise;
+
+      const initialZoom = 1.0;
+      const initialTranslateY = 0;
+
+      touchState.current.translateY = initialTranslateY;
+      setZoom(initialZoom);
+      applyCanvasTransform(initialZoom, initialTranslateY, false);
+      tick();
+    } catch (error) {
+      console.error("PDF 렌더링 오류:", error);
+    } finally {
+      setTimeout(() => {
+        renderedRef.current = false;
+      }, 100);
+    }
+  }, [applyCanvasTransform, tick]);
+
+  const renderFirstPage = useCallback(async (doc) => {
+    if (!doc) return;
+    await renderPage(doc, 1);
+  }, [renderPage]);
+
+  // ---------- PDF 로드 ----------
   useEffect(() => {
     let cancelled = false;
+
     (async () => {
-      console.log("데이터 로딩 시작:", roundLabel);
-      setLoading(true);
-      
-      if (!isRoundAvailable(roundLabel)) {
-        console.log("매핑되지 않은 회차:", roundLabel);
-        if (!cancelled) {
-          setHighErrorQuestions({});
-          // ✅ MODIFIED: 배열로 초기화
-          setFireBySession({
-            "1교시": [], "2교시": [], "3교시": [], "4교시": [],
-          });
-          setActiveSubject(null);
-          setLoading(false);
-        }
+      if (!open || !filePath || !sid) {
+        renderedRef.current = false;
         return;
       }
-      
+
+      setLoading(true);
+      setErr(null);
+      renderedRef.current = false;
+
       try {
-        // 해설 인덱스만 가져옴 (Functions의 더미 데이터는 사용하지 않음)
-        const explanationIndex = await getExplanationIndex(roundLabel);
-        
-        if (!cancelled) {
-          // 프론트엔드에서 모든 문항 생성
-          const allQuestions = {};
-          
-          // 모든 교시의 모든 문항을 생성
-          const sessions = {
-            "1교시": { min: 1, max: 80 },
-            "2교시": { min: 1, max: 100 },
-            "3교시": { min: 1, max: 80 },
-            "4교시": { min: 1, max: 80 }
-          };
+        const key = `${filePath}::${sid}`;
 
-          Object.entries(sessions).forEach(([session, range]) => {
-            for (let qNum = range.min; qNum <= range.max; qNum++) {
-              const subject = getSubjectByQuestion(qNum, session, roundLabel);
-              if (!allQuestions[subject]) {
-                allQuestions[subject] = [];
-              }
-              
-              allQuestions[subject].push({
-                questionNum: qNum,
-                session: session,
-                errorRate: Math.random() * 0.7 + 0.3 // 더미 오답률
-              });
-            }
-          });
-
-          // 각 과목별로 문항번호 순 정렬
-          Object.keys(allQuestions).forEach(subject => {
-            allQuestions[subject].sort((a, b) => a.questionNum - b.questionNum);
-          });
-          
-          console.log("생성된 모든 문항:", allQuestions);
-          setHighErrorQuestions(allQuestions);
-          // ✅ MODIFIED: 배열 객체를 그대로 저장
-          setFireBySession({
-            "1교시": explanationIndex["1교시"] || [],
-            "2교시": explanationIndex["2교시"] || [],
-            "3교시": explanationIndex["3교시"] || [],
-            "4교시": explanationIndex["4교시"] || [],
-          });
-          
-          // 첫 번째 과목 활성화
-          const subjectKeys = Object.keys(allQuestions).filter(subject => 
-            allQuestions[subject].length > 0
-          );
-          if (subjectKeys.length > 0) {
-            const sortedSubjects = subjectKeys.sort((a, b) => {
-              const aIndex = SUBJECT_ORDER.indexOf(a);
-              const bIndex = SUBJECT_ORDER.indexOf(b);
-              return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
-            });
-            setActiveSubject(sortedSubjects[0]);
-            console.log("활성 과목 설정:", sortedSubjects[0]);
-          } else {
-            setActiveSubject(null);
-          }
-        }
-      } catch (error) {
-        console.error("데이터 로딩 실패:", error);
-      } finally {
-        if (!cancelled) {
+        if (pdfDoc && lastKeyRef.current === key) {
           setLoading(false);
-        }
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [roundLabel, getExplanationIndex]);
-
-  // 단순화된 그리드 크기 계산 (한 번만 계산)
-  useEffect(() => {
-    const el = gridWrapRef.current;
-    if (!el) return;
-    
-    let timeoutId = null;
-    
-    const computeGrid = () => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        const currentQuestions = activeSubject ? (highErrorQuestions[activeSubject] || []) : [];
-        const questionCount = currentQuestions.length;
-        
-        if (questionCount === 0) {
-          setGridStyle({ cols: 8, cellW: 50, cellH: 50 });
+          setTimeout(async () => {
+            if (!cancelled) await renderFirstPage(pdfDoc);
+          }, 50);
           return;
         }
-        
-        const rect = el.getBoundingClientRect();
-        const { width } = rect;
-        
-        if (width > 0) {
-          const simpleGrid = calculateSimpleGrid(questionCount, width);
-          console.log(`단순 그리드: ${questionCount}개 문제 → ${simpleGrid.cols}x${simpleGrid.rows} (${simpleGrid.cellW}px)`);
-          setGridStyle(simpleGrid);
-        }
-      }, 200);
-    };
-    
-    // 초기 계산만 실행
-    computeGrid();
-    
-    return () => {
-      clearTimeout(timeoutId);
-    };
-  }, [activeSubject, highErrorQuestions]); // ResizeObserver 제거
 
-  // 윈도우 리사이즈는 방향 전환시에만 처리
+        const functions = getFunctions(undefined, "asia-northeast3");
+        const serve = httpsCallable(functions, "serveWatermarkedPdf");
+        const res = await serve({ filePath, sid });
+        const base64 = res?.data;
+        if (!base64) throw new Error("빈 응답");
+
+        const bin = atob(base64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+
+        const task = getDocument({
+          data: bytes,
+          useSystemFonts: true,
+          disableFontFace: false
+        });
+        const doc = await task.promise;
+        if (cancelled) return;
+
+        setPdfDoc(doc);
+        setNumPages(doc.numPages);
+        setPageNum(1);
+        lastKeyRef.current = key;
+
+        setTimeout(async () => {
+          if (!cancelled) await renderFirstPage(doc);
+        }, 50);
+      } catch (e) {
+        if (!cancelled) setErr(e?.message || "PDF 로드 실패");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      renderedRef.current = false;
+    };
+  }, [open, filePath, sid, renderFirstPage, pdfDoc]);
+
+  // ---------- 전역 키/휠 ----------
   useEffect(() => {
-    let timeoutId = null;
-    let lastOrientation = window.orientation;
-    
-    const handleOrientationChange = () => {
-      if (window.orientation !== undefined && window.orientation !== lastOrientation) {
-        lastOrientation = window.orientation;
-        
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => {
-          const el = gridWrapRef.current;
-          if (!el) return;
-          
-          const currentQuestions = activeSubject ? (highErrorQuestions[activeSubject] || []) : [];
-          const questionCount = currentQuestions.length;
-          
-          if (questionCount > 0) {
-            const rect = el.getBoundingClientRect();
-            const { width } = rect;
-            
-            if (width > 0) {
-              const simpleGrid = calculateSimpleGrid(questionCount, width);
-              setGridStyle(simpleGrid);
-            }
-          }
-        }, 500);
+    if (!open) return;
+
+    const handler = (e) => {
+      if (e.key === "Escape" && !loading) onClose();
+      if ((e.ctrlKey || e.metaKey) && (e.key === "p" || e.key === "P")) {
+        e.preventDefault(); e.stopPropagation();
+      }
+
+      const unit = 60;
+      const pageUnit = 400;
+      const minAllowed = Math.min(1, minScaleRef.current);
+      if (zoom <= minAllowed) return;
+
+      let moved = false;
+      let ty = touchState.current.translateY;
+
+      switch (e.key) {
+        case "ArrowDown": ty = clampTranslateY(ty - unit, zoom); moved = true; break;
+        case "ArrowUp":   ty = clampTranslateY(ty + unit, zoom); moved = true; break;
+        case "PageDown":  ty = clampTranslateY(ty - pageUnit, zoom); moved = true; break;
+        case "PageUp":    ty = clampTranslateY(ty + pageUnit, zoom); moved = true; break;
+        case "Home":      ty = clampTranslateY(0, zoom); moved = true; break;
+        case "End": {
+          const canvas = canvasRef.current;
+          const { height: h } = getInnerSize(holderRef.current);
+          const baseCssHeight = parseFloat(canvas?.style.height || "0");
+          const scaled = baseCssHeight * zoom;
+          ty = clampTranslateY(h - scaled, zoom);
+          moved = true;
+          break;
+        }
+        default: break;
+      }
+
+      if (moved) {
+        e.preventDefault();
+        touchState.current.translateY = ty;
+        applyCanvasTransform(zoom, ty, false);
+        tick();
       }
     };
-    
-    window.addEventListener('orientationchange', handleOrientationChange);
-    
-    return () => {
-      window.removeEventListener('orientationchange', handleOrientationChange);
-      clearTimeout(timeoutId);
+
+    // 브라우저 전역 줌(CTRL/⌘ + 휠) 차단
+    const preventAllZoom = (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
     };
-  }, [activeSubject, highErrorQuestions]);
 
-  // ✅ MODIFIED: rate 인자 추가 및 파일 경로에 rate 포함
-  const openExplanation = (session, qNum, rate) => {
-    const rNum = parseInt(String(roundLabel).replace(/\D/g, ""), 10) || 1;
-    const sNum = parseInt(String(session).replace(/\D/g, ""), 10) || 1;
-    // 파일명에 정답률 포함
-    const path = `explanation/${rNum}-${sNum}-${qNum}-${rate}.pdf`;
-    
-    console.log("PDF 열기:", path);
-    
-    // 모달을 먼저 열고 잠시 기다린 후 PDF 경로 설정
-    setPdfOpen(true);
-    setTimeout(() => {
-      setPdfPath(path);
-    }, 100); // 100ms 지연
-  };
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("keydown", handler, { capture: true });
+    window.addEventListener("wheel", preventAllZoom, { passive: false, capture: true });
 
-  // ✅ MODIFIED: renderButtons 함수 전체 수정 (색상 차이 최대화 로직 적용)
-  const renderButtons = () => {
-    if (!activeSubject || !highErrorQuestions[activeSubject]) {
-      console.log("버튼 렌더링 불가:", { activeSubject, hasData: !!highErrorQuestions[activeSubject] });
-      return null;
-    }
-    
-    const questions = highErrorQuestions[activeSubject];
-    const expQuestions = fireBySession[activeSession] || []; // { qNum, rate } 배열
-    
-    // 현재 과목의 모든 문항을 렌더링하도록 수정 (필터링 제거)
-    const sortedQuestions = questions
-        .map(q => {
-            // 정답률 객체 찾기
-            const exp = expQuestions.find(exp => exp.qNum === q.questionNum);
-            // rate는 number이거나 null
-            return exp 
-                ? { ...q, rate: exp.rate, hasExp: true } 
-                : { ...q, rate: null, hasExp: false };
-        })
-        .sort((a, b) => a.questionNum - b.questionNum); // 순서대로 정렬 유지
-    
-    console.log("버튼 렌더링:", { activeSubject, questions: sortedQuestions.length, gridStyle });
-    
-    const { cols, rows, cellW, cellH } = gridStyle;
-    
-    return (
-      <div
-        className="btn-grid"
-        style={{
-          display: 'grid',
-          gridTemplateColumns: `repeat(${cols}, ${cellW}px)`,
-          gridTemplateRows: `repeat(${rows}, ${cellH}px)`,
-          gap: `${window.innerWidth < 600 ? 2 : 3}px`,
-          justifyContent: 'center',
-          alignContent: 'start',
-          width: '100%',
-          maxWidth: '100%',
-          overflow: 'visible'
-        }}
-      >
-        {sortedQuestions.map((q) => { // Loop over ALL questions
-          const qNum = q.questionNum;
-          const session = q.session;
-          const hasExp = q.hasExp;
-          const rate = q.rate; // This is a number or null
+    return () => {
+      window.removeEventListener("keydown", handler, { capture: true });
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("wheel", preventAllZoom, { capture: true });
+    };
+  }, [open, onClose, loading, handleMouseMove, handleMouseUp, applyCanvasTransform, clampTranslateY, zoom, tick]);
 
-          // ✅ FIX: rate를 숫자로 변환하여 계산 오류 방지
-          const numericRate = (typeof rate === 'number' && !isNaN(rate)) ? rate : Number(rate);
-
-          let color, shadowColor, bgColor, cursor, clickHandler, rateText, styleMods = {};
-          let cls = `qbtn`;
-          
-          if (hasExp) {
-              // Dynamic Red Styling (Difficulty)
-              const clampedRate = Math.min(100, Math.max(0, numericRate)); 
-              // 난이도(Difficulty): 100 - Rate. 0% Rate -> 100 Difficulty (가장 어려움)
-              const clampedDifficulty = 100 - clampedRate; 
-
-              const hue = 0; // Red Hue (Fixed)
-              
-              // **난이도 변화에 따른 극단적 대비를 위한 HSL 계산 (다크 모드 최적화)**
-              
-              // FIX 1: 채도 (Saturation): 30% (쉬움) ~ 100% (어려움)
-              const saturation = Math.min(100, Math.max(30, Math.round(30 + clampedDifficulty * 0.7))); 
-
-              // FIX 2: 배경 밝기 (Background Lightness): 15% (쉬움) -> 1% (어려움)
-              // 난이도가 높을수록 배경이 어두워져 발광 대비가 극대화됩니다.
-              const bgLightness = Math.min(15, Math.max(1, Math.round(15 - clampedDifficulty * 0.14)));
-              
-              // FIX 3: 강조 밝기 (Accent Lightness): 30% (쉬움) -> 95% (어려움)
-              // 난이도가 높을수록 발광이 밝아져 시각적 자극이 극대화됩니다.
-              const accentLightness = Math.min(95, Math.max(30, Math.round(30 + clampedDifficulty * 0.65)));
-              
-              // Text Lightness: 80% 고정 (가독성 확보)
-              const textLightness = 80; 
-              
-              color = `hsl(${hue}, ${saturation}%, ${textLightness}%)`; // 텍스트 색상
-              shadowColor = `hsl(${hue}, ${saturation}%, ${accentLightness}%)`; // 테두리/그림자 색상
-              bgColor = `hsl(${hue}, ${saturation}%, ${bgLightness}%)`; // 배경 색상
-              
-              cursor = "pointer";
-              // openExplanation 함수에 rate를 그대로 전달 (toFixed는 표시용)
-              clickHandler = (e) => { e.stopPropagation(); openExplanation(session, qNum, rate); };
-              rateText = `${numericRate.toFixed(1)}%`; // 소수점 한 자리 표시
-              
-              // Apply dynamic styles
-              styleMods = {
-                color: color,
-                borderColor: shadowColor,
-                background: bgColor,
-                // 그림자 강도를 난이도에 비례하게 설정 (어려울수록 더 밝게 빛남)
-                boxShadow: `0 0 ${8 + clampedDifficulty * 0.25}px ${shadowColor}, 0 0 ${16 + clampedDifficulty * 0.5}px ${shadowColor}40`,
-                cursor: cursor,
-              };
-              cls += ` qbtn-rate`; 
-
-          } else {
-              // Default "No Explanation" Style
-              color = 'var(--muted)';
-              shadowColor = 'var(--line)'; // Default border
-              bgColor = 'rgba(255,255,255,0.02)'; // Lighter background for no exp
-              cursor = "default";
-              clickHandler = undefined;
-              rateText = null; 
-              
-              // Apply static styles
-              styleMods = {
-                color: color,
-                borderColor: shadowColor,
-                background: bgColor,
-                opacity: 0.7, 
-                cursor: cursor,
-                boxShadow: 'none',
-              };
-              cls += ` no-explanation`; 
-          }
-          
-          const label = hasExp 
-              ? `문항 ${qNum} · 정답률 ${rateText} · 특별 해설`
-              : `문항 ${qNum}`; // 툴팁에서 해설 없음 문구 제거
-
-          return (
-            <button
-              key={qNum}
-              type="button"
-              className={cls}
-              title={label}
-              aria-label={label}
-              onClick={clickHandler}
-              disabled={!hasExp} // 해설 없는 문항은 비활성화
-              // ✅ Apply combined styles and hover property
-              style={{
-                width: `${cellW}px`,
-                height: `${cellH}px`,
-                fontSize: `${Math.max(8, Math.min(12, cellW / 5))}px`,
-                position: 'relative', 
-                fontWeight: 700,
-                transition: 'all 0.2s ease',
-                minWidth: 0,
-                minHeight: 0,
-                boxSizing: 'border-box',
-                ...styleMods // Apply calculated styles
-              }}
-              // CSS-in-JS로 hover 효과 적용
-              onMouseEnter={(e) => {
-                  if (hasExp) {
-                      e.currentTarget.style.transform = 'translateY(-1px) scale(1.02)';
-                      // Hover 시 그림자 강도를 동적으로 더 강하게
-                      const clampedDifficulty = 100 - Math.min(100, Math.max(0, numericRate)); 
-                      e.currentTarget.style.boxShadow = `0 0 ${12 + clampedDifficulty * 0.1}px ${shadowColor}, 0 0 ${24 + clampedDifficulty * 0.2}px ${shadowColor}60`;
-                  }
-              }}
-              onMouseLeave={(e) => {
-                  if (hasExp) {
-                      e.currentTarget.style.transform = 'none';
-                      e.currentTarget.style.boxShadow = styleMods.boxShadow;
-                  }
-              }}
-            >
-              {qNum}
-              {/* ✅ 정답률 텍스트 표시 (해설 있는 경우) */}
-              {hasExp && (
-                  <span style={{ 
-                    position: 'absolute', 
-                    bottom: '2px', 
-                    fontSize: '10px', 
-                    fontWeight: 600,
-                    color: color,
-                    opacity: 0.9,
-                    lineHeight: 1 
-                  }}>
-                    {rateText}
-                  </span>
-              )}
-              
-              {/* 해설 없는 문항은 하단 텍스트를 표시하지 않음 */}
-              
-            </button>
-          );
-        })}
-      </div>
-    );
-  };
-
-  const getSubjectsBySession = (session) => {
-    const subjects = [];
-    if (highErrorQuestions) {
-      Object.entries(highErrorQuestions).forEach(([subj, questions]) => {
-        if (questions.some(q => q.session === session)) {
-          subjects.push(subj);
-        }
-      });
-    }
-    
-    subjects.sort((a, b) => {
-      const aIndex = SUBJECT_ORDER.indexOf(a);
-      const bIndex = SUBJECT_ORDER.indexOf(b);
-      return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
-    });
-    
-    console.log(`${session} 과목들:`, subjects);
-    return subjects;
-  };
-
+  // ---------- B안: 비-패시브 wheel 리스너(여기서 등록) ----------
   useEffect(() => {
-    const subjects = getSubjectsBySession(activeSession);
-    if (subjects.length > 0 && !subjects.includes(activeSubject)) {
-      setActiveSubject(subjects[0]);
-      console.log(`${activeSession} 첫 번째 과목으로 변경:`, subjects[0]);
-    }
-  }, [activeSession, highErrorQuestions]);
+    if (!open || !holderRef.current) return;
+    const el = holderRef.current;
+
+    const wheelHandler = (e) => {
+      if (e.ctrlKey || e.metaKey) return; // 브라우저 줌은 전역에서 이미 차단
+      e.preventDefault();                 // 이제 가능 (passive:false)
+      let ty = touchState.current.translateY - e.deltaY;
+      ty = clampTranslateY(ty, zoom);
+      touchState.current.translateY = ty;
+      applyCanvasTransform(zoom, ty, false);
+      tick();
+    };
+
+    el.addEventListener("wheel", wheelHandler, { passive: false });
+    return () => el.removeEventListener("wheel", wheelHandler, { passive: false });
+  }, [open, zoom, clampTranslateY, applyCanvasTransform, tick]);
+
+  if (!open) return null;
+
+  const maxScale = 1.0;
+  const minScale = Math.min(1, minScaleRef.current);
+  const pr = progressRatio(); // 0~1
+
+  // 스크롤바 thumb 계산 (뷰어 높이 기준)
+  const { height: viewH } = getContainerSize();
+  const baseCssHeight = parseFloat(canvasRef.current?.style?.height || "0");
+  const scaledH = baseCssHeight * zoom;
+  const showProgress = scaledH > viewH + 0.5 && !loading && !err;
+
+  const visibleRatio = showProgress ? Math.min(1, viewH / scaledH) : 1;
+  const trackHeight = viewH;                         // 트랙 = 내부 높이
+  const minThumbPx = 24;
+  const thumbHeight = showProgress ? Math.max(minThumbPx, Math.round(trackHeight * visibleRatio)) : 0;
+  const thumbTop = showProgress ? Math.round((trackHeight - thumbHeight) * pr) : 0;
 
   return (
-    <div className="wrong-panel-root">
-      <h2 style={{ marginTop: 0 }}>2025 전국모의고사</h2>
-
-      <div className="round-tabs" role="tablist" aria-label="회차 선택">
-        {allRoundLabels.map((r) => {
-          const isAvailable = isRoundAvailable(r);
-          return (
-            <button
-              key={r}
-              role="tab"
-              aria-selected={roundLabel === r}
-              className={`tab-btn ${roundLabel === r ? "active" : ""}`}
-              type="button"
-              disabled={!isAvailable}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (isAvailable) {
-                  onRoundChange(r);
-                }
-              }}
-            >
-              {r}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="session-tabs" role="tablist" aria-label="교시 선택">
-        {SESSIONS.map((s) => {
-          const isAvailable = isSessionAvailable(roundLabel, s);
-          return (
-            <button
-              key={s}
-              role="tab"
-              aria-selected={activeSession === s}
-              className={`tab-btn ${activeSession === s ? "active" : ""}`}
-              type="button"
-              disabled={!isAvailable}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (isAvailable) {
-                  setActiveSession(s);
-                }
-              }}
-            >
-              {s}
-            </button>
-          );
-        })}
-      </div>
-
-      {getSubjectsBySession(activeSession).length > 0 && (
-        <div className="subject-tabs" role="tablist" aria-label="과목 선택">
-          {getSubjectsBySession(activeSession).map((s) => (
-            <button
-              key={s}
-              role="tab"
-              aria-selected={activeSubject === s}
-              className={`tab-btn ${activeSubject === s ? "active" : ""}`}
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setActiveSubject(s);
-              }}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="tab-content" ref={gridWrapRef}>
-        {loading ? (
-          <div style={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            height: '200px',
-            gap: '12px'
-          }}>
-            <div className="spinner"></div>
-            <div style={{ color: 'var(--muted)', fontSize: '14px' }}>
-              문항 데이터를 불러오고 있습니다...
-            </div>
+    <div
+      style={backdropStyle}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget && !loading && !mouseState.current.isDragging) onClose();
+      }}
+      className="pdf-modal-root"
+    >
+      <div
+        style={modalStyle}
+        onClick={(e) => e.stopPropagation()}
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        {/* 헤더 */}
+        <div style={headerStyle}>
+          <div style={{ fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {title || "특별해설"}
           </div>
-        ) : (
-          renderButtons()
+
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <button
+              onClick={handleZoomOut}
+              disabled={zoom <= minScale}
+              style={{ ...zoomBtnStyle, opacity: zoom <= minScale ? 0.3 : 1, cursor: zoom <= minScale ? "not-allowed" : "pointer" }}
+            >
+              −
+            </button>
+            <span style={{ fontSize: "12px", fontWeight: 600, minWidth: "45px", textAlign: "center" }}>
+              {Math.round(zoom * 100)}%
+            </span>
+            <button
+              onClick={handleZoomIn}
+              disabled={zoom >= maxScale}
+              style={{ ...zoomBtnStyle, opacity: zoom >= maxScale ? 0.3 : 1, cursor: zoom >= maxScale ? "not-allowed" : "pointer" }}
+            >
+              +
+            </button>
+          </div>
+
+          <button onClick={onClose} style={closeBtnStyle} aria-label="닫기">✕</button>
+        </div>
+
+        {/* 뷰어(네이티브 스크롤 없음) */}
+        <div ref={holderRef} style={viewerStyleScrollable}>
+          {loading && (
+            <div style={centerStyle}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
+                <div
+                  style={{
+                    width: "50px", height: "50px",
+                    border: "4px solid #333", borderTop: "4px solid var(--primary)",
+                    borderRadius: "50%", animation: "spin 1s linear infinite"
+                  }}
+                />
+                <div style={{ fontSize: "16px", fontWeight: "700", color: "var(--ink)" }}>불러오는 중</div>
+              </div>
+            </div>
+          )}
+          {err && <div style={{ ...centerStyle, color: "var(--bad)" }}>{String(err)}</div>}
+          {!loading && !err && (
+            <canvas
+              ref={canvasRef}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onMouseDown={handleMouseDown}
+              onMouseLeave={handleMouseUp}
+              style={{
+                display: "block",
+                margin: "0 auto",
+                userSelect: "none",
+                maxWidth: "100%",
+                maxHeight: "none",
+                objectFit: "contain",
+                imageRendering: "high-quality",
+                touchAction: "none",
+                cursor: mouseState.current.isDragging || touchState.current.isDragging ? "grabbing" : "grab"
+              }}
+            />
+          )}
+
+          {/* 위치 표시: 스크롤바 스타일 트랙 + thumb (숫자 없음) */}
+          {showProgress && (
+            <div style={progressWrapInHolder}>
+              <div style={progressTrackStyle} />
+              <div
+                style={{
+                  ...progressThumbStyle,
+                  height: `${thumbHeight}px`,
+                  transform: `translateY(${thumbTop}px)`
+                }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* 페이지 네비게이션 */}
+        {numPages > 1 && !loading && (
+          <div style={footerStyle}>
+            <button
+              style={{ ...navBtnStyle, opacity: renderedRef.current || pageNum <= 1 ? 0.5 : 1 }}
+              disabled={renderedRef.current || pageNum <= 1}
+              onClick={async () => {
+                if (renderedRef.current || !pdfDoc || pageNum <= 1) return;
+                const prev = pageNum - 1;
+                setPageNum(prev);
+                await renderPage(pdfDoc, prev);
+              }}
+            >
+              ← 이전
+            </button>
+            <span style={{ fontWeight: 700 }}>Page {pageNum} / {numPages}</span>
+            <button
+              style={{ ...navBtnStyle, opacity: renderedRef.current || pageNum >= numPages ? 0.5 : 1 }}
+              disabled={renderedRef.current || pageNum >= numPages}
+              onClick={async () => {
+                if (renderedRef.current || !pdfDoc || pageNum >= numPages) return;
+                const next = pageNum + 1;
+                setPageNum(next);
+                await renderPage(pdfDoc, next);
+              }}
+            >
+              다음 →
+            </button>
+          </div>
         )}
       </div>
 
-      <PdfModalPdfjs
-        open={pdfOpen}
-        onClose={() => setPdfOpen(false)}
-        filePath={pdfPath}
-        sid={sid}
-        // 👇 수정된 모달 제목 사용
-        title={getModalTitle()}
-      />
+      <style jsx>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @media print { .pdf-modal-root { display: none !important; } }
+      `}</style>
     </div>
   );
 }
+
+// ---------- styles ----------
+const backdropStyle = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(0,0,0,.65)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 9999,
+  overscrollBehavior: "contain",
+};
+
+const modalStyle = {
+  width: "min(95vw, 900px)",
+  height: "min(80vh, 800px)",
+  background: "#1c1f24",
+  color: "#e5e7eb",
+  border: "1px solid #2d333b",
+  borderRadius: 12,
+  display: "flex",
+  flexDirection: "column",
+  overflow: "hidden",
+  boxShadow: "0 15px 50px rgba(0,0,0,.5)",
+  position: "relative"
+};
+
+const headerStyle = {
+  height: 44,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "0 12px",
+  borderBottom: "1px solid #2d333b",
+  background: "linear-gradient(#1c1f24, #1a1d22)",
+  flexShrink: 0,
+  gap: "12px"
+};
+
+const closeBtnStyle = {
+  border: "1px solid #2d333b",
+  borderRadius: 6,
+  background: "transparent",
+  padding: "4px 10px",
+  cursor: "pointer",
+  color: "#e5e7eb",
+  fontSize: 16,
+  lineHeight: 1
+};
+
+const zoomBtnStyle = {
+  border: "1px solid #2d333b",
+  borderRadius: 6,
+  background: "rgba(126,162,255,.12)",
+  padding: "4px 10px",
+  cursor: "pointer",
+  color: "#e5e7eb",
+  fontSize: 18,
+  lineHeight: 1,
+  fontWeight: "bold",
+  minWidth: "32px",
+  height: "32px"
+};
+
+const viewerStyleScrollable = {
+  flex: 1,
+  background: "#111",
+  position: "relative",
+  overflow: "hidden",
+  padding: "15px",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "flex-start",
+  touchAction: "none",
+  overscrollBehavior: "contain",
+};
+
+const centerStyle = {
+  position: "absolute",
+  inset: 0,
+  display: "grid",
+  placeItems: "center"
+};
+
+const footerStyle = {
+  borderTop: "1px solid #2d333b",
+  padding: "8px 12px",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  background: "rgb(21, 29, 54)",
+  fontSize: 14,
+  flexShrink: 0
+};
+
+const navBtnStyle = {
+  border: "1px solid #2d333b",
+  background: "transparent",
+  color: "#e5e7eb",
+  borderRadius: 8,
+  padding: "8px 12px",
+  cursor: "pointer",
+  fontWeight: 600
+};
+
+// 진행 표시(뷰어 내부 오버레이: 우측 트랙 + thumb)
+// ⬇️ 패딩 15px을 반영해 트랙 높이 = 내부(viewH)와 1:1 일치
+const progressWrapInHolder = {
+  position: "absolute",
+  top: 15,
+  bottom: 15,
+  right: 6,
+  width: 8,
+  pointerEvents: "none"
+};
+
+const progressTrackStyle = {
+  position: "absolute",
+  top: 0,
+  bottom: 0,
+  right: 0,
+  width: 4,
+  background: "rgba(255,255,255,0.10)",
+  borderRadius: 2
+};
+
+const progressThumbStyle = {
+  position: "absolute",
+  right: 0,
+  width: 4,
+  background: "rgba(126,162,255,0.95)",
+  borderRadius: 2,
+  boxShadow: "0 1px 6px rgba(0,0,0,0.35)",
+  pointerEvents: "none",
+  userSelect: "none",
+  willChange: "transform,height",
+  transition: "transform .08s linear, height .08s linear"
+};
