@@ -125,55 +125,36 @@ exports.serveWatermarkedPdf = functions
 
   const bucket = admin.storage().bucket();
   const [bytes] = await bucket.file(filePath).download();
-
   const pdfDoc = await PDFDocument.load(bytes);
   const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
   const text = String(sid);
   const fontSize = 64; 
-  const angle = degrees(45);
   const color = rgb(0.6, 0.6, 0.6);
   const opacity = 0.12;
 
   const pages = pdfDoc.getPages();
+  
   for (const page of pages) {
     const { width, height } = page.getSize();
     const textWidth = font.widthOfTextAtSize(text, fontSize);
-    const textHeight = fontSize;
     
-    // ✅ 페이지 중앙점
-    const pageCenterX = width / 2;
-    const pageCenterY = height / 2;
+    // ✅ 간단하게: 가로 중앙에 배치 (회전 없음으로 먼저 테스트)
+    const x = (width - textWidth) / 2;  // 정중앙
     
-    // ✅ 45도 회전 시 텍스트 중앙을 페이지 중앙에 맞추는 계산
-    // pdf-lib은 텍스트 왼쪽 아래 모서리를 기준으로 회전하므로
-    // 회전 후 텍스트 중앙이 페이지 중앙에 오도록 시작점을 조정
-    const rad = Math.PI / 4; // 45도
+    const stepY = fontSize * 3.5;
     
-    // 회전 전 텍스트 중앙점
-    const textCenterOffsetX = textWidth / 2;
-    const textCenterOffsetY = textHeight / 2;
-    
-    // 회전 변환 후 오프셋 (회전 행렬 적용)
-    const rotatedOffsetX = textCenterOffsetX * Math.cos(rad) - textCenterOffsetY * Math.sin(rad);
-    const rotatedOffsetY = textCenterOffsetX * Math.sin(rad) + textCenterOffsetY * Math.cos(rad);
-    
-    const stepY = textHeight * 3.5;
-
-    // Y축으로 반복 배치
-    for (let offsetY = -height; offsetY < height * 2; offsetY += stepY) { 
-      // ✅ 최종 시작점: 페이지 중앙 - 회전된 텍스트 중앙 오프셋
-      const startX = pageCenterX - rotatedOffsetX;
-      const startY = pageCenterY + offsetY - rotatedOffsetY;
+    for (let offsetY = -height * 0.5; offsetY < height * 2.5; offsetY += stepY) { 
+      const y = (height / 2) + offsetY;
       
       page.drawText(text, {
-        x: startX,
-        y: startY, 
+        x: x,
+        y: y,
         size: fontSize,
         font,
         color,
         opacity,
-        rotate: angle,
+        rotate: degrees(45),
       });
     }
   }
@@ -190,7 +171,6 @@ exports.serveWatermarkedPdf = functions
 
   return Buffer.from(out).toString("base64");
 });
-
 exports.logPdfAction = functions
   .region('asia-northeast3')
   .runWith({ memory: '8GB', timeoutSeconds: 180 })
