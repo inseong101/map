@@ -8,20 +8,20 @@ GlobalWorkerOptions.workerSrc =
 
 export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   // --- 설정 ---
-  const MIN_ZOOM_HARD_CAP = 0.1; // 최소 배율 하드캡
-  const MAX_ZOOM = 1.0;          // 최대 100%(가로맞춤)
+  const MIN_ZOOM_HARD_CAP = 0.1; // 절대 하한
+  const MAX_ZOOM = 1.0;          // 가로 맞춤 상한
 
   // --- refs ---
   const holderRef = useRef(null); // 뷰어 컨테이너 (position: relative)
-  const stageRef  = useRef(null); // 세로 이동(translateY) 전용 래퍼
-  const scaledRef = useRef(null); // 가로 중앙 + scale 적용 래퍼
-  const canvasRef = useRef(null); // 실제 PDF 렌더 캔버스
+  const stageRef  = useRef(null); // 세로 이동(translateY) 레이어
+  const scaledRef = useRef(null); // 가로 중앙 + scale 레이어
+  const canvasRef = useRef(null); // PDF 캔버스
 
   const lastKeyRef   = useRef(null);
   const renderedRef  = useRef(false);
-  const minScaleRef  = useRef(MIN_ZOOM_HARD_CAP);
-  const baseCssWRef  = useRef(0); // zoom=1 기준 CSS 폭
-  const baseCssHRef  = useRef(0); // zoom=1 기준 CSS 높이
+  const minScaleRef  = useRef(MIN_ZOOM_HARD_CAP); // 동적 최소 배율
+  const baseCssWRef  = useRef(0); // zoom=1 CSS 폭
+  const baseCssHRef  = useRef(0); // zoom=1 CSS 높이
 
   // --- state ---
   const [loading, setLoading] = useState(false);
@@ -31,7 +31,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   const [numPages, setNumPages] = useState(0);
   const [zoom, setZoom] = useState(1.0);
 
-  // 입력 상태(드래그/휠/키)
+  // 입력 상태
   const touchState = useRef({ isDragging: false, lastY: 0, translateY: 0 });
   const mouseState = useRef({ isDragging: false, lastY: 0 });
 
@@ -47,6 +47,15 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       innerH: Math.max(300, el.clientHeight - padY),
     };
   }, []);
+
+  // ---------- 동적 최소 배율(세로 맞춤) 계산 ----------
+  const computeMinZoom = useCallback(() => {
+    const { innerH } = getInnerBox();
+    const baseH = baseCssHRef.current || 1;
+    const fitHeight = innerH / baseH; // 이 값 이상이면 scaledH >= innerH
+    // 하드캡 이상, MAX_ZOOM 이하로 제한
+    return Math.max(MIN_ZOOM_HARD_CAP, Math.min(fitHeight, MAX_ZOOM));
+  }, [getInnerBox]);
 
   // ---------- 세로 이동 클램프 ----------
   const clampTranslateY = useCallback((ty, z) => {
@@ -70,7 +79,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     // 2) 가로 중앙 + 스케일
     const { innerW } = getInnerBox();
     const scaledW = baseCssWRef.current * z;
-    const tx = (innerW - scaledW) / 2; // 항상 가운데 정렬
+    const tx = (innerW - scaledW) / 2; // 항상 가운데
     scaled.style.setProperty("transform-origin", "top left", "important");
     scaled.style.setProperty("transform", `translateX(${tx}px) scale(${z})`, "important");
     scaled.style.setProperty("transition", withTransition ? "transform .16s ease" : "none", "important");
@@ -80,9 +89,13 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     applyTransforms(z, ty, withTransition);
   }, [applyTransforms]);
 
-  // ---------- 줌 변경(현재 시야 중앙 고정) ----------
+  // ---------- 줌 변경(현재 시야 중앙 고정) + 동적 min 반영 ----------
   const handleZoomChange = useCallback((nextZoomRaw) => {
-    const newZoom = Math.min(MAX_ZOOM, Math.max(minScaleRef.current, nextZoomRaw));
+    // 매번 최신 동적 최소 배율로 클램프
+    const dynMin = computeMinZoom();
+    minScaleRef.current = dynMin;
+
+    const newZoom = Math.min(MAX_ZOOM, Math.max(dynMin, nextZoomRaw));
     const { innerH } = getInnerBox();
 
     const oldScaledH = baseCssHRef.current * zoom;
@@ -90,16 +103,17 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
 
     const viewportCenter = innerH / 2;
     const oldTY = touchState.current.translateY;
-    const oldDocY = viewportCenter - oldTY;                            // 문서 좌표
+    const oldDocY = viewportCenter - oldTY; // 문서 좌표
     const ratio  = oldScaledH > 0 ? Math.min(1, Math.max(0, oldDocY / oldScaledH)) : 0.5;
     const newDocY = ratio * newScaledH;
+
     let newTY = viewportCenter - newDocY;
     newTY = clampTranslateY(newTY, newZoom);
 
     touchState.current.translateY = newTY;
     setZoom(newZoom);
     syncApply(newZoom, newTY, true);
-  }, [zoom, clampTranslateY, getInnerBox, syncApply]);
+  }, [zoom, computeMinZoom, clampTranslateY, getInnerBox, syncApply]);
 
   const handleZoomIn  = useCallback(() => handleZoomChange(Math.round((zoom + 0.1) * 100) / 100), [zoom, handleZoomChange]);
   const handleZoomOut = useCallback(() => handleZoomChange(Math.round((zoom - 0.1) * 100) / 100), [zoom, handleZoomChange]);
@@ -146,7 +160,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     if (!open || !holderRef.current) return;
     const el = holderRef.current;
     const onWheel = (e) => {
-      if (e.ctrlKey || e.metaKey) return; // (전역에서 브라우저 줌은 따로 차단)
+      if (e.ctrlKey || e.metaKey) return; // (전역에서 페이지 줌 차단)
       e.preventDefault();
       let ty = touchState.current.translateY - e.deltaY;
       ty = clampTranslateY(ty, zoom);
@@ -206,6 +220,36 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     };
   }, [open, onMouseMove, onMouseUp, clampTranslateY, syncApply, getInnerBox, zoom, loading, onClose]);
 
+  // ---------- 리사이즈: 동적 min 재계산 + 현재 줌/위치 보정 ----------
+  useEffect(() => {
+    if (!open) return;
+    const onResize = () => {
+      const dynMin = computeMinZoom();
+      minScaleRef.current = dynMin;
+      if (zoom < dynMin) {
+        // 현재 시야 중앙 기준으로 dynMin까지 확대
+        const { innerH } = getInnerBox();
+        const oldScaledH = baseCssHRef.current * zoom;
+        const newScaledH = baseCssHRef.current * dynMin;
+        const viewportCenter = innerH / 2;
+        const oldTY = touchState.current.translateY;
+        const ratio = oldScaledH > 0 ? (viewportCenter - oldTY) / oldScaledH : 0.5;
+        let newTY = viewportCenter - ratio * newScaledH;
+        newTY = clampTranslateY(newTY, dynMin);
+        touchState.current.translateY = newTY;
+        setZoom(dynMin);
+        syncApply(dynMin, newTY, false);
+      } else {
+        // 위치만 경계 보정
+        const ty = clampTranslateY(touchState.current.translateY, zoom);
+        touchState.current.translateY = ty;
+        syncApply(zoom, ty, false);
+      }
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [open, computeMinZoom, clampTranslateY, syncApply, getInnerBox, zoom]);
+
   // ---------- 페이지 렌더 ----------
   const renderPage = useCallback(async (doc, num) => {
     if (!doc || !canvasRef.current || !holderRef.current || renderedRef.current) return;
@@ -232,7 +276,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       canvas.style.width  = `${Math.round(cssW)}px`;
       canvas.style.height = `${Math.round(cssH)}px`;
 
-      // 렌더 해상도 (고품질)
+      // 실제 렌더 해상도(고품질)
       const isMobile = window.innerWidth <= 768;
       const q = isMobile ? 3.0 : 4.0;
       const renderScale = fitWidthScale * q;
@@ -251,19 +295,21 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         renderInteractiveForms: false
       }).promise;
 
-      // 하한은 하드캡만 유지
-      minScaleRef.current = MIN_ZOOM_HARD_CAP;
+      // ✅ 동적 최소 배율 재계산(세로 맞춤) 후 초기 상태 설정
+      const dynMin = computeMinZoom();
+      minScaleRef.current = dynMin;
 
-      // 초기 상태: 100%, 맨 위
+      // 초기 상태: zoom은 MAX_ZOOM과 dynMin 사이로, Y는 맨 위
+      const initZoom = Math.min(MAX_ZOOM, Math.max(dynMin, 1.0));
       touchState.current.translateY = 0;
-      setZoom(1.0);
-      syncApply(1.0, 0, false);
+      setZoom(initZoom);
+      syncApply(initZoom, 0, false);
     } catch (err) {
       console.error("PDF 렌더 오류:", err);
     } finally {
       setTimeout(() => { renderedRef.current = false; }, 100);
     }
-  }, [getInnerBox, syncApply]);
+  }, [getInnerBox, computeMinZoom, syncApply]);
 
   const renderFirstPage = useCallback(async (doc) => { if (doc) await renderPage(doc, 1); }, [renderPage]);
 
@@ -353,7 +399,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
           <button onClick={onClose} style={closeBtnStyle} aria-label="닫기">✕</button>
         </div>
 
-        {/* 뷰어: 오버레이(로딩) + stage(Y) → scaled(X+scale) → canvas */}
+        {/* 뷰어: 로딩 오버레이 + stage(Y) → scaled(X+scale) → canvas */}
         <div ref={holderRef} style={viewerStyle}>
           {/* ✅ 로딩 오버레이: 항상 뷰어 정중앙 */}
           {loading && !err && (
