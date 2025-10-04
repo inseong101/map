@@ -20,7 +20,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   const initialScaleRef = useRef(1);
   const minScaleRef = useRef(MIN_ZOOM_HARD_CAP);
 
-  const [zoom, setZoom] = useState(1.0); // UI 상태
+  const [zoom, setZoom] = useState(0.5); // ✅ 기본 50%
   const touchState = useRef({
     translateY: 0,
     lastTouchY: 0,
@@ -42,50 +42,117 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     };
   };
 
-  // ✅ X축 중앙 고정 transform
-  const applyCanvasTransform = useCallback((scale, translateY) => {
+  // ✅ translateY 제한 계산 (zoom을 실제 scale로 변환)
+  const clampTranslateY = useCallback((translateY, zoom) => {
+    if (!canvasRef.current || !holderRef.current) return translateY;
+    
+    const canvas = canvasRef.current;
+    const container = holderRef.current;
+    
+    const actualScale = zoom * initialScaleRef.current;
+    
+    const canvasHeight = parseFloat(canvas.style.height);
+    const scaledHeight = canvasHeight * actualScale;
+    const containerHeight = container.getBoundingClientRect().height;
+    
+    // 문서가 viewport보다 작으면 항상 0
+    if (scaledHeight <= containerHeight) {
+      return 0;
+    }
+    
+    // 위로: 0 이상 불가
+    const maxTranslateY = 0;
+    // 아래로: 문서 끝이 viewport 끝보다 위에 있으면 안 됨
+    const minTranslateY = containerHeight - scaledHeight;
+    
+    return Math.max(minTranslateY, Math.min(maxTranslateY, translateY));
+  }, []);
+
+  // ✅ X축 중앙 고정 transform (zoom을 실제 scale로 변환)
+  const applyCanvasTransform = useCallback((zoom, translateY) => {
     if (!canvasRef.current || !holderRef.current) return;
     
     const canvas = canvasRef.current;
     const container = holderRef.current;
     
+    // ✅ 실제 scale = zoom * widthFitScale
+    const actualScale = zoom * initialScaleRef.current;
+    
     const canvasWidth = parseFloat(canvas.style.width);
-    const scaledWidth = canvasWidth * scale;
+    const scaledWidth = canvasWidth * actualScale;
     const containerWidth = container.getBoundingClientRect().width;
     const translateX = (containerWidth - scaledWidth) / 2;
     
-    const transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+    // ✅ translateY 제한 적용
+    const clampedTranslateY = clampTranslateY(translateY, actualScale);
+    touchState.current.translateY = clampedTranslateY;
+    
+    const transform = `translate(${translateX}px, ${clampedTranslateY}px) scale(${actualScale})`;
     
     canvas.style.setProperty('transform', transform, 'important');
     canvas.style.setProperty('transform-origin', 'top left', 'important');
     canvas.style.setProperty('transition', 'transform 0.3s ease', 'important');
-  }, []);
+  }, [clampTranslateY]);
 
-  // ✅ 줌 버튼 핸들러
+  // ✅ 줌 버튼 핸들러 - viewport 중심 기준
   const handleZoomIn = useCallback(() => {
-    const maxScale = 1.0;
-    const newZoom = Math.min(zoom + 0.1, maxScale);
+    const maxZoom = 1.0;
+    const newZoom = Math.min(zoom + 0.1, maxZoom);
+    
+    if (!holderRef.current || !canvasRef.current) {
+      setZoom(newZoom);
+      applyCanvasTransform(newZoom, 0);
+      return;
+    }
+    
+    // viewport 중심 계산
+    const container = holderRef.current;
+    const containerRect = container.getBoundingClientRect();
+    const viewportCenterY = containerRect.height / 2;
+    
+    const currentY = touchState.current.translateY;
+    const currentScale = zoom * initialScaleRef.current;
+    const pointY = (viewportCenterY - currentY) / currentScale;
+    
+    const newScale = newZoom * initialScaleRef.current;
+    const newTranslateY = viewportCenterY - pointY * newScale;
+    
+    touchState.current.translateY = newTranslateY;
     setZoom(newZoom);
-    touchState.current.translateY = 0;
-    applyCanvasTransform(newZoom, 0);
+    applyCanvasTransform(newZoom, newTranslateY);
   }, [zoom, applyCanvasTransform]);
 
   const handleZoomOut = useCallback(() => {
-    const minScale = minScaleRef.current / initialScaleRef.current;
-    const newZoom = Math.max(zoom - 0.1, minScale);
+    const minZoom = minScaleRef.current;
+    const newZoom = Math.max(zoom - 0.1, minZoom);
+    
+    if (!holderRef.current || !canvasRef.current) {
+      setZoom(newZoom);
+      applyCanvasTransform(newZoom, 0);
+      return;
+    }
+    
+    const container = holderRef.current;
+    const containerRect = container.getBoundingClientRect();
+    const viewportCenterY = containerRect.height / 2;
+    
+    const currentY = touchState.current.translateY;
+    const currentScale = zoom * initialScaleRef.current;
+    const pointY = (viewportCenterY - currentY) / currentScale;
+    
+    const newScale = newZoom * initialScaleRef.current;
+    const newTranslateY = viewportCenterY - pointY * newScale;
+    
+    touchState.current.translateY = newTranslateY;
     setZoom(newZoom);
-    touchState.current.translateY = 0;
-    applyCanvasTransform(newZoom, 0);
+    applyCanvasTransform(newZoom, newTranslateY);
   }, [zoom, applyCanvasTransform]);
 
   const handleZoomReset = useCallback(() => {
-    setZoom(1.0);
+    setZoom(0.5);
     touchState.current.translateY = 0;
-    if (canvasRef.current) {
-      canvasRef.current.style.removeProperty('transform');
-      canvasRef.current.style.removeProperty('transform-origin');
-    }
-  }, []);
+    applyCanvasTransform(0.5, 0);
+  }, [applyCanvasTransform]);
 
   // 터치 드래그 (Y축만)
   const handleTouchStart = useCallback((e) => {
@@ -153,9 +220,26 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       const heightFitScale = containerHeight / baseViewport.height;
       
       initialScaleRef.current = widthFitScale;
-      minScaleRef.current = Math.max(MIN_ZOOM_HARD_CAP, heightFitScale);
       
-      const isMobile = window.innerWidth <= 768;
+      // ✅ UI zoom 기준으로 최소값 계산
+      // zoom = 1.0 → scale(1.0) = 가로 맞춤
+      // 여백 방지 조건: canvasHeight * zoom >= containerHeight
+      // 즉, zoom >= heightFitScale / widthFitScale
+      const minZoomRatio = heightFitScale / widthFitScale;
+      minScaleRef.current = Math.max(MIN_ZOOM_HARD_CAP, minZoomRatio);
+      
+      // ✅ 초기 줌: 50% 또는 최소값 중 큰 값
+      const initialZoom = Math.max(0.5, minZoomRatio);
+      setZoom(initialZoom);
+      touchState.current.translateY = 0;
+      
+      // ✅ 초기 줌 적용
+      applyCanvasTransform(initialZoom, 0);
+      
+      // ✅ 초기 줌 적용
+      setTimeout(() => {
+        applyCanvasTransform(initialZoom, 0);
+      }, 10);
       const qualityMultiplier = isMobile ? 3.0 : 4.0;
       const renderScale = widthFitScale * qualityMultiplier;
       const renderViewport = page.getViewport({ scale: renderScale });
@@ -176,13 +260,11 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
         renderInteractiveForms: false
       }).promise;
 
-      setZoom(1.0);
+      setZoom(0.5);
       touchState.current.translateY = 0;
       
-      if (canvasRef.current) {
-        canvasRef.current.style.removeProperty('transform');
-        canvasRef.current.style.removeProperty('transform-origin');
-      }
+      // ✅ 초기 50% 줌 적용
+      applyCanvasTransform(0.5, 0);
       
     } catch (error) {
       console.error("PDF 렌더링 오류:", error);
@@ -307,7 +389,15 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   const minScale = minScaleRef.current / initialScaleRef.current;
 
   return (
-    <div style={backdropStyle} onClick={loading ? undefined : onClose}>
+    <div 
+      style={backdropStyle} 
+      onMouseDown={(e) => {
+        // backdrop을 직접 클릭했을 때만 닫기 (드래그 중 아님)
+        if (e.target === e.currentTarget && !loading && !mouseState.current.isDragging) {
+          onClose();
+        }
+      }}
+    >
       <div
         style={modalStyle}
         onClick={(e) => e.stopPropagation()}
@@ -345,11 +435,6 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
             >
               +
             </button>
-            {zoom !== 1.0 && (
-              <button onClick={handleZoomReset} style={resetBtnStyle}>
-                초기화
-              </button>
-            )}
           </div>
           
           <button onClick={onClose} style={closeBtnStyle} aria-label="닫기">
@@ -501,17 +586,6 @@ const zoomBtnStyle = {
   fontWeight: 'bold',
   minWidth: '32px',
   height: '32px'
-};
-
-const resetBtnStyle = {
-  border: "1px solid #2d333b",
-  borderRadius: 6,
-  background: "transparent",
-  padding: "4px 8px",
-  cursor: "pointer",
-  color: "#e5e7eb",
-  fontSize: 11,
-  fontWeight: 600
 };
 
 const viewerStyleScrollable = {
