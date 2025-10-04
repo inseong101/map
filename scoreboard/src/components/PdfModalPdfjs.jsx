@@ -3,15 +3,16 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/build/pdf";
 
-GlobalWorkerOptions.workerSrc = "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+GlobalWorkerOptions.workerSrc =
+  "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
 
 export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
-  const MIN_ZOOM_HARD_CAP = 0.1;        // 하드 하한만 유지
-  const MAX_ZOOM = 1.0;                 // 최대는 1 (폭 맞춤)
+  const MIN_ZOOM_HARD_CAP = 0.1;   // 하한
+  const MAX_ZOOM = 1.0;            // 상한(폭 맞춤)
 
-  const holderRef = useRef(null);       // 스크롤 컨테이너 (네이티브 스크롤)
-  const sizerRef  = useRef(null);       // 레이아웃 높이/너비를 갖는 박스(스크롤 범위 제공)
-  const canvasRef = useRef(null);       // 실제 PDF 그려지는 캔버스(absolute)
+  const holderRef = useRef(null);  // 네이티브 스크롤 컨테이너 (padding 15px)
+  const sizerRef  = useRef(null);  // 스크롤 범위 제공(레이아웃 높이)
+  const canvasRef = useRef(null);  // 실제 PDF 그리는 캔버스(absolute + scale)
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
@@ -20,84 +21,64 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   const [numPages, setNumPages] = useState(0);
   const lastKeyRef = useRef(null);
 
-  // 렌더 기준(CSS) 크기 (zoom=1.0 일 때)
+  // 기준(CSS) 크기(zoom=1에서 컨테이너 내부폭에 맞춤)
   const baseCss = useRef({ width: 0, height: 0 });
   const [zoom, setZoom] = useState(1.0);
 
-  // 썸(진행바) UI 상태
-  const [thumb, setThumb] = useState({ show: false, top: 0, height: 0 });
-
-  // --------- helpers ----------
+  // 컨테이너 내부 사이즈(패딩 제외)를 일관 계산
   const getHolderBox = useCallback(() => {
     const el = holderRef.current;
-    if (!el) return { cw: 600, ch: 400, padTop: 0, padBottom: 0 };
+    if (!el) {
+      return {
+        clientW: 600, clientH: 400,
+        padL: 0, padR: 0, padT: 0, padB: 0,
+        innerW: 600, innerH: 400
+      };
+    }
     const cs = getComputedStyle(el);
-    const padTop = parseFloat(cs.paddingTop || "0");
-    const padBottom = parseFloat(cs.paddingBottom || "0");
-    return { cw: el.clientWidth, ch: el.clientHeight, padTop, padBottom };
+    const padL = parseFloat(cs.paddingLeft || "0");
+    const padR = parseFloat(cs.paddingRight || "0");
+    const padT = parseFloat(cs.paddingTop || "0");
+    const padB = parseFloat(cs.paddingBottom || "0");
+    const clientW = el.clientWidth;
+    const clientH = el.clientHeight;
+    const innerW = Math.max(0, clientW - padL - padR);
+    const innerH = Math.max(0, clientH - padT - padB);
+    return { clientW, clientH, padL, padR, padT, padB, innerW, innerH };
   }, []);
 
   const getScaledSize = useCallback(() => {
-    // 실제 보이는 문서 크기(스케일 반영)
     return {
-      width: baseCss.current.width * zoom,
+      width:  baseCss.current.width  * zoom,
       height: baseCss.current.height * zoom,
     };
   }, [zoom]);
 
-  // 진행 썸 업데이트 (네이티브 스크롤 값으로)
-  const updateThumbFromScroll = useCallback(() => {
-    const holder = holderRef.current;
-    if (!holder) return;
-
-    const scrollH = holder.scrollHeight;
-    const clientH = holder.clientHeight;
-    const scrollTop = holder.scrollTop;
-
-    if (scrollH <= clientH + 0.5) {
-      setThumb((t) => (t.show ? { show: false, top: 0, height: 0 } : t));
-      return;
-    }
-
-    const ratio = scrollTop / (scrollH - clientH); // 0~1
-    const trackH = clientH;
-    const visibleRatio = clientH / scrollH;
-    const minThumb = 24;
-    const thumbH = Math.max(minThumb, Math.round(trackH * visibleRatio));
-    const top = Math.round((trackH - thumbH) * ratio);
-
-    setThumb({ show: true, top, height: thumbH });
-  }, []);
-
-  // 캔버스 위치/크기 적용 (가로 중앙 + 스케일)
+  // 레이아웃 적용: sizer=레이아웃, canvas=absolute+scale+가로 중앙
   const applyLayout = useCallback(() => {
     const holder = holderRef.current;
     const sizer  = sizerRef.current;
     const canvas = canvasRef.current;
     if (!holder || !sizer || !canvas) return;
 
-    const { cw } = getHolderBox();
+    const { innerW } = getHolderBox();
     const { width: scaledW, height: scaledH } = getScaledSize();
 
-    // 스크롤 범위 제공: sizer의 레이아웃 크기를 스케일링된 문서 크기로
-    const sizerW = Math.max(cw, Math.ceil(scaledW)); // 가로 중앙 정렬 위해 최소 컨테이너 폭 보장
-    sizer.style.width  = `${sizerW}px`;
-    sizer.style.height = `${Math.ceil(scaledH)}px`;
+    // sizer: 내부 컨텐츠 영역(패딩 제외) 크기로 설정 → 네이티브 스크롤 범위 제공
     sizer.style.position = "relative";
+    sizer.style.width  = `${Math.ceil(innerW)}px`;
+    sizer.style.height = `${Math.ceil(scaledH)}px`;
 
-    // 캔버스는 sizer 안에서 절대 위치 + scale로 그려짐
-    const left = Math.round((sizerW - scaledW) / 2);
+    // canvas: sizer 내부에서 absolute + scale, X축 중앙 정렬
+    const left = Math.max(0, Math.round((innerW - scaledW) / 2));
     canvas.style.position = "absolute";
     canvas.style.top = "0px";
     canvas.style.left = `${left}px`;
     canvas.style.transformOrigin = "top left";
     canvas.style.transform = `scale(${zoom})`;
+  }, [getHolderBox, getScaledSize, zoom]);
 
-    // 진행 썸 갱신
-    updateThumbFromScroll();
-  }, [getHolderBox, getScaledSize, updateThumbFromScroll, zoom]);
-
-  // 줌 변경 (화면 중앙 고정)
+  // 줌 변경: “현재 화면 중앙” 기준 유지
   const changeZoomKeepingCenter = useCallback((nextZoomRaw) => {
     const holder = holderRef.current;
     if (!holder) return;
@@ -108,33 +89,23 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     const newScaledH = baseCss.current.height * newZoom;
 
     const viewportCenter = holder.clientHeight / 2;
-    // scrollTop은 "스케일 반영된" 좌표
-    const centerAbs = holder.scrollTop + viewportCenter;   // 현재 화면 중앙의 절대 위치(스케일 반영)
+    const centerAbs = holder.scrollTop + viewportCenter;   // 현재 중앙의 절대 위치(스케일 반영)
     const ratio = oldScaledH > 0 ? centerAbs / oldScaledH : 0.5;
 
     setZoom(newZoom);
 
-    // 레이아웃 먼저 갱신 → scrollTop 재설정
+    // 레이아웃 갱신 후 scrollTop 재설정
     requestAnimationFrame(() => {
       applyLayout();
       const newCenterAbs = ratio * newScaledH;
-      const newScrollTop = Math.max(0, Math.min(newCenterAbs - viewportCenter, holder.scrollHeight - holder.clientHeight));
+      const maxTop = Math.max(0, holder.scrollHeight - holder.clientHeight);
+      const newScrollTop = Math.max(0, Math.min(newCenterAbs - viewportCenter, maxTop));
       holder.scrollTop = newScrollTop;
-      updateThumbFromScroll();
     });
-  }, [applyLayout, updateThumbFromScroll, zoom]);
+  }, [applyLayout, zoom]);
 
-  const handleZoomIn  = useCallback(() => changeZoomKeepingCenter( Math.round((zoom + 0.1) * 100) / 100 ), [zoom, changeZoomKeepingCenter]);
-  const handleZoomOut = useCallback(() => changeZoomKeepingCenter( Math.round((zoom - 0.1) * 100) / 100 ), [zoom, changeZoomKeepingCenter]);
-
-  // 스크롤 이벤트로 썸 갱신
-  useEffect(() => {
-    const holder = holderRef.current;
-    if (!holder || !open) return;
-    const onScroll = () => updateThumbFromScroll();
-    holder.addEventListener("scroll", onScroll, { passive: true });
-    return () => holder.removeEventListener("scroll", onScroll);
-  }, [open, updateThumbFromScroll]);
+  const handleZoomIn  = useCallback(() => changeZoomKeepingCenter(Math.round((zoom + 0.1) * 100) / 100), [zoom, changeZoomKeepingCenter]);
+  const handleZoomOut = useCallback(() => changeZoomKeepingCenter(Math.round((zoom - 0.1) * 100) / 100), [zoom, changeZoomKeepingCenter]);
 
   // 리사이즈 시 레이아웃 재적용
   useEffect(() => {
@@ -144,38 +115,41 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     return () => window.removeEventListener("resize", onResize);
   }, [open, applyLayout]);
 
-  // Ctrl/⌘ + Wheel 브라우저 줌 방지 (우리 줌만 쓰기)
+  // Ctrl/⌘ + Wheel 브라우저 줌 방지(우리 줌만 사용)
   useEffect(() => {
     if (!open) return;
     const preventPageZoom = (e) => {
-      if (e.ctrlKey || e.metaKey) { e.preventDefault(); e.stopPropagation(); }
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
     };
     window.addEventListener("wheel", preventPageZoom, { passive: false, capture: true });
     return () => window.removeEventListener("wheel", preventPageZoom, { capture: true });
   }, [open]);
 
-  // 페이지 렌더
+  // PDF 페이지 렌더
   const renderPage = useCallback(async (doc, num) => {
     if (!doc || !canvasRef.current || !holderRef.current) return;
+
     const page = await doc.getPage(num);
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d", { alpha: false });
 
-    // 기준 사이즈(zoom=1에서 컨테이너 폭에 맞춤)
-    const holder = holderRef.current;
-    const cw = holder.clientWidth - 30; // 내부 padding 15px*2 고려(아래 style과 일치)
+    // 내부폭(innerW)에 맞춰 기준 크기 산정(패딩 제외)
+    const { innerW } = getHolderBox();
     const baseViewport = page.getViewport({ scale: 1 });
-    const fitWidthScale = cw / baseViewport.width;
+    const fitWidthScale = innerW / baseViewport.width;
 
-    const cssW = cw;
+    const cssW = innerW;
     const cssH = baseViewport.height * fitWidthScale;
     baseCss.current = { width: cssW, height: cssH };
 
-    // 캔버스 CSS 크기(기준)
+    // CSS 기준 크기
     canvas.style.width  = `${Math.floor(cssW)}px`;
     canvas.style.height = `${Math.floor(cssH)}px`;
 
-    // 실제 렌더 해상도 (고품질)
+    // 실제 렌더 해상도(고품질)
     const isMobile = window.innerWidth <= 768;
     const q = isMobile ? 3.0 : 4.0;
     const renderScale = fitWidthScale * q;
@@ -187,18 +161,20 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    await page.render({ canvasContext: ctx, viewport: renderViewport, intent: "display", renderInteractiveForms: false }).promise;
+    await page.render({
+      canvasContext: ctx,
+      viewport: renderViewport,
+      intent: "display",
+      renderInteractiveForms: false
+    }).promise;
 
-    // 레이아웃 적용 및 진행바 초기화
+    // 레이아웃 적용 및 초기 스크롤
     requestAnimationFrame(() => {
       applyLayout();
       const holderEl = holderRef.current;
-      if (holderEl) {
-        holderEl.scrollTop = 0;
-        updateThumbFromScroll();
-      }
+      if (holderEl) holderEl.scrollTop = 0;
     });
-  }, [applyLayout, updateThumbFromScroll]);
+  }, [applyLayout, getHolderBox]);
 
   const renderFirstPage = useCallback(async (doc) => { if (doc) await renderPage(doc, 1); }, [renderPage]);
 
@@ -215,6 +191,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
           await renderFirstPage(pdfDoc);
           return;
         }
+
         const functions = getFunctions(undefined, "asia-northeast3");
         const serve = httpsCallable(functions, "serveWatermarkedPdf");
         const res = await serve({ filePath, sid });
@@ -258,24 +235,29 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
           <div style={{ fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {title || "특별해설"}
           </div>
+
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <button onClick={() => changeZoomKeepingCenter(zoom - 0.1)} style={zoomBtnStyle}>−</button>
             <span style={{ fontSize: 12, fontWeight: 600, minWidth: 45, textAlign: "center" }}>
               {Math.round(zoom * 100)}%
             </span>
-            <button onClick={() => changeZoomKeepingCenter(zoom + 0.1)} disabled={zoom >= MAX_ZOOM}
-              style={{ ...zoomBtnStyle, opacity: zoom >= MAX_ZOOM ? 0.3 : 1, cursor: zoom >= MAX_ZOOM ? "not-allowed" : "pointer" }}>
+            <button
+              onClick={() => changeZoomKeepingCenter(zoom + 0.1)}
+              disabled={zoom >= MAX_ZOOM}
+              style={{ ...zoomBtnStyle, opacity: zoom >= MAX_ZOOM ? 0.3 : 1, cursor: zoom >= MAX_ZOOM ? "not-allowed" : "pointer" }}
+            >
               +
             </button>
           </div>
+
           <button onClick={onClose} style={closeBtnStyle} aria-label="닫기">✕</button>
         </div>
 
         {/* 뷰어(네이티브 스크롤) */}
         <div ref={holderRef} style={viewerStyleScrollable}>
-          {/* 스크롤 범위를 제공하는 sizer */}
+          {/* 스크롤 범위 제공 */}
           <div ref={sizerRef}>
-            {/* 그 위에 실제 캔버스(absolute + scale) */}
+            {/* 실제 PDF 캔버스 */}
             {loading && (
               <div style={centerStyle}>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
@@ -297,17 +279,9 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
               />
             )}
           </div>
-
-          {/* 오른쪽 진행 썸 */}
-          {thumb.show && (
-            <div style={progressWrap}>
-              <div style={progressTrack} />
-              <div style={{ ...progressThumb, height: `${thumb.height}px`, transform: `translateY(${thumb.top}px)` }} />
-            </div>
-          )}
         </div>
 
-        {/* 하단 페이지 네비(여러 페이지일 때) */}
+        {/* 하단 네비(여러 페이지일 때) */}
         {numPages > 1 && !loading && (
           <div style={footerStyle}>
             <button
@@ -318,7 +292,9 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
                 setPageNum(prev);
                 await renderPage(pdfDoc, prev);
               }}
-            >← 이전</button>
+            >
+              ← 이전
+            </button>
             <span style={{ fontWeight: 700 }}>Page {pageNum} / {numPages}</span>
             <button
               style={navBtnStyle}
@@ -328,7 +304,9 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
                 setPageNum(next);
                 await renderPage(pdfDoc, next);
               }}
-            >다음 →</button>
+            >
+              다음 →
+            </button>
           </div>
         )}
       </div>
@@ -341,7 +319,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   );
 }
 
-// ------- styles -------
+/* ---------------- styles ---------------- */
 const backdropStyle = {
   position: "fixed",
   inset: 0,
@@ -363,7 +341,7 @@ const modalStyle = {
   flexDirection: "column",
   overflow: "hidden",
   boxShadow: "0 15px 50px rgba(0,0,0,.5)",
-  position: "relative"
+  position: "relative",
 };
 
 const headerStyle = {
@@ -375,7 +353,7 @@ const headerStyle = {
   borderBottom: "1px solid #2d333b",
   background: "linear-gradient(#1c1f24, #1a1d22)",
   flexShrink: 0,
-  gap: 12
+  gap: 12,
 };
 
 const closeBtnStyle = {
@@ -386,7 +364,7 @@ const closeBtnStyle = {
   cursor: "pointer",
   color: "#e5e7eb",
   fontSize: 16,
-  lineHeight: 1
+  lineHeight: 1,
 };
 
 const zoomBtnStyle = {
@@ -400,24 +378,25 @@ const zoomBtnStyle = {
   lineHeight: 1,
   fontWeight: "bold",
   minWidth: 32,
-  height: 32
+  height: 32,
 };
 
 const viewerStyleScrollable = {
   flex: 1,
   background: "#111",
   position: "relative",
-  overflowY: "auto",         // ✅ 네이티브 스크롤
+  overflowY: "auto",    // 네이티브 스크롤
   overflowX: "hidden",
-  padding: "15px",
-  touchAction: "auto"        // ✅ 터치 스크롤 허용
+  padding: "15px",      // ← 내부 폭(innerW) 계산의 기준
+  touchAction: "auto",
+  overscrollBehavior: "contain", // 모바일 바운스 억제
 };
 
 const centerStyle = {
   position: "absolute",
   inset: 0,
   display: "grid",
-  placeItems: "center"
+  placeItems: "center",
 };
 
 const footerStyle = {
@@ -428,7 +407,7 @@ const footerStyle = {
   alignItems: "center",
   background: "rgb(21, 29, 54)",
   fontSize: 14,
-  flexShrink: 0
+  flexShrink: 0,
 };
 
 const navBtnStyle = {
@@ -438,38 +417,5 @@ const navBtnStyle = {
   borderRadius: 8,
   padding: "8px 12px",
   cursor: "pointer",
-  fontWeight: 600
-};
-
-// 오른쪽 진행 썸
-const progressWrap = {
-  position: "absolute",
-  top: 15,
-  bottom: 15,
-  right: 6,
-  width: 8,
-  pointerEvents: "none",
-  zIndex: 2,
-};
-
-const progressTrack = {
-  position: "absolute",
-  top: 0,
-  bottom: 0,
-  right: 0,
-  width: 4,
-  background: "rgba(255,255,255,0.10)",
-  borderRadius: 2
-};
-
-const progressThumb = {
-  position: "absolute",
-  right: 0,
-  width: 4,
-  background: "rgba(126,162,255,0.95)",
-  borderRadius: 2,
-  boxShadow: "0 1px 6px rgba(0,0,0,0.35)",
-  pointerEvents: "none",
-  userSelect: "none",
-  willChange: "transform,height"
+  fontWeight: 600,
 };
