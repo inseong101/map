@@ -111,8 +111,8 @@ exports.onPhonesFileUploaded = functions
 });
 
 exports.serveWatermarkedPdf = functions
-  .region('asia-northeast3') // 지역 설정
-  .runWith({ memory: '8GB', timeoutSeconds: 180 }) // 8GB 메모리 설정
+  .region('asia-northeast3')
+  .runWith({ memory: '8GB', timeoutSeconds: 180 })
   .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -131,7 +131,7 @@ exports.serveWatermarkedPdf = functions
 
   const text = String(sid);
   const fontSize = 64; 
-  const angle = degrees(45); // 45도 기울임
+  const angle = degrees(45);
   const color = rgb(0.6, 0.6, 0.6);
   const opacity = 0.12;
 
@@ -139,24 +139,41 @@ exports.serveWatermarkedPdf = functions
   for (const page of pages) {
     const { width, height } = page.getSize();
     const textWidth = font.widthOfTextAtSize(text, fontSize);
-    
-    // ✅ FIX: 워터마크 텍스트의 시각적 정중앙이 PDF X축 정중앙과 일치하도록 배치
-    // 텍스트 시작점 = (페이지 너비 / 2) - (텍스트 너비 / 2)
-    const watermarkX = (width / 2) - (textWidth / 2); // 새로운 X 시작점
-    
     const textHeight = fontSize;
-    const stepY = textHeight * 3.5; // Y축 반복 간격 (띄엄띄엄 배치)
+    
+    // ✅ 페이지 중앙점
+    const pageCenterX = width / 2;
+    const pageCenterY = height / 2;
+    
+    // ✅ 45도 회전 시 텍스트 중앙을 페이지 중앙에 맞추는 계산
+    // pdf-lib은 텍스트 왼쪽 아래 모서리를 기준으로 회전하므로
+    // 회전 후 텍스트 중앙이 페이지 중앙에 오도록 시작점을 조정
+    const rad = Math.PI / 4; // 45도
+    
+    // 회전 전 텍스트 중앙점
+    const textCenterOffsetX = textWidth / 2;
+    const textCenterOffsetY = textHeight / 2;
+    
+    // 회전 변환 후 오프셋 (회전 행렬 적용)
+    const rotatedOffsetX = textCenterOffsetX * Math.cos(rad) - textCenterOffsetY * Math.sin(rad);
+    const rotatedOffsetY = textCenterOffsetX * Math.sin(rad) + textCenterOffsetY * Math.cos(rad);
+    
+    const stepY = textHeight * 3.5;
 
-    // Y축 중앙을 기준으로 위아래로 반복 배치
-    for (let y = -height * 0.5; y < height * 2.5; y += stepY) { 
+    // Y축으로 반복 배치
+    for (let offsetY = -height; offsetY < height * 2; offsetY += stepY) { 
+      // ✅ 최종 시작점: 페이지 중앙 - 회전된 텍스트 중앙 오프셋
+      const startX = pageCenterX - rotatedOffsetX;
+      const startY = pageCenterY + offsetY - rotatedOffsetY;
+      
       page.drawText(text, {
-        x: watermarkX, // 수정된 X 좌표 사용
-        y: y, 
+        x: startX,
+        y: startY, 
         size: fontSize,
         font,
         color,
         opacity,
-        rotate: angle, // 45도
+        rotate: angle,
       });
     }
   }
