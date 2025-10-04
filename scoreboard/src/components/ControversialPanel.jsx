@@ -1,4 +1,4 @@
-// src/components/ControversialPanel.jsx
+// src/components/ControversialPanel.jsx (수정된 코드 전체)
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import PdfModalPdfjs from "./PdfModalPdfjs";
 import { getFunctions, httpsCallable } from "firebase/functions";
@@ -146,8 +146,9 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
   const [pdfOpen, setPdfOpen] = useState(false);
   const [pdfPath, setPdfPath] = useState(null);
   const [highErrorQuestions, setHighErrorQuestions] = useState({});
+  // ✅ MODIFIED: Set 대신 { qNum, rate } 객체 배열로 변경
   const [fireBySession, setFireBySession] = useState({
-    "1교시": new Set(), "2교시": new Set(), "3교시": new Set(), "4교시": new Set(),
+    "1교시": [], "2교시": [], "3교시": [], "4교시": [],
   });
   const [loading, setLoading] = useState(false);
 
@@ -194,8 +195,9 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
         console.log("매핑되지 않은 회차:", roundLabel);
         if (!cancelled) {
           setHighErrorQuestions({});
+          // ✅ MODIFIED: 배열로 초기화
           setFireBySession({
-            "1교시": new Set(), "2교시": new Set(), "3교시": new Set(), "4교시": new Set(),
+            "1교시": [], "2교시": [], "3교시": [], "4교시": [],
           });
           setActiveSubject(null);
           setLoading(false);
@@ -241,11 +243,12 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
           
           console.log("생성된 모든 문항:", allQuestions);
           setHighErrorQuestions(allQuestions);
+          // ✅ MODIFIED: 배열 객체를 그대로 저장
           setFireBySession({
-            "1교시": new Set(explanationIndex["1교시"] || []),
-            "2교시": new Set(explanationIndex["2교시"] || []),
-            "3교시": new Set(explanationIndex["3교시"] || []),
-            "4교시": new Set(explanationIndex["4교시"] || []),
+            "1교시": explanationIndex["1교시"] || [],
+            "2교시": explanationIndex["2교시"] || [],
+            "3교시": explanationIndex["3교시"] || [],
+            "4교시": explanationIndex["4교시"] || [],
           });
           
           // 첫 번째 과목 활성화
@@ -350,20 +353,23 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     };
   }, [activeSubject, highErrorQuestions]);
 
-  const openExplanation = (session, qNum) => {
-  const rNum = parseInt(String(roundLabel).replace(/\D/g, ""), 10) || 1;
-  const sNum = parseInt(String(session).replace(/\D/g, ""), 10) || 1;
-  const path = `explanation/${rNum}-${sNum}-${qNum}.pdf`;
-  
-  console.log("PDF 열기:", path);
-  
-  // 모달을 먼저 열고 잠시 기다린 후 PDF 경로 설정
-  setPdfOpen(true);
-  setTimeout(() => {
-    setPdfPath(path);
-  }, 100); // 100ms 지연
-};
+  // ✅ MODIFIED: rate 인자 추가 및 파일 경로에 rate 포함
+  const openExplanation = (session, qNum, rate) => {
+    const rNum = parseInt(String(roundLabel).replace(/\D/g, ""), 10) || 1;
+    const sNum = parseInt(String(session).replace(/\D/g, ""), 10) || 1;
+    // 파일명에 정답률 포함
+    const path = `explanation/${rNum}-${sNum}-${qNum}-${rate}.pdf`;
+    
+    console.log("PDF 열기:", path);
+    
+    // 모달을 먼저 열고 잠시 기다린 후 PDF 경로 설정
+    setPdfOpen(true);
+    setTimeout(() => {
+      setPdfPath(path);
+    }, 100); // 100ms 지연
+  };
 
+  // ✅ MODIFIED: renderButtons 함수 전체 수정 (정답률 표시 및 동적 스타일링)
   const renderButtons = () => {
     if (!activeSubject || !highErrorQuestions[activeSubject]) {
       console.log("버튼 렌더링 불가:", { activeSubject, hasData: !!highErrorQuestions[activeSubject] });
@@ -371,10 +377,19 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     }
     
     const questions = highErrorQuestions[activeSubject];
-    console.log("버튼 렌더링:", { activeSubject, questions: questions.length, gridStyle });
+    const expQuestions = fireBySession[activeSession] || []; // { qNum, rate } 배열
     
-    // 문제 번호 순으로 정렬 (작은 번호부터 왼쪽에서 오른쪽으로)
-    const sortedQuestions = [...questions].sort((a, b) => a.questionNum - b.questionNum);
+    // 현재 과목의 문항 중 해설이 있는 문항만 필터링하고 정답률 정보를 병합
+    const questionsToRender = questions
+        .map(q => {
+            // 정답률 객체 찾기
+            const exp = expQuestions.find(exp => exp.qNum === q.questionNum);
+            return exp ? { ...q, rate: exp.rate, hasExp: true } : { ...q, hasExp: false };
+        })
+        .filter(q => q.hasExp) // 해설이 있는 문항만 렌더링
+        .sort((a, b) => a.questionNum - b.questionNum);
+    
+    console.log("버튼 렌더링:", { activeSubject, questions: questionsToRender.length, gridStyle });
     
     const { cols, rows, cellW, cellH } = gridStyle;
     
@@ -393,46 +408,71 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
           overflow: 'visible'
         }}
       >
-        {sortedQuestions.map((q) => {
+        {questionsToRender.map((q) => {
           const qNum = q.questionNum;
           const session = q.session;
-          const hasExp = fireBySession[session]?.has(qNum);
+          const rate = q.rate;
           
-          const cls = hasExp 
-            ? `qbtn fire` 
-            : `qbtn no-explanation`;
+          // ✅ 동적 빨간색 강조 계산: 정답률이 낮을수록 (난이도가 높을수록) 강한 빨간색
+          const difficulty = 100 - rate; // 0 (쉬움) to 100 (어려움)
           
-          const label = hasExp 
-            ? `문항 ${qNum} · 특별 해설`
-            : `문항 ${qNum}`;
+          // Saturation: 50% (쉬움) to 100% (어려움)
+          const saturation = Math.min(100, Math.max(50, Math.round(50 + difficulty * 0.5)));
+          // Lightness: 25% (어려움) to 45% (쉬움). 어두운 배경에서 어두운 색상은 더 강하게 보임.
+          const lightness = Math.min(45, Math.max(25, Math.round(45 - difficulty * 0.2)));
+          
+          const hue = 0; // 고정된 빨간색 Hue
+          
+          const color = `hsl(${hue}, ${saturation}%, 65%)`; // 텍스트 색상: 밝은 빨간색
+          const shadowColor = `hsl(${hue}, ${saturation}%, ${lightness}%)`; // 테두리/그림자 색상: 깊은 빨간색
+          const bgColor = `hsl(${hue}, ${saturation}%, 10%)`; // 배경 색상: 매우 어두운, 미묘한 빨간색
+          
+          const cls = `qbtn qbtn-rate`; // 새로운 범용 클래스 적용
 
           return (
             <button
               key={qNum}
               type="button"
               className={cls}
-              title={label}
-              aria-label={label}
-              onClick={
-                hasExp
-                  ? (e) => { 
-                      e.stopPropagation(); 
-                      openExplanation(session, qNum); // ✅ openExplanation이 정상적으로 참조됨
-                    }
-                  : undefined
-              }
+              title={`문항 ${qNum} · 정답률 ${rate}%`}
+              aria-label={`문항 ${qNum} · 정답률 ${rate}%`}
+              onClick={(e) => { 
+                  e.stopPropagation(); 
+                  // openExplanation 함수에 rate 전달
+                  openExplanation(session, qNum, rate); 
+              }}
               style={{
                 width: `${cellW}px`,
                 height: `${cellH}px`,
-                cursor: hasExp ? "pointer" : "default",
-                fontSize: `${Math.max(8, Math.min(12, cellW / 5))}px`, // 버튼 크기에 따른 폰트 조절
+                cursor: "pointer",
+                fontSize: `${Math.max(8, Math.min(12, cellW / 5))}px`,
+                // 동적 HSL 색상 적용
+                color: color,
+                borderColor: shadowColor,
+                background: bgColor,
+                // 빨간색 강조 Box Shadow
+                boxShadow: `0 0 8px ${shadowColor}, 0 0 16px ${shadowColor}40`,
+                position: 'relative', 
+                fontWeight: 700,
+                transition: 'all 0.2s ease',
                 minWidth: 0,
                 minHeight: 0,
                 boxSizing: 'border-box'
               }}
             >
               {qNum}
-              {hasExp && <span className="flame-emoji" aria-hidden>🔥</span>}
+              {/* ✅ 정답률 텍스트 표시 */}
+              <span style={{ 
+                position: 'absolute', 
+                bottom: '2px', 
+                fontSize: '10px', 
+                fontWeight: 600,
+                color: color,
+                opacity: 0.9,
+                lineHeight: 1 
+              }}>
+                {rate}%
+              </span>
             </button>
           );
         })}
