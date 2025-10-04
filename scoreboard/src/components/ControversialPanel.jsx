@@ -438,52 +438,50 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
               // 🌶️ 실제 데이터 분포: 대부분 10~50% 정답률 구간
               // → 이 구간에서 색상 대비 극대화!
               
-              // 🔥 채도 (Saturation): 10~50% 구간에서 극단적 변화
+              // 🔥 배경 채도: 10~50% 구간에서 극단적 변화
               // 정답률 10% (diff 90) → 채도 100% (찐한 빨강)
-              // 정답률 50% (diff 50) → 채도 30% (연한 빨강)
-              // 정답률 90% (diff 10) → 채도 18% (거의 회색)
-              const saturation = difficulty >= 50 
-                ? Math.min(100, 30 + (difficulty - 50) * 1.75)  // 50 이상: 급격히 증가
-                : Math.max(15, 15 + difficulty * 0.3);           // 50 미만: 완만히 증가
+              // 정답률 50% (diff 50) → 채도 40% (연한 빨강)
+              // 정답률 90% (diff 10) → 채도 25% (옅은 빨강)
+              const bgSaturation = difficulty >= 50 
+                ? Math.min(100, 40 + (difficulty - 50) * 1.5)  // 50 이상: 급격히 증가
+                : Math.max(20, 20 + difficulty * 0.4);          // 50 미만: 완만히 증가
 
-              // 🔥 메인 색상 밝기: 10~50% 구간에서 선명도 차이
-              // 정답률 10% (diff 90) → 밝기 49% (선명한 빨강)
-              // 정답률 50% (diff 50) → 밝기 25% (어두운 빨강)
-              // 정답률 90% (diff 10) → 밝기 17% (거의 안 보임)
-              const mainLightness = difficulty >= 50
-                ? Math.min(55, 25 + (difficulty - 50) * 0.6)    // 50 이상: 밝아짐
-                : Math.max(15, 15 + difficulty * 0.2);           // 50 미만: 어둡게
+              // 🔥 배경 밝기: 10~50% 구간에서 밝기 차이
+              // 정답률 10% (diff 90) → 밝기 45% (선명한 빨강)
+              // 정답률 50% (diff 50) → 밝기 28% (중간 빨강)
+              // 정답률 90% (diff 10) → 밝기 22% (어두운 빨강)
+              const bgLightness = difficulty >= 50
+                ? Math.min(50, 28 + (difficulty - 50) * 0.44)   // 50 이상: 밝아짐
+                : Math.max(20, 20 + difficulty * 0.16);          // 50 미만: 완만히 증가
               
-              // 🔥 배경 밝기: 어려울수록 더 어두운 배경 (대비 강화)
-              const bgLightness = Math.min(12, Math.max(6, 12 - difficulty * 0.06));
+              // 🔥 텍스트는 항상 밝고 선명하게 (가독성 확보)
+              const textColor = 'hsl(0, 0%, 95%)';  // 거의 흰색
               
-              // 🔥 발광 효과: 10~50% 구간에서 강도 차이
+              // 🔥 발광 효과: 어려운 문제일수록 강하게
               const glowLightness = difficulty >= 50
-                ? Math.min(70, 35 + (difficulty - 50) * 0.7)
-                : Math.max(25, 25 + difficulty * 0.2);
+                ? Math.min(65, 40 + (difficulty - 50) * 0.5)
+                : Math.max(30, 30 + difficulty * 0.2);
 
               // 색상 적용
-              color = `hsl(${hue}, ${saturation}%, ${mainLightness}%)`; // 찐한 빨간색 텍스트
-              shadowColor = `hsl(${hue}, ${saturation}%, ${glowLightness}%)`; // 발광 효과
-              bgColor = `hsl(${hue}, ${saturation}%, ${bgLightness}%)`; // 어두운 배경
+              color = textColor;  // 텍스트는 항상 밝게
+              shadowColor = `hsl(${hue}, ${bgSaturation}%, ${glowLightness}%)`; // 발광 효과
+              bgColor = `hsl(${hue}, ${bgSaturation}%, ${bgLightness}%)`; // 배경색으로 난이도 표현
               
               cursor = "pointer";
               clickHandler = (e) => { e.stopPropagation(); openExplanation(session, qNum, rate); };
               rateText = `${numericRate.toFixed(1)}%`; 
               
-              // 🔥 테두리는 메인 색상으로 찐하게
-              const borderColor = `hsl(${hue}, ${saturation}%, ${mainLightness + 10}%)`;
+              // 🔥 테두리는 배경보다 약간 밝게
+              const borderColor = `hsl(${hue}, ${bgSaturation}%, ${Math.min(60, bgLightness + 15)}%)`;
               
               // 🔥 그림자 크기: 10~50% 구간에서 발광 강도 차이
-              // 정답률 10% → 큰 발광 (위험 신호)
-              // 정답률 50% → 작은 발광 (약한 강조)
               const shadowSize = difficulty >= 50
-                ? 10 + (difficulty - 50) * 0.4      // 10~26
-                : 4 + difficulty * 0.12;             // 4~10
+                ? 10 + (difficulty - 50) * 0.4
+                : 4 + difficulty * 0.12;
                 
               const shadowSpread = difficulty >= 50
-                ? 20 + (difficulty - 50) * 0.8      // 20~52
-                : 8 + difficulty * 0.24;             // 8~20
+                ? 20 + (difficulty - 50) * 0.8
+                : 8 + difficulty * 0.24;
               
               styleMods = {
                 color: color,
@@ -503,20 +501,19 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
               cls += ` qbtn-rate`; 
 
           } else {
-              // Default "No Explanation" Style
-              color = 'var(--muted)';
-              shadowColor = 'var(--line)'; // Default border
-              bgColor = 'rgba(255,255,255,0.02)'; // Lighter background for no exp
+              // Default "No Explanation" Style - 텍스트는 항상 보이게
+              color = 'hsl(0, 0%, 60%)';  // 밝은 회색
+              shadowColor = 'var(--line)'; 
+              bgColor = 'rgba(255,255,255,0.03)'; 
               cursor = "default";
               clickHandler = undefined;
               rateText = null; 
               
-              // Apply static styles
               styleMods = {
                 color: color,
                 borderColor: shadowColor,
                 background: bgColor,
-                opacity: 0.7, 
+                opacity: 0.6, 
                 cursor: cursor,
                 boxShadow: 'none',
               };
@@ -549,26 +546,26 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
                 boxSizing: 'border-box',
                 ...styleMods // Apply calculated styles
               }}
-              // Hover 효과: 10~50% 구간에서 색상 변화 극대화
+              // Hover 효과: 배경색만 변화, 텍스트는 항상 밝게
               onMouseEnter={(e) => {
                   if (hasExp) {
                       const difficulty = 100 - Math.min(100, Math.max(0, numericRate));
                       const hue = 0;
                       
-                      const saturation = difficulty >= 50 
-                        ? Math.min(100, 30 + (difficulty - 50) * 1.75)
-                        : Math.max(15, 15 + difficulty * 0.3);
+                      const bgSaturation = difficulty >= 50 
+                        ? Math.min(100, 40 + (difficulty - 50) * 1.5)
+                        : Math.max(20, 20 + difficulty * 0.4);
                       
-                      const mainLightness = difficulty >= 50
-                        ? Math.min(55, 25 + (difficulty - 50) * 0.6)
-                        : Math.max(15, 15 + difficulty * 0.2);
+                      const bgLightness = difficulty >= 50
+                        ? Math.min(50, 28 + (difficulty - 50) * 0.44)
+                        : Math.max(20, 20 + difficulty * 0.16);
                       
                       const glowLightness = difficulty >= 50
-                        ? Math.min(70, 35 + (difficulty - 50) * 0.7)
-                        : Math.max(25, 25 + difficulty * 0.2);
+                        ? Math.min(65, 40 + (difficulty - 50) * 0.5)
+                        : Math.max(30, 30 + difficulty * 0.2);
                       
-                      const hoverGlow = `hsl(${hue}, ${saturation}%, ${glowLightness}%)`;
-                      const hoverBorder = `hsl(${hue}, ${saturation}%, ${mainLightness + 15}%)`;
+                      const hoverGlow = `hsl(${hue}, ${bgSaturation}%, ${glowLightness}%)`;
+                      const hoverBorder = `hsl(${hue}, ${bgSaturation}%, ${Math.min(70, bgLightness + 20)}%)`;
                       
                       const shadowSize = difficulty >= 50
                         ? 12 + (difficulty - 50) * 0.5
@@ -596,17 +593,17 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
               }}
             >
               {qNum}
-              {/* 정답률 텍스트: 어려울수록 찐하게 */}
+              {/* 정답률 텍스트: 항상 선명하게 */}
               {hasExp && (
                   <span style={{ 
                     position: 'absolute', 
                     bottom: '2px', 
                     fontSize: `${Math.max(9, Math.min(11, cellW / 6))}px`,
                     fontWeight: 700,
-                    color: color,
+                    color: 'hsl(0, 0%, 90%)',  // 항상 밝은 회색
                     opacity: 1,
                     lineHeight: 1,
-                    textShadow: `0 0 3px ${shadowColor}`
+                    textShadow: '0 1px 2px rgba(0,0,0,0.5)'  // 가독성을 위한 그림자
                   }}>
                     {rateText}
                   </span>
