@@ -1,4 +1,4 @@
-// src/components/ControversialPanel.jsx (FIXED CODE)
+// src/components/ControversialPanel.jsx (수정된 코드 전체)
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import PdfModalPdfjs from "./PdfModalPdfjs";
 import { getFunctions, httpsCallable } from "firebase/functions";
@@ -278,7 +278,7 @@ export default function ControversialPanel({ allRoundLabels, roundLabel, onRound
     return () => { cancelled = true; };
   }, [roundLabel, getExplanationIndex]);
 
-  // 단순화된 그리드 크기 계산 (한 번만 계산)
+  // 단순화된 그리드 계산 함수 - 고정 크기, 세로 확장
   useEffect(() => {
     const el = gridWrapRef.current;
     if (!el) return;
