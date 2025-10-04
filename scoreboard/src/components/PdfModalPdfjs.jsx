@@ -103,7 +103,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   }, []);
 
   const handleTouchMove = useCallback((e) => {
-    // 🚨 FIX: onTouchMove={handleTouchMove()}와 같은 실수 방지 및 e.preventDefault() 호출
+    // 🚨 FIX: e.preventDefault() 호출
     if (!e) return; 
     e.preventDefault();
     e.stopPropagation();
