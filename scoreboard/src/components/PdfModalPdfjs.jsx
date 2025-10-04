@@ -44,7 +44,7 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
   };
 
   const clampTranslateY = useCallback((translateY, currentZoom) => {
-    if (!canvasRef.current || !holderRef.current) return translateY;
+    if (!canvasRef.current || !holderRef.current) return 0;
     
     const canvas = canvasRef.current;
     const container = holderRef.current;
@@ -60,12 +60,16 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
       return 0;
     }
     
-    // 위쪽 한계: 0 (캔버스 상단이 컨테이너 상단)
+    // 위쪽 한계: 0 (캔버스 상단이 컨테이너 상단보다 위로 갈 수 없음)
     const maxTranslateY = 0; 
-    // 아래쪽 한계: 캔버스 하단이 컨테이너 하단과 일치
+    // 아래쪽 한계: 캔버스 하단이 컨테이너 하단과 일치할 때
+    // translateY + scaledHeight = containerHeight
+    // translateY = containerHeight - scaledHeight
     const minTranslateY = containerHeight - scaledHeight;
     
-    return Math.max(minTranslateY, Math.min(maxTranslateY, translateY));
+    // 엄격하게 클램핑
+    const clamped = Math.max(minTranslateY, Math.min(maxTranslateY, translateY));
+    return clamped;
   }, []);
 
   const applyCanvasTransform = useCallback((currentZoom, translateY, withTransition = true) => {
@@ -100,28 +104,38 @@ export default function PdfModalPdfjs({ open, onClose, filePath, sid, title }) {
     }
 
     const container = holderRef.current;
+    const canvas = canvasRef.current;
     const containerRect = container.getBoundingClientRect();
-    const viewportCenterY = (containerRect.height - 30) / 2;
+    const containerHeight = containerRect.height - 30; // 패딩 제외
     
-    const currentY = touchState.current.translateY;
-    const currentScale = zoom;
-
-    // 뷰포트 중심점이 문서의 어느 지점을 가리키는지 계산
-    const pointY = (viewportCenterY - currentY) / currentScale;
+    const canvasBaseHeight = parseFloat(canvas.style.height);
+    const oldScaledHeight = canvasBaseHeight * zoom;
+    const newScaledHeight = canvasBaseHeight * newZoom;
     
-    // 새 줌에서 같은 지점을 중심에 유지
-    let newTranslateY = viewportCenterY - pointY * newZoom;
-
-    // 최소 줌일 때는 상단 정렬
+    // 최소 줌일 때는 무조건 상단 정렬
     if (newZoom <= minScaleRef.current) {
-      newTranslateY = 0;
-    } else {
-      newTranslateY = clampTranslateY(newTranslateY, newZoom);
+      touchState.current.translateY = 0;
+      setZoom(newZoom);
+      applyCanvasTransform(newZoom, 0, true);
+      return;
     }
     
-    touchState.current.translateY = newTranslateY;
+    // 현재 뷰포트 중심이 문서의 어느 지점을 보고 있는지 계산
+    const viewportCenterY = containerHeight / 2;
+    const currentTranslateY = touchState.current.translateY;
+    
+    // 문서 좌표계에서 뷰포트 중심이 가리키는 지점 (비율로 계산)
+    const documentPointY = (viewportCenterY - currentTranslateY) / oldScaledHeight;
+    
+    // 새 줌에서 같은 문서 지점이 뷰포트 중심에 오도록 translateY 계산
+    const newTranslateY = viewportCenterY - (documentPointY * newScaledHeight);
+    
+    // 클램핑 적용
+    const clampedY = clampTranslateY(newTranslateY, newZoom);
+    
+    touchState.current.translateY = clampedY;
     setZoom(newZoom);
-    applyCanvasTransform(newZoom, newTranslateY, true);
+    applyCanvasTransform(newZoom, clampedY, true);
   }, [zoom, applyCanvasTransform, clampTranslateY]);
 
   const handleZoomIn = useCallback(() => {
